@@ -158,7 +158,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 const STORAGE_KEYS = {
   AUTH_SESSION: 'sipades_sirombu_session_24h',
   USERS: 'sipad_users_v2',
-  DESAS: 'sipad_desas_v2',
+  DESAS: 'sipad_desas_v3',
   ASETS: 'sipad_asets_v2',
   DELETED_ASETS: 'sipad_deleted_asets_v2',
   VERIFIKASI: 'sipad_verifikasi_v2',
