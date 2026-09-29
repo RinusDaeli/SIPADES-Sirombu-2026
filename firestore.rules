@@ -1,0 +1,56 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global catch-all default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    // Koleksi Aset Desa (Sinkronisasi Antar-Laptop)
+    match /asets/{asetId} {
+      allow read: if true;
+      allow write: if isValidId(asetId);
+    }
+
+    // Koleksi Permohonan Verifikasi Mutasi & Penghapusan
+    match /verifikasi/{verifikasiId} {
+      allow read: if true;
+      allow write: if isValidId(verifikasiId);
+    }
+
+    // Koleksi Pengesahan Laporan Tahunan
+    match /pengesahan/{pengesahanId} {
+      allow read: if true;
+      allow write: if isValidId(pengesahanId);
+    }
+
+    // Profil Desa
+    match /desas/{desaId} {
+      allow read: if true;
+      allow write: if isValidId(desaId);
+    }
+
+    // Pengguna Sistem
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if isValidId(userId);
+    }
+
+    // Konfigurasi & Profil Kantor Kecamatan
+    match /system/{configId} {
+      allow read: if true;
+      allow write: if isValidId(configId);
+    }
+
+    // Collection test untuk pengecekan koneksi
+    match /test/{testId} {
+      allow read, write: if true;
+    }
+  }
+}
