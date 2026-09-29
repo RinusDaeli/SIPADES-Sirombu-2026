@@ -12,6 +12,8 @@ export interface FullSyncPayload {
   desas?: Desa[];
   users?: User[];
   kecamatanProfile?: KecamatanProfile;
+  deletedId?: string;
+  deletedAssetIds?: string[];
 }
 
 export type SyncCallback = (payload: FullSyncPayload) => void;
@@ -110,7 +112,7 @@ class CloudSyncManager {
     });
 
     conn.on('data', (data: any) => {
-      if (data && data.type === 'SYNC_STATE' && data.payload) {
+      if (data && (data.type === 'SYNC_STATE' || data.type === 'DELETE_ASET') && data.payload) {
         this.notifySync(data.payload);
       }
     });
@@ -151,7 +153,7 @@ class CloudSyncManager {
             if (msg.type === 'ANNOUNCE') {
               // Connect to the newly announced peer
               this.connectToPeer(msg.peerId);
-            } else if (msg.type === 'BROADCAST_STATE' && msg.payload) {
+            } else if ((msg.type === 'BROADCAST_STATE' || msg.type === 'DELETE_ASET') && msg.payload) {
               this.notifySync(msg.payload);
             }
           }
@@ -214,6 +216,35 @@ class CloudSyncManager {
       type: 'BROADCAST_STATE',
       peerId: this.peerId,
       payload: lightweightPayload,
+    });
+  }
+
+  public broadcastDelete(assetId: string, remainingAsets: Aset[]) {
+    const payload: FullSyncPayload = {
+      version: 2,
+      timestamp: new Date().toISOString(),
+      senderId: this.peerId,
+      deletedId: assetId,
+      deletedAssetIds: [assetId],
+      asets: remainingAsets,
+    };
+
+    // 1. Send via active P2P connections
+    this.connections.forEach((conn) => {
+      if (conn.open) {
+        try {
+          conn.send({ type: 'DELETE_ASET', payload });
+        } catch {
+          // ignore
+        }
+      }
+    });
+
+    // 2. Broadcast via cloud signaling
+    this.broadcastSignal({
+      type: 'DELETE_ASET',
+      peerId: this.peerId,
+      payload,
     });
   }
 

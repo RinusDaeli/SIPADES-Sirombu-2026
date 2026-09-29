@@ -160,11 +160,43 @@ const STORAGE_KEYS = {
   USERS: 'sipad_users_v2',
   DESAS: 'sipad_desas_v2',
   ASETS: 'sipad_asets_v2',
+  DELETED_ASETS: 'sipad_deleted_asets_v2',
   VERIFIKASI: 'sipad_verifikasi_v2',
   PENGESAHAN: 'sipad_pengesahan_v2',
   KECAMATAN_PROFILE: 'sipad_kecamatan_profile_v2',
   YEAR: 'sipad_year_v2',
 };
+
+/**
+ * Deduplicate assets by unique identity (desaId + kodeAset + nomorRegister + namaAset)
+ * and strictly filter out any permanently deleted IDs and dummy sample assets.
+ */
+export function deduplicateAsets(list: Aset[], deletedIds?: Set<string>): Aset[] {
+  if (!Array.isArray(list)) return [];
+  const seenKey = new Set<string>();
+  const seenId = new Set<string>();
+  const result: Aset[] = [];
+
+  for (const a of list) {
+    if (!a || !a.id) continue;
+    if (a.id === 'ast-test-1') continue; // Never allow sample dummy asset
+    if (deletedIds && deletedIds.has(a.id)) continue; // Never allow deleted assets to reappear
+    if (seenId.has(a.id)) continue; // Avoid duplicate IDs
+
+    // Unique identity key per asset in a desa
+    const reg = a.nomorRegister ? a.nomorRegister.replace(/^0+/, '') : '';
+    const uniqueKey = `${a.desaId || ''}_${(a.kodeAset || '').trim()}_${reg}_${(a.namaAset || '').trim().toLowerCase()}`;
+    if (seenKey.has(uniqueKey)) {
+      continue; // Duplicate entry of the same asset!
+    }
+
+    seenId.add(a.id);
+    seenKey.add(uniqueKey);
+    result.push(a);
+  }
+
+  return result;
+}
 
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -188,6 +220,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try { localStorage.removeItem(STORAGE_KEYS.AUTH_SESSION); } catch {}
     }
     return null;
+  });
+
+  // Track deleted asset IDs (Tombstones) so deleted assets NEVER reappear upon sync or reload
+  const [deletedAssetIds, setDeletedAssetIds] = useState<Set<string>>(() => {
+    const defaultDeleted = new Set<string>(['ast-test-1']);
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.DELETED_ASETS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((id: string) => defaultDeleted.add(id));
+        }
+      }
+    } catch {}
+    return defaultDeleted;
   });
 
   const [desas, setDesas] = useState<Desa[]>(() => {
@@ -228,21 +275,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [asets, setAsets] = useState<Aset[]>(() => {
+    let deletedSet = new Set<string>(['ast-test-1']);
+    try {
+      const savedDeleted = localStorage.getItem(STORAGE_KEYS.DELETED_ASETS);
+      if (savedDeleted) {
+        const parsed = JSON.parse(savedDeleted);
+        if (Array.isArray(parsed)) {
+          deletedSet = new Set([...deletedSet, ...parsed]);
+        }
+      }
+    } catch {}
+
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ASETS);
       if (saved) {
         const parsed: Aset[] = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.filter((a: any) => a && a.id).map((a) => ({
+          const mapped = parsed.filter((a: any) => a && a.id).map((a) => ({
             ...a,
             klasifikasi: (a?.klasifikasi ? a.klasifikasi.replace(/^[I|V|X]+\.\s*/, '') : 'Tanah') as KlasAset,
           }));
+          return deduplicateAsets(mapped, deletedSet);
         }
       }
     } catch (e) {
       console.error(e);
     }
-    return INITIAL_ASETS;
+    return deduplicateAsets(INITIAL_ASETS, deletedSet);
   });
 
   const [verifikasiList, setVerifikasiList] = useState<PermohonanVerifikasi[]>(() => {
@@ -358,9 +417,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (serverData && typeof serverData === 'object') {
           if (Array.isArray(serverData.asets)) {
             setAsets((prev) => {
-              if (JSON.stringify(prev) === JSON.stringify(serverData.asets)) return prev;
-              persistAsetsSafely(serverData.asets);
-              return serverData.asets;
+              const cleanAsets = deduplicateAsets(serverData.asets, deletedAssetIds);
+              if (JSON.stringify(prev) === JSON.stringify(cleanAsets)) return prev;
+              persistAsetsSafely(cleanAsets);
+              return cleanAsets;
             });
           }
           if (Array.isArray(serverData.verifikasiList)) {
@@ -415,9 +475,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubAsets = subscribeAsets((cloudAsets) => {
       if (cloudAsets) {
         setAsets((prev) => {
-          if (JSON.stringify(prev) === JSON.stringify(cloudAsets)) return prev;
-          persistAsetsSafely(cloudAsets);
-          return cloudAsets;
+          const cleanCloud = deduplicateAsets(cloudAsets, deletedAssetIds);
+          if (JSON.stringify(prev) === JSON.stringify(cleanCloud)) return prev;
+          persistAsetsSafely(cleanCloud);
+          return cleanCloud;
         });
         setIsServerConnected(true);
         setLastSyncTime(new Date());
@@ -498,8 +559,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (payload && payload.type === 'DATA_CHANGED' && payload.data) {
               const serverData = payload.data;
               if (Array.isArray(serverData.asets)) {
-                setAsets(serverData.asets);
-                persistAsetsSafely(serverData.asets);
+                const cleanSSE = deduplicateAsets(serverData.asets, deletedAssetIds);
+                setAsets(cleanSSE);
+                persistAsetsSafely(cleanSSE);
               }
               if (Array.isArray(serverData.verifikasiList)) {
                 setVerifikasiList(serverData.verifikasiList);
@@ -545,20 +607,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       clearTimeout(reconnectTimeout);
       if (eventSource) eventSource.close();
     };
-  }, [persistAsetsSafely]);
+  }, [persistAsetsSafely, deletedAssetIds]);
 
   // Multi-Device Synchronization Engine (Cross-Browser, Cross-Laptop, Vercel & P2P)
   const importSyncPayload = useCallback((payload: FullSyncPayload) => {
     if (!payload) return;
+
+    // 1. Process deletions first
+    if (payload.deletedId || (payload.deletedAssetIds && payload.deletedAssetIds.length > 0)) {
+      const idsToDelete = [
+        ...(payload.deletedId ? [payload.deletedId] : []),
+        ...(payload.deletedAssetIds || []),
+      ];
+
+      setDeletedAssetIds((prev) => {
+        const next = new Set(prev);
+        idsToDelete.forEach((id) => next.add(id));
+        try {
+          localStorage.setItem(STORAGE_KEYS.DELETED_ASETS, JSON.stringify(Array.from(next)));
+        } catch {}
+        return next;
+      });
+
+      setAsets((prev) => {
+        const filtered = prev.filter((a) => !idsToDelete.includes(a.id));
+        persistAsetsSafely(filtered);
+        return filtered;
+      });
+    }
+
+    // 2. Process incoming assets (strictly filter against deleted IDs & deduplicate)
     if (Array.isArray(payload.asets) && payload.asets.length > 0) {
       setAsets((prev) => {
+        const currentDeleted = new Set(deletedAssetIds);
+        if (payload.deletedId) currentDeleted.add(payload.deletedId);
+        payload.deletedAssetIds?.forEach((id) => currentDeleted.add(id));
+
         const existingMap = new Map(prev.map((a) => [a.id, a]));
         payload.asets?.forEach((incoming) => {
-          if (incoming && incoming.id) {
+          if (incoming && incoming.id && !currentDeleted.has(incoming.id) && incoming.id !== 'ast-test-1') {
             existingMap.set(incoming.id, incoming);
           }
         });
-        const merged = Array.from(existingMap.values());
+        const merged = deduplicateAsets(Array.from(existingMap.values()), currentDeleted);
         persistAsetsSafely(merged);
         return merged;
       });
@@ -632,7 +723,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loadAsetsFromIndexedDB().then((idbAsets) => {
       if (Array.isArray(idbAsets) && idbAsets.length > 0) {
         setAsets((current) => {
-          if (current.length === 0) return idbAsets;
+          if (current.length === 0) return deduplicateAsets(idbAsets, deletedAssetIds);
           return current.map((c) => {
             const matched = idbAsets.find((item) => item && item.id === c.id);
             if (matched && (!c.fotoAset || c.fotoAset.length === 0) && matched.fotoAset && matched.fotoAset.length > 0) {
@@ -927,27 +1018,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         message: 'Aset sedang dalam proses permohonan verifikasi Kecamatan, tidak dapat dihapus langsung!',
       };
     }
-    const filtered = asets.filter((a) => a.id !== id);
-    setAsets(filtered);
 
-    syncManager.broadcastChange({
-      version: 2,
-      timestamp: new Date().toISOString(),
-      senderId: 'client',
-      asets: filtered,
-      verifikasiList,
-      pengesahanList,
-      desas,
-      users,
-      kecamatanProfile,
+    // 1. Record ID in permanent tombstone set
+    setDeletedAssetIds((prev) => {
+      const next = new Set(prev).add(id);
+      try {
+        localStorage.setItem(STORAGE_KEYS.DELETED_ASETS, JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
     });
 
+    // 2. Remove from local state & storage immediately
+    const filtered = asets.filter((a) => a.id !== id);
+    setAsets(filtered);
+    persistAsetsSafely(filtered);
+
+    // 3. Broadcast deletion event to all connected devices (P2P + Cloud)
+    syncManager.broadcastDelete(id, filtered);
+
+    // 4. Delete from Firestore & server database
     deleteAsetFromCloud(id).catch((err) => console.warn('[Cloud] Aset delete failed:', err));
     fetch(`/api/asets/${id}`, {
       method: 'DELETE',
     }).catch((e) => console.warn('[Sync] Asset delete failed:', e));
 
-    return { success: true };
+    return { success: true, message: 'Data aset berhasil dihapus permanen.' };
   };
 
   // Mutasi & Penghapusan Verifikasi
