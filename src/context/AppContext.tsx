@@ -23,6 +23,7 @@ import {
   saveAsetsToIndexedDB,
   loadAsetsFromIndexedDB,
 } from '../utils/safeStorage';
+import { syncManager, FullSyncPayload } from '../utils/cloudSyncService';
 import {
   subscribeAsets,
   subscribeVerifikasi,
@@ -143,6 +144,10 @@ interface AppContextType {
 
   // Desa Information Update
   updateDesa: (id: string, data: Partial<Desa>) => { success: boolean; message?: string };
+
+  // Multi-Device Cloud & P2P Sync
+  importSyncPayload: (payload: FullSyncPayload) => void;
+  broadcastCurrentState: () => void;
 
   // Reset
   resetToDefault: () => void;
@@ -542,6 +547,86 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [persistAsetsSafely]);
 
+  // Multi-Device Synchronization Engine (Cross-Browser, Cross-Laptop, Vercel & P2P)
+  const importSyncPayload = useCallback((payload: FullSyncPayload) => {
+    if (!payload) return;
+    if (Array.isArray(payload.asets) && payload.asets.length > 0) {
+      setAsets((prev) => {
+        const existingMap = new Map(prev.map((a) => [a.id, a]));
+        payload.asets?.forEach((incoming) => {
+          if (incoming && incoming.id) {
+            existingMap.set(incoming.id, incoming);
+          }
+        });
+        const merged = Array.from(existingMap.values());
+        persistAsetsSafely(merged);
+        return merged;
+      });
+    }
+    if (Array.isArray(payload.verifikasiList) && payload.verifikasiList.length > 0) {
+      setVerifikasiList((prev) => {
+        const existingMap = new Map(prev.map((v) => [v.id, v]));
+        payload.verifikasiList?.forEach((incoming) => {
+          if (incoming && incoming.id) existingMap.set(incoming.id, incoming);
+        });
+        const merged = Array.from(existingMap.values());
+        safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(merged));
+        return merged;
+      });
+    }
+    if (Array.isArray(payload.desas) && payload.desas.length > 0) {
+      setDesas(payload.desas);
+      safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(payload.desas));
+    }
+    if (Array.isArray(payload.users) && payload.users.length > 0) {
+      setUsers(payload.users);
+      safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(payload.users));
+    }
+    if (payload.kecamatanProfile) {
+      setKecamatanProfile(payload.kecamatanProfile);
+      safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(payload.kecamatanProfile));
+    }
+    setIsServerConnected(true);
+    setLastSyncTime(new Date());
+  }, [persistAsetsSafely]);
+
+  const broadcastCurrentState = useCallback(() => {
+    syncManager.broadcastChange({
+      version: 2,
+      timestamp: new Date().toISOString(),
+      senderId: 'manual',
+      asets,
+      verifikasiList,
+      pengesahanList,
+      desas,
+      users,
+      kecamatanProfile,
+    });
+  }, [asets, verifikasiList, pengesahanList, desas, users, kecamatanProfile]);
+
+  // Connect to P2P and Cloud Sync Hub
+  useEffect(() => {
+    syncManager.init(() => ({
+      version: 2,
+      timestamp: new Date().toISOString(),
+      senderId: 'client',
+      asets,
+      verifikasiList,
+      pengesahanList,
+      desas,
+      users,
+      kecamatanProfile,
+    }));
+
+    const unsub = syncManager.onSync((remotePayload) => {
+      importSyncPayload(remotePayload);
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [asets, verifikasiList, pengesahanList, desas, users, kecamatanProfile, importSyncPayload]);
+
   // Hydrate full photo assets from IndexedDB if offline or on fresh page load
   useEffect(() => {
     loadAsetsFromIndexedDB().then((idbAsets) => {
@@ -758,6 +843,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('[Cloud] Batch aset save failed:', err)
     );
 
+    // Broadcast via WebRTC P2P and Cloud Relay for instant cross-laptop synchronization
+    const combinedAsets = [...newAsets, ...asets];
+    syncManager.broadcastChange({
+      version: 2,
+      timestamp: now,
+      senderId: 'client',
+      asets: combinedAsets,
+      verifikasiList,
+      pengesahanList,
+      desas,
+      users,
+      kecamatanProfile,
+    });
+
     // Sync to local server
     fetch('/api/asets/batch', {
       method: 'POST',
@@ -802,6 +901,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           body: JSON.stringify(target),
         }).catch((e) => console.warn('[Sync] Asset update failed:', e));
       }
+
+      syncManager.broadcastChange({
+        version: 2,
+        timestamp: new Date().toISOString(),
+        senderId: 'client',
+        asets: updated,
+        verifikasiList,
+        pengesahanList,
+        desas,
+        users,
+        kecamatanProfile,
+      });
+
       return updated;
     });
   };
@@ -815,7 +927,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         message: 'Aset sedang dalam proses permohonan verifikasi Kecamatan, tidak dapat dihapus langsung!',
       };
     }
-    setAsets((prev) => prev.filter((a) => a.id !== id));
+    const filtered = asets.filter((a) => a.id !== id);
+    setAsets(filtered);
+
+    syncManager.broadcastChange({
+      version: 2,
+      timestamp: new Date().toISOString(),
+      senderId: 'client',
+      asets: filtered,
+      verifikasiList,
+      pengesahanList,
+      desas,
+      users,
+      kecamatanProfile,
+    });
 
     deleteAsetFromCloud(id).catch((err) => console.warn('[Cloud] Aset delete failed:', err));
     fetch(`/api/asets/${id}`, {
@@ -1339,6 +1464,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         getBackupData,
         restoreBackupData,
         updateDesa,
+        importSyncPayload,
+        broadcastCurrentState,
         saveMasterToSourceCode,
         resetToDefault,
       }}

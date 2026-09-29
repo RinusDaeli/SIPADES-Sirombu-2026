@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { NiasBaratLogo } from './NiasBaratLogo';
 import { BackupRestoreModal } from './BackupRestoreModal';
+import { SyncDevicesModal } from './SyncDevicesModal';
+import { syncManager } from '../utils/cloudSyncService';
 import {
   LayoutDashboard,
   Boxes,
@@ -34,6 +36,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner }) => {
   } = useApp();
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [peerCount, setPeerCount] = useState<number>(() => syncManager.getConnectedCount());
+
+  useEffect(() => {
+    return syncManager.onPeerCountChange((count) => {
+      setPeerCount(count);
+    });
+  }, []);
 
   // Desa only sees badge for their own pending mutations
   const pendingVerifCount = verifikasiList.filter((v) => {
@@ -195,27 +205,34 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner }) => {
           )}
 
           {/* Real-time Multi-Laptop Connection Status */}
-          <div className="p-2.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 flex items-center justify-between gap-2 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setShowSyncModal(true)}
+            className="w-full p-2.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/90 border border-emerald-500/40 flex items-center justify-between gap-2 shadow-sm transition-all cursor-pointer text-left group"
+            title="Klik untuk melihat status sinkronisasi antar perangkat & kode transfer"
+          >
             <div className="flex items-center gap-2 min-w-0">
-              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isServerConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${peerCount > 0 || isServerConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
               <div className="flex flex-col min-w-0">
-                <span className="font-bold text-white text-[11px] leading-tight truncate">
-                  {isServerConnected ? 'Terhubung Antar Laptop' : 'Mode Offline / Terputus'}
+                <span className="font-bold text-white text-[11px] leading-tight truncate group-hover:text-emerald-300 transition-colors">
+                  {peerCount > 0 ? `Terhubung (${peerCount} Laptop Online)` : isServerConnected ? 'Terhubung Antar Laptop' : 'Mode Offline / Terputus'}
                 </span>
                 <span className="text-[10px] text-emerald-300/80 truncate">
-                  Sinkronisasi Real-Time
+                  P2P & Cloud Relay Aktif
                 </span>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => refreshServerData()}
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                refreshServerData();
+              }}
               className="p-1.5 rounded-lg bg-emerald-900/60 hover:bg-emerald-800 text-emerald-300 hover:text-white transition-colors cursor-pointer shrink-0"
-              title="Sinkronkan data dengan laptop lain sekarang"
+              title="Sinkronkan data sekarang"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-            </button>
-          </div>
+            </div>
+          </button>
 
           {/* Logout Button */}
           <button
@@ -227,6 +244,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner }) => {
           </button>
         </div>
       </aside>
+
+      {/* Modal Sinkronisasi Antar Perangkat */}
+      <SyncDevicesModal
+        isOpen={showSyncModal}
+        onClose={() => setShowSyncModal(false)}
+      />
 
       {/* Modal Backup & Restore */}
       {isAdminOrSuper && (
