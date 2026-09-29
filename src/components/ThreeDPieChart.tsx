@@ -96,19 +96,19 @@ export const ThreeDPieChart: React.FC<ThreeDPieChartProps> = ({
   return (
     <div className="space-y-4">
       {title && (
-        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-800">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
-            <h3 className="text-sm font-bold text-slate-900 tracking-tight">{title}</h3>
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-pulse" />
+            <h3 className="text-sm font-bold text-white tracking-tight">{title}</h3>
           </div>
-          <span className="px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-[10px] font-bold text-blue-700">
+          <span className="px-2 py-0.5 rounded-full bg-blue-950/80 border border-blue-500/30 text-[10px] font-bold text-blue-300">
             3-D Pie Perspective
           </span>
         </div>
       )}
 
       {/* 3D Pie Chart Graphic Container */}
-      <div className="relative flex justify-center items-center py-2 bg-gradient-to-b from-slate-50/50 via-white to-slate-50/80 rounded-2xl border border-slate-200/80 p-2 shadow-inner">
+      <div className="relative flex justify-center items-center py-2 bg-gradient-to-b from-[#0A101D] via-[#0E172B] to-[#0A101D] rounded-2xl border border-slate-800 p-2 shadow-inner">
         <svg
           viewBox={`0 0 ${svgWidth} ${svgHeight}`}
           className="w-full max-w-[440px] h-auto overflow-visible select-none"
@@ -119,7 +119,7 @@ export const ThreeDPieChart: React.FC<ThreeDPieChartProps> = ({
               <feGaussianBlur in="SourceAlpha" stdDeviation="6" />
               <feOffset dx="0" dy="16" />
               <feComponentTransfer>
-                <feFuncA type="linear" slope="0.25" />
+                <feFuncA type="linear" slope="0.3" />
               </feComponentTransfer>
               <feMerge>
                 <feMergeNode />
@@ -131,7 +131,7 @@ export const ThreeDPieChart: React.FC<ThreeDPieChartProps> = ({
             <linearGradient id="pieSpecular" x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stopColor="#ffffff" stopOpacity="0.3" />
               <stop offset="50%" stopColor="#ffffff" stopOpacity="0" />
-              <stop offset="100%" stopColor="#000000" stopOpacity="0.2" />
+              <stop offset="100%" stopColor="#000000" stopOpacity="0.3" />
             </linearGradient>
           </defs>
 
@@ -141,8 +141,8 @@ export const ThreeDPieChart: React.FC<ThreeDPieChartProps> = ({
             cy={cy + depth + 14}
             rx={rx + 8}
             ry={ry + 4}
-            fill="#0f172a"
-            opacity="0.16"
+            fill="#000000"
+            opacity="0.4"
             filter="blur(8px)"
           />
 
@@ -342,22 +342,22 @@ export const ThreeDPieChart: React.FC<ThreeDPieChartProps> = ({
                 onMouseLeave={() => setHoveredIndex(null)}
                 className={`p-2 rounded-xl border flex items-center justify-between text-xs cursor-pointer transition-all ${
                   isHovered
-                    ? 'bg-slate-100 border-slate-400 shadow-sm scale-[1.01]'
-                    : 'bg-white border-slate-200/90 hover:border-slate-300'
+                    ? 'bg-slate-800/90 border-slate-600 shadow-md scale-[1.01]'
+                    : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
                 }`}
               >
                 <div className="flex items-center gap-2 min-w-0 pr-2">
                   <span
-                    className="w-3 h-3 rounded-full shrink-0 shadow-xs border border-white"
+                    className="w-3 h-3 rounded-full shrink-0 shadow-xs border border-white/40"
                     style={{ backgroundColor: slice.colors.top }}
                   />
-                  <span className="font-semibold text-slate-800 truncate" title={slice.label}>
+                  <span className="font-semibold text-slate-200 truncate" title={slice.label}>
                     {slice.label}
                   </span>
                 </div>
                 <div className="text-right shrink-0 flex items-center gap-2">
-                  <span className="font-mono font-bold text-slate-900">
-                    {slice.value} <span className="text-[10px] text-slate-500 font-normal">{unitLabel}</span>
+                  <span className="font-mono font-bold text-white">
+                    {slice.value} <span className="text-[10px] text-slate-400 font-normal">{unitLabel}</span>
                   </span>
                   <span
                     className="px-1.5 py-0.5 rounded text-[10px] font-black text-white"
@@ -374,7 +374,7 @@ export const ThreeDPieChart: React.FC<ThreeDPieChartProps> = ({
 
       {/* Footer / Keterangan Tambahan di Bawahnya */}
       {footerNote && (
-        <div className="pt-2 border-t border-slate-100 text-xs text-slate-600 font-medium">
+        <div className="pt-2 border-t border-slate-800 text-xs text-slate-300 font-medium">
           {footerNote}
         </div>
       )}

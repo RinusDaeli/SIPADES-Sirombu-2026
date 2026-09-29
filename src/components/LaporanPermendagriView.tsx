@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { Aset } from '../types';
 import { INITIAL_DESA_LIST } from '../data/initialData';
 import {
   exportToPermendagriPDF,
@@ -7,6 +8,7 @@ import {
   formatRupiah,
   formatNumber,
   formatTanggalIndonesia,
+  formatNamaDesaTitleCase,
   KLASIFIKASI_LIST,
   ROMAN_KLASIFIKASI,
 } from '../utils/reportGenerator';
@@ -32,8 +34,6 @@ export const LaporanPermendagriView: React.FC = () => {
     asets,
     desas,
     currentUser,
-    selectedYear,
-    setSelectedYear,
     selectedDesaFilter,
     setSelectedDesaFilter,
   } = useApp();
@@ -41,7 +41,10 @@ export const LaporanPermendagriView: React.FC = () => {
   const isDesaUser = currentUser?.role === 'admin_desa';
   const isKecamatanOrSuper = currentUser?.role === 'admin_kecamatan' || currentUser?.role === 'super_admin';
 
-  const [tanggalCetak, setTanggalCetak] = useState('2026-09-20');
+  // Filter default aset di Rekap Aset Desa adalah 0 ("(Seluruh tahun anggaran)") baik di akun admin maupun desa.
+  // State lokal ini menjaga agar pilihan filter tahun (misal 2025) tidak kembali ke 2026 dalam beberapa detik akibat poller latar belakang.
+  const [selectedYear, setSelectedYear] = useState<number>(0);
+  const [tanggalCetak, setTanggalCetak] = useState('2026-12-31');
   const [showPdfPreview, setShowPdfPreview] = useState(false);
 
   // All desa mode is active when an admin selects "all"
@@ -56,11 +59,15 @@ export const LaporanPermendagriView: React.FC = () => {
 
   const currentDesa = desas.find((d) => d.id === currentDesaId) || desas[20] || desas[0] || INITIAL_DESA_LIST[20] || INITIAL_DESA_LIST[0];
 
-  // Filter assets for this view up to selected year
+  // Filter assets for this view:
+  // - If selectedYear > 0 (e.g. 2025): Show ONLY assets acquired in that specific year (tahunPerolehan === selectedYear)
+  // - If selectedYear === 0: Show assets across ALL years (Seluruh Tahun Anggaran)
   const reportAsets = useMemo(() => {
+    const filterByYear = (a: Aset) => (selectedYear > 0 ? a.tahunPerolehan === selectedYear : true);
+
     if (isAllDesaMode) {
       return asets
-        .filter((a) => a.tahunPerolehan <= selectedYear && a.status !== 'terhapus')
+        .filter((a) => filterByYear(a) && a.status !== 'terhapus')
         .sort((a, b) => {
           if (a.desaName !== b.desaName) {
             return (a.desaName || '').localeCompare(b.desaName || '');
@@ -72,7 +79,7 @@ export const LaporanPermendagriView: React.FC = () => {
     }
 
     return asets
-      .filter((a) => a.desaId === currentDesaId && a.tahunPerolehan <= selectedYear && a.status !== 'terhapus')
+      .filter((a) => a.desaId === currentDesaId && filterByYear(a) && a.status !== 'terhapus')
       .sort((a, b) => {
         const orderA = KLASIFIKASI_LIST.indexOf((a.klasifikasi || '').replace(/^[I|V|X]+\.\s*/, '') as any);
         const orderB = KLASIFIKASI_LIST.indexOf((b.klasifikasi || '').replace(/^[I|V|X]+\.\s*/, '') as any);
@@ -149,7 +156,7 @@ export const LaporanPermendagriView: React.FC = () => {
               : `Laporan Penatausahaan Aset Tetap • ${currentDesa.name}`}
           </h2>
           <p className="text-xs text-slate-400">
-            Per 31 Desember {selectedYear} • {isAllDesaMode ? 'Memuat seluruh aset 25 desa dikelompokkan per desa' : 'Format resmi penatausahaan aset tetap desa'}.
+            {selectedYear > 0 ? `Per 31 Desember ${selectedYear}` : '(Seluruh tahun anggaran)'} • {isAllDesaMode ? 'Memuat seluruh aset 25 desa dikelompokkan per desa' : 'Format resmi penatausahaan aset tetap desa'}.
           </p>
         </div>
 
@@ -227,10 +234,14 @@ export const LaporanPermendagriView: React.FC = () => {
               onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
               className="bg-transparent text-amber-400 font-bold focus:outline-none cursor-pointer"
             >
-              <option value={2026} className="bg-slate-900 text-white">2026</option>
-              <option value={2025} className="bg-slate-900 text-white">2025</option>
-              <option value={2024} className="bg-slate-900 text-white">2024</option>
-              <option value={2023} className="bg-slate-900 text-white">2023</option>
+              <option value={0} className="bg-slate-900 text-amber-300 font-bold">★ (Seluruh tahun anggaran)</option>
+              <option value={2026} className="bg-slate-900 text-white">Tahun Anggaran 2026</option>
+              <option value={2025} className="bg-slate-900 text-white">Tahun Anggaran 2025</option>
+              <option value={2024} className="bg-slate-900 text-white">Tahun Anggaran 2024</option>
+              <option value={2023} className="bg-slate-900 text-white">Tahun Anggaran 2023</option>
+              <option value={2022} className="bg-slate-900 text-white">Tahun Anggaran 2022</option>
+              <option value={2021} className="bg-slate-900 text-white">Tahun Anggaran 2021</option>
+              <option value={2020} className="bg-slate-900 text-white">Tahun Anggaran 2020</option>
             </select>
           </div>
 
@@ -246,7 +257,7 @@ export const LaporanPermendagriView: React.FC = () => {
               title="Atur Tanggal Cetak yang Tertera pada Tanda Tangan"
             />
             <span className="text-[11px] text-amber-400/90 font-medium hidden sm:inline">
-              ({isKecamatanOrSuper ? 'Tetesua' : (currentDesa?.name || '').replace(/^DESA\s+/i, '')}, {formatTanggalIndonesia(tanggalCetak)})
+              ({isKecamatanOrSuper ? 'Tetesua' : formatNamaDesaTitleCase(currentDesa?.name)}, {formatTanggalIndonesia(tanggalCetak)})
             </span>
           </div>
         </div>
@@ -295,8 +306,8 @@ export const LaporanPermendagriView: React.FC = () => {
           <div className="pt-3 text-center">
             <h1 className="text-xs sm:text-sm font-black uppercase text-black tracking-wide">
               {isAllDesaMode
-                ? `REKAPITULASI ASET TETAP DESA SE-KECAMATAN SIROMBU PER 31 DESEMBER ${selectedYear}`
-                : `RINCIAN ASET TETAP DESA PER 31 DESEMBER ${selectedYear}`}
+                ? `REKAPITULASI ASET TETAP DESA SE-KECAMATAN SIROMBU ${selectedYear > 0 ? `PER 31 DESEMBER ${selectedYear}` : 'SELURUH TAHUN ANGGARAN'}`
+                : `RINCIAN ASET TETAP DESA ${selectedYear > 0 ? `PER 31 DESEMBER ${selectedYear}` : 'SELURUH TAHUN ANGGARAN'}`}
             </h1>
             <p className="text-[10px] italic text-slate-600 mt-0.5">
               (Format Standar Berdasarkan Lampiran Permendagri Nomor 20 Tahun 2018 tentang Pengelolaan Keuangan & Aset Desa)
@@ -353,7 +364,7 @@ export const LaporanPermendagriView: React.FC = () => {
                 // TAMPILAN SEMUA DESA (DIKELOMPOKKAN PER DESA)
                 desas.map((d, dIdx) => {
                   const desaItems = asets.filter(
-                    (a) => a.desaId === d.id && a.tahunPerolehan <= selectedYear && a.status !== 'terhapus'
+                    (a) => a.desaId === d.id && (selectedYear > 0 ? a.tahunPerolehan === selectedYear : true) && a.status !== 'terhapus'
                   );
                   const desaSubtotal = desaItems.reduce((s, a) => s + (a.nilaiPerolehan || 0), 0);
 
@@ -374,7 +385,7 @@ export const LaporanPermendagriView: React.FC = () => {
                         <tr>
                           <td className="py-2 px-2 text-center text-slate-600 font-mono text-[11px] border-r border-slate-800">-</td>
                           <td colSpan={6} className="py-2 px-3 italic text-slate-500 border-r border-slate-800">
-                            Belum ada aset tetap tercatat pada tahun anggaran {selectedYear}
+                            Belum ada aset tetap tercatat pada {selectedYear > 0 ? `tahun anggaran ${selectedYear}` : 'seluruh tahun anggaran'}
                           </td>
                           <td className="py-2 px-3 text-right text-slate-500 font-mono border-r border-slate-800">0</td>
                           <td className="py-2 px-2 text-center text-slate-500 border-r border-slate-800">-</td>
@@ -547,7 +558,9 @@ export const LaporanPermendagriView: React.FC = () => {
                 <td colSpan={7} className="py-3 px-3 text-right uppercase tracking-wider text-amber-400">
                   {isAllDesaMode
                     ? 'Total Nilai Perolehan Seluruh Desa se-Kecamatan Sirombu:'
-                    : `Total Nilai Aset Tetap per 31 Desember ${selectedYear}:`}
+                    : selectedYear > 0
+                    ? `Total Nilai Aset Tetap per 31 Desember ${selectedYear}:`
+                    : 'Total Nilai Seluruh Aset Tetap:'}
                 </td>
                 <td className="py-3 px-3 text-right font-mono text-emerald-400 text-sm">
                   {formatNumber(totalValuation)}
@@ -589,13 +602,15 @@ export const LaporanPermendagriView: React.FC = () => {
                 </p>
               </>
             ) : (
-              // AKUN DESA: KEPALA DESA DI SEBELAH KANAN
+              // AKUN DESA: KEPALA DESA / PJ. KEPALA DESA DI SEBELAH KANAN
               <>
                 <p className="text-slate-400 text-xs">
-                  {(currentDesa?.name || '').replace(/^DESA\s+/i, '')}, {formatTanggalIndonesia(tanggalCetak)}
+                  {formatNamaDesaTitleCase(currentDesa?.name)}, {formatTanggalIndonesia(tanggalCetak)}
                 </p>
-                <p className="font-bold text-white uppercase text-xs">
-                  Kepala Desa {(currentDesa?.name || '').replace(/^DESA\s+/i, '')}
+                <p className="font-bold text-white text-xs">
+                  {currentDesa.nipKepalaDesa && currentDesa.nipKepalaDesa.trim() !== '' && currentDesa.nipKepalaDesa.trim() !== '-' && currentDesa.nipKepalaDesa.trim() !== 'NIP. -'
+                    ? `Pj. Kepala Desa ${formatNamaDesaTitleCase(currentDesa?.name)}`
+                    : `Kepala Desa ${formatNamaDesaTitleCase(currentDesa?.name)}`}
                 </p>
 
                 <div className="h-20 flex items-center justify-center">
@@ -609,7 +624,7 @@ export const LaporanPermendagriView: React.FC = () => {
                   {currentDesa.kepalaDesa || 'Kepala Desa'}
                 </p>
                 <p className="text-[11px] text-slate-400 font-mono">
-                  {currentDesa.nipKepalaDesa && currentDesa.nipKepalaDesa.trim() !== '' && currentDesa.nipKepalaDesa.trim() !== '-'
+                  {currentDesa.nipKepalaDesa && currentDesa.nipKepalaDesa.trim() !== '' && currentDesa.nipKepalaDesa.trim() !== '-' && currentDesa.nipKepalaDesa.trim() !== 'NIP. -'
                     ? `NIP. ${currentDesa.nipKepalaDesa.trim()}`
                     : 'NIP. -'}
                 </p>

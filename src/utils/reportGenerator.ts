@@ -30,7 +30,7 @@ export const formatNumber = (num: number): string => {
 };
 
 export const formatTanggalIndonesia = (dateInput?: string | Date): string => {
-  if (!dateInput) return '20 September 2026';
+  if (!dateInput) return '31 Desember 2026';
 
   if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
     const [y, m, d] = dateInput.split('-').map(Number);
@@ -51,6 +51,20 @@ export const formatTanggalIndonesia = (dateInput?: string | Date): string => {
   ];
   return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
 };
+
+/**
+ * Format nama desa ke bentuk Title Case yang rapi (contoh: "DESA LAHAWA" -> "Lahawa")
+ */
+export function formatNamaDesaTitleCase(name?: string): string {
+  if (!name) return 'Desa';
+  const clean = name.replace(/^DESA\s+/i, '').trim();
+  if (!clean) return 'Desa';
+  return clean
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
 
 export interface RomanKlasifikasi {
   roman: string;
@@ -218,7 +232,7 @@ export const generatePermendagriPDF = async (options: PermendagriPdfOptions): Pr
     year,
     asets,
     isPrintedByAdmin = false,
-    tanggalCetak = '2026-09-20',
+    tanggalCetak = '2026-12-31',
     camatName = 'MESRAWAN HAREFA, S.Pd., M.M.',
     camatPangkat = 'Pembina, IV/a',
     camatNip = '19780512 200501 1 008',
@@ -296,9 +310,10 @@ export const generatePermendagriPDF = async (options: PermendagriPdfOptions): Pr
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(0, 0, 0);
+    const yearLabel = !year || year === 0 ? 'SELURUH TAHUN ANGGARAN' : `PER 31 DESEMBER ${year}`;
     const titleText = isAllDesaMode
-      ? `REKAPITULASI ASET TETAP DESA SE-KECAMATAN SIROMBU PER 31 DESEMBER ${year}`
-      : `RINCIAN ASET TETAP DESA PER 31 DESEMBER ${year}`;
+      ? `REKAPITULASI ASET TETAP DESA SE-KECAMATAN SIROMBU ${yearLabel}`
+      : `RINCIAN ASET TETAP DESA ${yearLabel}`;
     doc.text(titleText, 148.5, 33.5, { align: 'center' });
 
     doc.setFont('helvetica', 'italic');
@@ -362,7 +377,8 @@ export const generatePermendagriPDF = async (options: PermendagriPdfOptions): Pr
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(0, 0, 0);
-    doc.text(`RINCIAN ASET TETAP DESA PER 31 DESEMBER ${year}`, 148.5, 33.5, { align: 'center' });
+    const yearLabelDesa = !year || year === 0 ? 'SELURUH TAHUN ANGGARAN' : `PER 31 DESEMBER ${year}`;
+    doc.text(`RINCIAN ASET TETAP DESA ${yearLabelDesa}`, 148.5, 33.5, { align: 'center' });
 
     doc.setFont('helvetica', 'italic');
     doc.setFontSize(7.5);
@@ -385,7 +401,7 @@ export const generatePermendagriPDF = async (options: PermendagriPdfOptions): Pr
     // =========================================================================
     allDesas.forEach((d, dIdx) => {
       const activeDesaAsets = asets.filter(
-        (a) => a.desaId === d.id && a.tahunPerolehan <= year && a.status !== 'terhapus'
+        (a) => a.desaId === d.id && (!year || year === 0 ? true : a.tahunPerolehan === year) && a.status !== 'terhapus'
       );
       const desaTotal = activeDesaAsets.reduce((sum, a) => sum + (a.nilaiPerolehan || 0), 0);
       grandTotal += desaTotal;
@@ -460,7 +476,7 @@ export const generatePermendagriPDF = async (options: PermendagriPdfOptions): Pr
     // MODE DESA TUNGGAL (FORMAT 10 KOLOM RESMI - HANYA DATA YANG ADA TANPA DST)
     // =========================================================================
     const activeAsets = asets.filter(
-      (a) => a.desaId === desa?.id && a.tahunPerolehan <= year && a.status !== 'terhapus'
+      (a) => a.desaId === desa?.id && (!year || year === 0 ? true : a.tahunPerolehan === year) && a.status !== 'terhapus'
     );
 
     if (activeAsets.length === 0) {
@@ -514,8 +530,8 @@ export const generatePermendagriPDF = async (options: PermendagriPdfOptions): Pr
 
   // Grand Total Row
   const totalLabel = isAllDesaMode
-    ? `TOTAL KESELURUHAN ASET DESA SE-KECAMATAN SIROMBU (25 DESA) PER 31 DESEMBER ${year}`
-    : `Total Nilai Aset Tetap per 31 Desember ${year}`;
+    ? `TOTAL KESELURUHAN ASET DESA SE-KECAMATAN SIROMBU (25 DESA) ${!year || year === 0 ? '(SELURUH TAHUN ANGGARAN)' : `PER 31 DESEMBER ${year}`}`
+    : `Total Nilai Aset Tetap ${!year || year === 0 ? '(Seluruh Tahun Anggaran)' : `per 31 Desember ${year}`}`;
 
   tableBody.push([
     {
@@ -635,13 +651,21 @@ export const generatePermendagriPDF = async (options: PermendagriPdfOptions): Pr
     doc.text(camatPangkat, 235, signatureY + 30, { align: 'center' });
     doc.text(`NIP. ${camatNip}`, 235, signatureY + 34, { align: 'center' });
   } else {
-    // Skenario Akun Desa: Ditandatangani oleh KEPALA DESA di sisi kanan
-    const namaDesaClean = (desa?.name || '').replace(/^DESA\s+/i, '');
+    // Skenario Akun Desa: Ditandatangani oleh KEPALA DESA / PJ. KEPALA DESA di sisi kanan
+    const namaDesaTitleCase = formatNamaDesaTitleCase(desa?.name);
+    const hasNip = Boolean(
+      desa?.nipKepalaDesa &&
+      desa.nipKepalaDesa.trim() !== '' &&
+      desa.nipKepalaDesa.trim() !== '-' &&
+      desa.nipKepalaDesa.trim() !== 'NIP. -'
+    );
+    const jabatanKades = hasNip ? `Pj. Kepala Desa ${namaDesaTitleCase}` : `Kepala Desa ${namaDesaTitleCase}`;
+
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
-    doc.text(`${namaDesaClean}, ${tanggalCetakFormatted}`, 235, signatureY, { align: 'center' });
+    doc.text(`${namaDesaTitleCase}, ${tanggalCetakFormatted}`, 235, signatureY, { align: 'center' });
     doc.setFont('helvetica', 'bold');
-    doc.text(`Kepala Desa ${namaDesaClean}`, 235, signatureY + 4.5, { align: 'center' });
+    doc.text(jabatanKades, 235, signatureY + 4.5, { align: 'center' });
 
     const kadesName = desa?.kepalaDesa || '...........................................';
     doc.setFont('helvetica', 'bold');
@@ -653,9 +677,7 @@ export const generatePermendagriPDF = async (options: PermendagriPdfOptions): Pr
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    const nipText = desa?.nipKepalaDesa && desa.nipKepalaDesa.trim() !== '' && desa.nipKepalaDesa.trim() !== '-'
-      ? `NIP. ${desa.nipKepalaDesa.trim()}`
-      : 'NIP. -';
+    const nipText = hasNip ? `NIP. ${desa!.nipKepalaDesa!.trim()}` : 'NIP. -';
     doc.text(nipText, 235, signatureY + 30, { align: 'center' });
   }
 
@@ -676,13 +698,13 @@ export const exportToPermendagriPDF = async (
   if ('id' in (desaOrOptions as any) && 'name' in (desaOrOptions as any)) {
     options = {
       desa: desaOrOptions as Desa,
-      year: year || 2026,
+      year: typeof year === 'number' ? year : 0,
       asets: asets || [],
       isPrintedByAdmin,
       camatName,
       camatNip,
       camatPangkat,
-      tanggalCetak: tanggalCetak || '2026-09-20',
+      tanggalCetak: tanggalCetak || '2026-12-31',
     };
   } else {
     options = desaOrOptions as PermendagriPdfOptions;
@@ -697,12 +719,13 @@ export const exportToPermendagriPDF = async (
 
 export const exportToCSV = (desa: Desa, year: number, asets: Aset[]) => {
   const activeAsets = asets.filter(
-    (a) => a.desaId === desa.id && a.tahunPerolehan <= year && a.status !== 'terhapus'
+    (a) => a.desaId === desa.id && (!year || year === 0 ? true : a.tahunPerolehan === year) && a.status !== 'terhapus'
   );
 
+  const yearTitle = !year || year === 0 ? 'Seluruh Tahun Anggaran' : `per 31 Desember ${year}`;
   let csvContent = `PEMERINTAH ${desa.name}\n`;
   csvContent += `Kecamatan Sirombu, Kabupaten Nias Barat\n`;
-  csvContent += `Rincian Aset Tetap Desa per 31 Desember ${year}\n`;
+  csvContent += `Rincian Aset Tetap Desa ${yearTitle}\n`;
   csvContent += `Sesuai Format Lampiran Permendagri Nomor 20 Tahun 2018\n\n`;
   csvContent += `No,Klasifikasi Aset,Nama / Identitas Aset,Bukti Kepemilikan Jenis,Nomor Bukti,Tanggal Bukti,Kode Aset Tetap,Tahun Perolehan,Nilai Perolehan (Rp),Kondisi,Sumber Dana,Lokasi/Volume,Keterangan\n`;
 

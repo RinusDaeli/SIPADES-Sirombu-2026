@@ -127,35 +127,35 @@ export const DashboardView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Top Header Section as in screenshot */}
+      {/* Top Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="text-[11px] font-bold tracking-widest text-slate-400 uppercase mb-1">
+          <div className="text-[11px] font-bold tracking-widest text-emerald-400 uppercase mb-1">
             DASHBOARD INVENTARIS
           </div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+          <h1 className="text-3xl font-black text-white tracking-tight">
             {effectiveDesaId === 'all'
               ? 'Kecamatan Sirombu'
               : currentDesa?.name || 'Kecamatan Sirombu'}
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-slate-400 mt-1">
             Halo {currentUser?.name || 'Administrator'}
           </p>
         </div>
 
         {/* Filter Wilayah (Desa Selector for Kecamatan / Super Admin) */}
         {!isDesaUser && (
-          <div className="flex items-center gap-2 bg-white border border-slate-200 shadow-sm rounded-xl px-3 py-2 text-xs">
-            <Filter className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="text-slate-500 font-medium">Filter Wilayah:</span>
+          <div className="flex items-center gap-2 bg-[#0E1526] border border-slate-800 shadow-lg rounded-xl px-3.5 py-2 text-xs">
+            <Filter className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-slate-400 font-medium">Filter Wilayah:</span>
             <select
               value={selectedDesaFilter}
               onChange={(e) => setSelectedDesaFilter(e.target.value)}
-              className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer"
+              className="bg-transparent font-bold text-white focus:outline-none cursor-pointer"
             >
-              <option value="all">Semua Desa (25 Desa)</option>
+              <option value="all" className="bg-slate-900 text-white">Semua Desa (25 Desa)</option>
               {desas.map((d) => (
-                <option key={d.id} value={d.id}>
+                <option key={d.id} value={d.id} className="bg-slate-900 text-white">
                   {d.name}
                 </option>
               ))}
@@ -167,61 +167,61 @@ export const DashboardView: React.FC = () => {
       {/* 4 Metric Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Jenis Aset */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm hover:shadow transition-shadow">
+        <div className="bg-[#0E1526] border border-slate-800 rounded-2xl p-5 shadow-xl hover:border-slate-700 transition-all">
           <div className="flex items-center justify-between mb-3">
-            <div className="text-emerald-700">
-              <Boxes className="w-6 h-6 stroke-[1.75]" />
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+              <Boxes className="w-5 h-5 stroke-[2]" />
             </div>
           </div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
             JENIS ASET
           </div>
-          <div className="text-3xl font-black text-slate-900 tracking-tight">
+          <div className="text-3xl font-black text-white tracking-tight">
             {distinctCategories}
           </div>
         </div>
 
         {/* Card 2: Total Unit */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm hover:shadow transition-shadow">
+        <div className="bg-[#0E1526] border border-slate-800 rounded-2xl p-5 shadow-xl hover:border-slate-700 transition-all">
           <div className="flex items-center justify-between mb-3">
-            <div className="text-emerald-700">
-              <Layers className="w-6 h-6 stroke-[1.75]" />
+            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+              <Layers className="w-5 h-5 stroke-[2]" />
             </div>
           </div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
             TOTAL UNIT
           </div>
-          <div className="text-3xl font-black text-slate-900 tracking-tight">
+          <div className="text-3xl font-black text-white tracking-tight">
             {totalUnit}
           </div>
         </div>
 
         {/* Card 3: Nilai Perolehan */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm hover:shadow transition-shadow">
+        <div className="bg-[#0E1526] border border-slate-800 rounded-2xl p-5 shadow-xl hover:border-slate-700 transition-all">
           <div className="flex items-center justify-between mb-3">
-            <div className="text-emerald-700">
-              <Coins className="w-6 h-6 stroke-[1.75]" />
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+              <Coins className="w-5 h-5 stroke-[2]" />
             </div>
           </div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
             NILAI PEROLEHAN
           </div>
-          <div className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight truncate">
+          <div className="text-2xl lg:text-3xl font-black text-amber-300 tracking-tight truncate font-mono">
             {formatRupiah(totalNilai)}
           </div>
         </div>
 
         {/* Card 4: Wilayah */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm hover:shadow transition-shadow">
+        <div className="bg-[#0E1526] border border-slate-800 rounded-2xl p-5 shadow-xl hover:border-slate-700 transition-all">
           <div className="flex items-center justify-between mb-3">
-            <div className="text-emerald-700">
-              <Building className="w-6 h-6 stroke-[1.75]" />
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+              <Building className="w-5 h-5 stroke-[2]" />
             </div>
           </div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
             WILAYAH
           </div>
-          <div className="text-xl lg:text-2xl font-black text-slate-900 tracking-tight truncate">
+          <div className="text-xl lg:text-2xl font-black text-white tracking-tight truncate">
             {effectiveDesaId === 'all'
               ? 'Kec. Sirombu'
               : (currentDesa?.name || '').replace('DESA ', '') || 'Kec. Sirombu'}
@@ -232,14 +232,12 @@ export const DashboardView: React.FC = () => {
       {/* DASHBOARD CHARTS SECTION */}
       {!isDesaUser ? (
         /* ================= ADMIN / SUPER ADMIN VIEW ================= */
-        /* Kiri: Total Aset semua desa menurut Kategori/klasifikasi aset (Grafik 3-D Column) */
-        /* Kanan: Rekap Total Aset Sesuai Kondisi (Grafik 3-D Pie) */
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Sisi Kiri: Total Aset semua desa menurut Kategori/klasifikasi aset dalam Grafik 3-D Column */}
-          <div className="lg:col-span-7 bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+          {/* Sisi Kiri: Total Aset semua desa menurut Kategori */}
+          <div className="lg:col-span-7 bg-[#0E1526] border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
             <div>
               <div className="mb-3">
-                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
                   <span>Total Aset Menurut Kategori</span>
                 </h2>
               </div>
@@ -254,11 +252,11 @@ export const DashboardView: React.FC = () => {
             </div>
           </div>
 
-          {/* Sisi Kanan: Rekap Total Aset Sesuai Kondisi dalam Grafik 3-D Pie */}
-          <div className="lg:col-span-5 bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+          {/* Sisi Kanan: Rekap Total Aset Sesuai Kondisi */}
+          <div className="lg:col-span-5 bg-[#0E1526] border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
             <div>
               <div className="mb-3">
-                <h2 className="text-base font-bold text-slate-900">
+                <h2 className="text-base font-bold text-white">
                   Rekap Total Aset Sesuai Kondisi
                 </h2>
               </div>
@@ -268,18 +266,18 @@ export const DashboardView: React.FC = () => {
                 unitLabel="Unit"
                 emptyMessage="Belum ada data kondisi aset"
                 footerNote={
-                  <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span className="text-slate-600 font-bold">Keterangan:</span>
+                  <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="text-slate-400 font-bold">Keterangan:</span>
                     <div className="flex flex-wrap items-center gap-3 font-semibold">
-                      <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                      <span className="inline-flex items-center gap-1.5 text-emerald-400">
                         <span className="w-2 h-2 rounded-full bg-emerald-500" />
                         Baik {countBaik} Unit
                       </span>
-                      <span className="inline-flex items-center gap-1.5 text-amber-700">
+                      <span className="inline-flex items-center gap-1.5 text-amber-400">
                         <span className="w-2 h-2 rounded-full bg-amber-500" />
                         Rusak Ringan {countRingan} Unit
                       </span>
-                      <span className="inline-flex items-center gap-1.5 text-rose-700">
+                      <span className="inline-flex items-center gap-1.5 text-rose-400">
                         <span className="w-2 h-2 rounded-full bg-rose-500" />
                         Rusak Berat {countBerat} Unit
                       </span>
@@ -292,20 +290,18 @@ export const DashboardView: React.FC = () => {
         </div>
       ) : (
         /* ================= DESA VIEW ================= */
-        /* Kiri: Aset Per Kategori (Grafik 3-D Column) */
-        /* Kanan: Kondisi Barang (Grafik 3-D Pie) */
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Sisi Kiri: Aset Per Kategori dalam Grafik 3-D Column */}
-          <div className="lg:col-span-7 bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+          <div className="lg:col-span-7 bg-[#0E1526] border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
             <div>
               <div className="mb-3">
-                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
                   <span>Aset Per Kategori</span>
-                  <span className="text-xs font-normal text-emerald-700 font-bold">
+                  <span className="text-xs font-normal text-emerald-400 font-bold">
                     • {currentDesa?.name || 'Desa'}
                   </span>
                 </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-xs text-slate-400 mt-0.5">
                   Grafik 3-D Column rincian aset berdasarkan jenis klasifikasi barang desa.
                 </p>
               </div>
@@ -322,13 +318,13 @@ export const DashboardView: React.FC = () => {
           </div>
 
           {/* Sisi Kanan: Kondisi Barang dalam Grafik 3-D Pie */}
-          <div className="lg:col-span-5 bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+          <div className="lg:col-span-5 bg-[#0E1526] border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
             <div>
               <div className="mb-3">
-                <h2 className="text-base font-bold text-slate-900">
+                <h2 className="text-base font-bold text-white">
                   Kondisi Barang
                 </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-xs text-slate-400 mt-0.5">
                   Grafik 3-D Pie persentase kondisi fisik aset desa (Baik, Rusak Ringan, Rusak Berat).
                 </p>
               </div>
@@ -338,18 +334,18 @@ export const DashboardView: React.FC = () => {
                 unitLabel="Unit"
                 emptyMessage="Belum ada data kondisi aset"
                 footerNote={
-                  <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span className="text-slate-600 font-bold">Keterangan:</span>
+                  <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="text-slate-400 font-bold">Keterangan:</span>
                     <div className="flex flex-wrap items-center gap-3 font-semibold">
-                      <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                      <span className="inline-flex items-center gap-1.5 text-emerald-400">
                         <span className="w-2 h-2 rounded-full bg-emerald-500" />
                         Baik {countBaik} Unit
                       </span>
-                      <span className="inline-flex items-center gap-1.5 text-amber-700">
+                      <span className="inline-flex items-center gap-1.5 text-amber-400">
                         <span className="w-2 h-2 rounded-full bg-amber-500" />
                         Rusak Ringan {countRingan} Unit
                       </span>
-                      <span className="inline-flex items-center gap-1.5 text-rose-700">
+                      <span className="inline-flex items-center gap-1.5 text-rose-400">
                         <span className="w-2 h-2 rounded-full bg-rose-500" />
                         Rusak Berat {countBerat} Unit
                       </span>

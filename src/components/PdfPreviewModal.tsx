@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import {
   generatePermendagriPDF,
   formatTanggalIndonesia,
+  formatNamaDesaTitleCase,
   formatRupiah,
   formatNumber,
   ROMAN_KLASIFIKASI,
@@ -77,8 +78,8 @@ export const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({
 
   // Calculate filtered assets and totals
   const relevantAsets = isAllDesaMode
-    ? asets.filter((a) => a.tahunPerolehan <= year && a.status !== 'terhapus')
-    : asets.filter((a) => a.desaId === desa?.id && a.tahunPerolehan <= year && a.status !== 'terhapus');
+    ? asets.filter((a) => (!year || year === 0 ? true : a.tahunPerolehan === year) && a.status !== 'terhapus')
+    : asets.filter((a) => a.desaId === desa?.id && (!year || year === 0 ? true : a.tahunPerolehan === year) && a.status !== 'terhapus');
 
   const totalNilai = relevantAsets.reduce((sum, item) => sum + (item.nilaiPerolehan || 0), 0);
 
@@ -218,7 +219,7 @@ export const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({
               <p className="text-xs text-slate-400 mt-0.5">
                 {isAllDesaMode
                   ? `25 Desa Se-Kecamatan Sirombu • Total Nilai: ${formatRupiah(totalNilai)}`
-                  : `${desa?.name} • TA ${year} • Total Nilai: ${formatRupiah(totalNilai)}`}
+                  : `${desa?.name} • ${!year || year === 0 ? 'Seluruh Tahun Anggaran' : `TA ${year}`} • Total Nilai: ${formatRupiah(totalNilai)}`}
               </p>
             </div>
           </div>
@@ -314,7 +315,7 @@ export const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({
           </div>
 
           <div className="text-[11px] text-slate-300">
-            Tempat & Tanggal Tertera: <strong className="text-amber-400">{isPrintedByAdmin ? 'Tetesua' : (desa?.name || '').replace(/^DESA\s+/i, '')}, {formattedTanggalCetak}</strong>
+            Tempat & Tanggal Tertera: <strong className="text-amber-400">{isPrintedByAdmin ? 'Tetesua' : formatNamaDesaTitleCase(desa?.name)}, {formattedTanggalCetak}</strong>
           </div>
         </div>
 
@@ -366,8 +367,8 @@ export const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({
               <div className="text-center my-3">
                 <h2 className="text-xs sm:text-sm font-bold uppercase tracking-wide">
                   {isAllDesaMode
-                    ? `REKAPITULASI ASET TETAP DESA SE-KECAMATAN SIROMBU PER 31 DESEMBER ${year}`
-                    : `RINCIAN ASET TETAP DESA PER 31 DESEMBER ${year}`}
+                    ? `REKAPITULASI ASET TETAP DESA SE-KECAMATAN SIROMBU ${!year || year === 0 ? 'SELURUH TAHUN ANGGARAN' : `PER 31 DESEMBER ${year}`}`
+                    : `RINCIAN ASET TETAP DESA ${!year || year === 0 ? 'SELURUH TAHUN ANGGARAN' : `PER 31 DESEMBER ${year}`}`}
                 </h2>
                 <p className="text-[9.5px] italic text-gray-700 mt-0.5">
                   (Format Standar Berdasarkan Lampiran Permendagri Nomor 20 Tahun 2018 tentang Pengelolaan Keuangan & Aset Desa)
@@ -412,7 +413,7 @@ export const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({
                     // MODE SEMUA DESA (DIKELOMPOKKAN SESUAI DESA)
                     allDesas.map((d, dIdx) => {
                       const desaItems = asets.filter(
-                        (a) => a.desaId === d.id && a.tahunPerolehan <= year && a.status !== 'terhapus'
+                        (a) => a.desaId === d.id && (!year || year === 0 ? true : a.tahunPerolehan === year) && a.status !== 'terhapus'
                       );
                       const desaSubtotal = desaItems.reduce((s, a) => s + (a.nilaiPerolehan || 0), 0);
 
@@ -434,7 +435,7 @@ export const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({
                             <tr>
                               <td className="border border-black text-center text-gray-400 py-1">-</td>
                               <td className="border border-black px-2 py-1 italic text-gray-400" colSpan={6}>
-                                Belum ada aset tetap tercatat pada tahun anggaran {year}
+                                Belum ada aset tetap tercatat pada {!year || year === 0 ? 'seluruh tahun anggaran' : `tahun anggaran ${year}`}
                               </td>
                               <td className="border border-black text-right text-gray-400 py-1">0</td>
                               <td className="border border-black text-center text-gray-400 py-1">-</td>
@@ -488,7 +489,7 @@ export const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({
                       <tr>
                         <td className="border border-black text-center py-2 text-gray-400 font-mono">-</td>
                         <td colSpan={6} className="border border-black px-2 py-2 italic text-gray-400">
-                          Belum ada data aset tetap yang tercatat pada tahun anggaran ini
+                          Belum ada data aset tetap yang tercatat pada {!year || year === 0 ? 'seluruh tahun anggaran' : `tahun anggaran ${year}`}
                         </td>
                         <td className="border border-black px-2 py-2 text-right font-bold text-gray-400">0</td>
                         <td className="border border-black text-center py-2 text-gray-400">-</td>
@@ -543,8 +544,8 @@ export const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({
                   <tr className="bg-slate-200 font-bold border-t-2 border-b-2 border-black">
                     <td colSpan={7} className="border border-black px-3 py-1.5 text-left uppercase">
                       {isAllDesaMode
-                        ? `TOTAL KESELURUHAN ASET DESA SE-KECAMATAN SIROMBU (25 DESA) PER 31 DESEMBER ${year}`
-                        : `Total Nilai Aset Tetap per 31 Desember ${year}`}
+                        ? `TOTAL KESELURUHAN ASET DESA SE-KECAMATAN SIROMBU (25 DESA) ${!year || year === 0 ? '(SELURUH TAHUN ANGGARAN)' : `PER 31 DESEMBER ${year}`}`
+                        : `Total Nilai Aset Tetap ${!year || year === 0 ? '(Seluruh Tahun Anggaran)' : `per 31 Desember ${year}`}`}
                     </td>
                     <td className="border border-black px-2 py-1.5 text-right font-black">
                       {formatNumber(totalNilai)}
@@ -590,13 +591,15 @@ export const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({
                       </p>
                     </>
                   ) : (
-                    // AKUN DESA: DITANDATANGANI KEPALA DESA
+                    // AKUN DESA: DITANDATANGANI KEPALA DESA / PJ. KEPALA DESA
                     <>
                       <p className="text-[11px] text-black">
-                        {(desa?.name || '').replace(/^DESA\s+/i, '')}, {formattedTanggalCetak}
+                        {formatNamaDesaTitleCase(desa?.name)}, {formattedTanggalCetak}
                       </p>
-                      <p className="text-[11px] font-bold text-black uppercase mt-0.5">
-                        Kepala Desa {(desa?.name || '').replace(/^DESA\s+/i, '')}
+                      <p className="text-[11px] font-bold text-black mt-0.5">
+                        {desa?.nipKepalaDesa && desa.nipKepalaDesa.trim() !== '' && desa.nipKepalaDesa.trim() !== '-' && desa.nipKepalaDesa.trim() !== 'NIP. -'
+                          ? `Pj. Kepala Desa ${formatNamaDesaTitleCase(desa?.name)}`
+                          : `Kepala Desa ${formatNamaDesaTitleCase(desa?.name)}`}
                       </p>
 
                       <div className="h-16 flex items-center justify-center">
@@ -609,7 +612,7 @@ export const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({
                         {desa?.kepalaDesa || '...........................................'}
                       </p>
                       <p className="text-[10px] text-black mt-0.5 font-mono">
-                        {desa?.nipKepalaDesa && desa.nipKepalaDesa.trim() !== '' && desa.nipKepalaDesa.trim() !== '-'
+                        {desa?.nipKepalaDesa && desa.nipKepalaDesa.trim() !== '' && desa.nipKepalaDesa.trim() !== '-' && desa.nipKepalaDesa.trim() !== 'NIP. -'
                           ? `NIP. ${desa.nipKepalaDesa.trim()}`
                           : 'NIP. -'}
                       </p>

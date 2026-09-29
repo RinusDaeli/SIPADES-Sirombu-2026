@@ -8,12 +8,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "RAHMAT ARMADI DAULAY",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Bawosaloo Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "bawosaloo@sirombu.desa.id",
-    "nomorHp": "081263001001",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Sokhiato Daeli",
-    "sekdes": "Ama Brian Hia",
-    "kontak": "081263001001"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-02",
@@ -22,12 +22,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "MIZANUL ADLI DOMO",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Imana Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "imana@sirombu.desa.id",
-    "nomorHp": "081263001002",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Aro’o Waruwu",
-    "sekdes": "Ina Kevin Gulo",
-    "kontak": "081263001002"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-03",
@@ -36,12 +36,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "FIDEL GAURIFA",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Tuwatuwa Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "tuwatuwa@sirombu.desa.id",
-    "nomorHp": "081263001003",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Noverius Hia",
-    "sekdes": "Bezaro Daeli",
-    "kontak": "081263001003"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-04",
@@ -50,12 +50,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "HERTI RAHAYU HIA",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Kafokafo Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "kafokafo@sirombu.desa.id",
-    "nomorHp": "081263001004",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Agustinus Gulo",
-    "sekdes": "Yulianus Marundruri",
-    "kontak": "081263001004"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-05",
@@ -64,12 +64,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "AFIFUDDIN MARULAFAU",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Bawasawa Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "bawasawa@sirombu.desa.id",
-    "nomorHp": "081263001005",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Fatolosa Daeli",
-    "sekdes": "Kariaman Hia",
-    "kontak": "081263001005"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-06",
@@ -78,12 +78,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "ALFALA KHAIRUN HIA",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Pulaubogi Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "pulaubogi@sirombu.desa.id",
-    "nomorHp": "081263001006",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Budianto Hia",
-    "sekdes": "Darman Marundruri",
-    "kontak": "081263001006"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-07",
@@ -92,12 +92,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "NUR DIAN MARUAO",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Halamona Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "halamona@sirombu.desa.id",
-    "nomorHp": "081263001007",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Yuliaman Waruwu",
-    "sekdes": "Alisama Daeli",
-    "kontak": "081263001007"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-08",
@@ -106,12 +106,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "MARTAWATI DAELI",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Hanofa Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "hanofa@sirombu.desa.id",
-    "nomorHp": "081263001008",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Ebenezer Hia",
-    "sekdes": "Faigi’o Gulo",
-    "kontak": "081263001008"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-09",
@@ -120,12 +120,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "MEINARIA WARUWU, S.Pd",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Lahawa Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "lahawa@sirombu.desa.id",
-    "nomorHp": "081263001009",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Arisman Daeli",
-    "sekdes": "Yupiter Daeli",
-    "kontak": "081263001009"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-10",
@@ -134,12 +134,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "IMAN YAKIN DAELI",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Hinako Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "hinako@sirombu.desa.id",
-    "nomorHp": "081263001010",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Otoni Hia",
-    "sekdes": "Yason Marundruri",
-    "kontak": "081263001010"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-11",
@@ -148,12 +148,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "AINAL WAZNA TANJUNG, SE",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Sineneeto Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "sineneeto@sirombu.desa.id",
-    "nomorHp": "081263001011",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Matius Daeli",
-    "sekdes": "Yaredi Gulo",
-    "kontak": "081263001011"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-12",
@@ -162,12 +162,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "HETTY HENDRAWATI DAELI, S.Th",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Balowondrate Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "balowondrate@sirombu.desa.id",
-    "nomorHp": "081263001012",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Restu Waruwu",
-    "sekdes": "Waozaro Hia",
-    "kontak": "081263001012"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-13",
@@ -176,12 +176,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "ROSTINA BU'ULOLO",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Hilimberuanaa Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "hilimberuanaa@sirombu.desa.id",
-    "nomorHp": "081263001013",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Karisman Hia",
-    "sekdes": "Meiman Daeli",
-    "kontak": "081263001013"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-14",
@@ -190,12 +190,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "MEGAWATI LASE",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Lahusa Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "lahusa@sirombu.desa.id",
-    "nomorHp": "081263001014",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Efer Waruwu",
-    "sekdes": "Otani Gulo",
-    "kontak": "081263001014"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-15",
@@ -204,12 +204,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "FATIELI HIA",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Ombolata Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "ombolata@sirombu.desa.id",
-    "nomorHp": "081263001015",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Pardomuan Daeli",
-    "sekdes": "Sudirman Hia",
-    "kontak": "081263001015"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-16",
@@ -218,12 +218,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "FIDELIS HALAWA",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Tetehosi Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "tetehosi@sirombu.desa.id",
-    "nomorHp": "081263001016",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Amoni Hia",
-    "sekdes": "Faatulo Daeli",
-    "kontak": "081263001016"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-17",
@@ -232,12 +232,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "AMENESI HIA",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Togimbogi Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "togimbogi@sirombu.desa.id",
-    "nomorHp": "081263001017",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Helmin Waruwu",
-    "sekdes": "Beni Gulo",
-    "kontak": "081263001017"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-18",
@@ -246,12 +246,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "AGUSTOMO HIA",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Sisobandrao Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "sisobandrao@sirombu.desa.id",
-    "nomorHp": "081263001018",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Berkat Hia",
-    "sekdes": "Syukur Daeli",
-    "kontak": "081263001018"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-19",
@@ -260,12 +260,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "TAROMALIMO ZIDUHU MARUNDURI, ST",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Fadoro Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "fadoro@sirombu.desa.id",
-    "nomorHp": "081263001019",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Paskah Gulo",
-    "sekdes": "Natalis Hia",
-    "kontak": "081263001019"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-20",
@@ -274,12 +274,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "OSIGO HIA",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Tugalagawu Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "tugalagawu@sirombu.desa.id",
-    "nomorHp": "081263001020",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Yosafat Daeli",
-    "sekdes": "Markus Waruwu",
-    "kontak": "081263001020"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-21",
@@ -288,12 +288,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "VENI HIDAYATI, AM.Keb",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Sirombu Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "kantor@sirombu.desa.id",
-    "nomorHp": "081263001021",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Faomaso Hia",
-    "sekdes": "Ya’ahowu Daeli",
-    "kontak": "081263001021"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-22",
@@ -302,12 +302,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "MARIUS FIVE FINISMAN DAELI, S.STP",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Togideu Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "togideu@sirombu.desa.id",
-    "nomorHp": "081263001022",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Sadari Hia",
-    "sekdes": "Sabar Gulo",
-    "kontak": "081263001022"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-23",
@@ -316,12 +316,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "SUDI MURNIATI MENDROFA",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Tugala Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "tugala@sirombu.desa.id",
-    "nomorHp": "081263001023",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Fajar Waruwu",
-    "sekdes": "Purnama Daeli",
-    "kontak": "081263001023"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-24",
@@ -330,12 +330,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "IMAN KRISTIAN DAELI",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Orahili Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "orahili@sirombu.desa.id",
-    "nomorHp": "081263001024",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Solagratia Daeli",
-    "sekdes": "Imanuel Hia",
-    "kontak": "081263001024"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   },
   {
     "id": "desa-25",
@@ -344,12 +344,12 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "kepalaDesa": "INOVATOR IMAN PUTRA DAELI",
     "nipKepalaDesa": "-",
     "alamatDesa": "Desa Gunungcahaya Kecamatan Sirombu Kabupaten Nias Barat",
-    "emailDesa": "gunungcahaya@sirombu.desa.id",
-    "nomorHp": "081263001025",
+    "emailDesa": "",
+    "nomorHp": "",
     "kodePos": "22863",
-    "kaurAset": "Sinar Waruwu",
-    "sekdes": "Terkabul Gulo",
-    "kontak": "081263001025"
+    "kaurAset": "",
+    "sekdes": "",
+    "kontak": ""
   }
 ];
 
@@ -382,7 +382,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-01",
     "desaName": "DESA BAWOSALOO",
-    "phone": "081263001001",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -393,7 +393,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-02",
     "desaName": "DESA IMANA",
-    "phone": "081263001002",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -404,7 +404,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-03",
     "desaName": "DESA TUWATUWA",
-    "phone": "081263001003",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -415,7 +415,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-04",
     "desaName": "DESA KAFOKAFO",
-    "phone": "081263001004",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -426,7 +426,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-05",
     "desaName": "DESA BAWASAWA",
-    "phone": "081263001005",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -437,7 +437,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-06",
     "desaName": "DESA PULAUBOGI",
-    "phone": "081263001006",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -448,7 +448,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-07",
     "desaName": "DESA HALAMONA",
-    "phone": "081263001007",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -459,7 +459,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-08",
     "desaName": "DESA HANOFA",
-    "phone": "081263001008",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -470,7 +470,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-09",
     "desaName": "DESA LAHAWA",
-    "phone": "081263001009",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -481,7 +481,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-10",
     "desaName": "DESA HINAKO",
-    "phone": "081263001010",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -492,7 +492,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-11",
     "desaName": "DESA SINENEETO",
-    "phone": "081263001011",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -503,7 +503,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-12",
     "desaName": "DESA BALOWONDRATE",
-    "phone": "081263001012",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -514,7 +514,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-13",
     "desaName": "DESA HILIMBERUANAA",
-    "phone": "081263001013",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -525,7 +525,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-14",
     "desaName": "DESA LAHUSA",
-    "phone": "081263001014",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -536,7 +536,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-15",
     "desaName": "DESA OMBOLATA",
-    "phone": "081263001015",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -547,7 +547,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-16",
     "desaName": "DESA TETEHOSI",
-    "phone": "081263001016",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -558,7 +558,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-17",
     "desaName": "DESA TOGIMBOGI",
-    "phone": "081263001017",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -569,7 +569,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-18",
     "desaName": "DESA SISOBANDRAO",
-    "phone": "081263001018",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -580,7 +580,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-19",
     "desaName": "DESA FADORO",
-    "phone": "081263001019",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -591,7 +591,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-20",
     "desaName": "DESA TUGALAGAWU",
-    "phone": "081263001020",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -602,7 +602,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-21",
     "desaName": "DESA SIROMBU",
-    "phone": "081263001021",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -613,7 +613,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-22",
     "desaName": "DESA TOGIDEU",
-    "phone": "081263001022",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -624,7 +624,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-23",
     "desaName": "DESA TUGALA",
-    "phone": "081263001023",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -635,7 +635,7 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-24",
     "desaName": "DESA ORAHILI",
-    "phone": "081263001024",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   },
   {
@@ -646,163 +646,12 @@ export const INITIAL_USERS: User[] = [
     "role": "admin_desa",
     "desaId": "desa-25",
     "desaName": "DESA GUNUNGCAHAYA",
-    "phone": "081263001025",
+    "phone": "",
     "createdAt": "2024-01-05T09:00:00Z"
   }
 ];
 
-export const INITIAL_ASETS: Aset[] = [
-  {
-    "id": "ast-togideu-0001",
-    "desaId": "desa-22",
-    "desaName": "DESA TOGIDEU",
-    "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "namaAset": "Kursi Kerja Pejabat",
-    "kodeAset": "02.01.01.22.0001",
-    "nomorRegister": "0001",
-    "bukti": {
-      "jenis": "Kwitansi / BAST",
-      "nomor": "00023/KWT/02.2022/2025",
-      "tanggal": "2025-07-29"
-    },
-    "tahunPerolehan": 2025,
-    "nilaiPerolehan": 3307500,
-    "kondisi": "Baik",
-    "sumberDana": "ADD",
-    "volume": "1 Unit",
-    "lokasi": "Kantor Desa Togideu",
-    "keterangan": "Pengadaan aset inventaris kantor desa tahun 2025",
-    "fotoAset": [],
-    "status": "aktif",
-    "createdAt": "2025-07-29T08:00:00.000Z",
-    "updatedAt": "2025-07-29T08:00:00.000Z"
-  },
-  {
-    "id": "ast-togideu-0002",
-    "desaId": "desa-22",
-    "desaName": "DESA TOGIDEU",
-    "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "namaAset": "Kipas Angin",
-    "kodeAset": "02.01.01.22.0002",
-    "nomorRegister": "0002",
-    "bukti": {
-      "jenis": "Kwitansi / BAST",
-      "nomor": "00023/KWT/02.2022/2025",
-      "tanggal": "2025-07-29"
-    },
-    "tahunPerolehan": 2025,
-    "nilaiPerolehan": 889100,
-    "kondisi": "Baik",
-    "sumberDana": "ADD",
-    "volume": "1 Unit",
-    "lokasi": "Kantor Desa Togideu",
-    "keterangan": "Pengadaan kipas angin inventaris kantor desa",
-    "fotoAset": [],
-    "status": "aktif",
-    "createdAt": "2025-07-29T08:00:00.000Z",
-    "updatedAt": "2025-07-29T08:00:00.000Z"
-  },
-  {
-    "id": "ast-togideu-0003",
-    "desaId": "desa-22",
-    "desaName": "DESA TOGIDEU",
-    "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "namaAset": "Kipas Angin",
-    "kodeAset": "02.01.01.22.0003",
-    "nomorRegister": "0003",
-    "bukti": {
-      "jenis": "Kwitansi / BAST",
-      "nomor": "00023/KWT/02.2022/2025",
-      "tanggal": "2025-07-29"
-    },
-    "tahunPerolehan": 2025,
-    "nilaiPerolehan": 889100,
-    "kondisi": "Baik",
-    "sumberDana": "ADD",
-    "volume": "1 Unit",
-    "lokasi": "Kantor Desa Togideu",
-    "keterangan": "Pengadaan kipas angin inventaris kantor desa",
-    "fotoAset": [],
-    "status": "aktif",
-    "createdAt": "2025-07-29T08:00:00.000Z",
-    "updatedAt": "2025-07-29T08:00:00.000Z"
-  },
-  {
-    "id": "ast-togideu-0004",
-    "desaId": "desa-22",
-    "desaName": "DESA TOGIDEU",
-    "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "namaAset": "Sapu Lantai",
-    "kodeAset": "02.01.01.22.0004",
-    "nomorRegister": "0004",
-    "bukti": {
-      "jenis": "Kwitansi / BAST",
-      "nomor": "00036/KWT/02.2022/2025",
-      "tanggal": "2025-08-04"
-    },
-    "tahunPerolehan": 2025,
-    "nilaiPerolehan": 67200,
-    "kondisi": "Baik",
-    "sumberDana": "ADD",
-    "volume": "1 Unit",
-    "lokasi": "Kantor Desa Togideu",
-    "keterangan": "Perlengkapan kebersihan kantor desa",
-    "fotoAset": [],
-    "status": "aktif",
-    "createdAt": "2025-08-04T08:00:00.000Z",
-    "updatedAt": "2025-08-04T08:00:00.000Z"
-  },
-  {
-    "id": "ast-togideu-0005",
-    "desaId": "desa-22",
-    "desaName": "DESA TOGIDEU",
-    "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "namaAset": "Sapu Lantai",
-    "kodeAset": "02.01.01.22.0005",
-    "nomorRegister": "0005",
-    "bukti": {
-      "jenis": "Kwitansi / BAST",
-      "nomor": "00036/KWT/02.2022/2025",
-      "tanggal": "2025-08-04"
-    },
-    "tahunPerolehan": 2025,
-    "nilaiPerolehan": 67200,
-    "kondisi": "Baik",
-    "sumberDana": "ADD",
-    "volume": "1 Unit",
-    "lokasi": "Kantor Desa Togideu",
-    "keterangan": "Perlengkapan kebersihan kantor desa",
-    "fotoAset": [],
-    "status": "aktif",
-    "createdAt": "2025-08-04T08:00:00.000Z",
-    "updatedAt": "2025-08-04T08:00:00.000Z"
-  },
-  {
-    "id": "ast-togideu-0006",
-    "desaId": "desa-22",
-    "desaName": "DESA TOGIDEU",
-    "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "namaAset": "Gambar Presiden",
-    "kodeAset": "02.01.01.22.0006",
-    "nomorRegister": "0006",
-    "bukti": {
-      "jenis": "Kwitansi / BAST",
-      "nomor": "00036/KWT/02.2022/2025",
-      "tanggal": "2025-08-04"
-    },
-    "tahunPerolehan": 2025,
-    "nilaiPerolehan": 114550,
-    "kondisi": "Baik",
-    "sumberDana": "ADD",
-    "volume": "1 Unit",
-    "lokasi": "Kantor Desa Togideu",
-    "keterangan": "Foto resmi Presiden dan Wakil Presiden RI",
-    "fotoAset": [],
-    "status": "aktif",
-    "createdAt": "2025-08-04T08:00:00.000Z",
-    "updatedAt": "2025-08-04T08:00:00.000Z"
-  }
-];
+export const INITIAL_ASETS: Aset[] = [];
 
 export const INITIAL_VERIFIKASI: PermohonanVerifikasi[] = [];
 

@@ -61,7 +61,7 @@ function loadDatabase(): DatabaseSchema {
         users: Array.isArray(parsed.users) && parsed.users.length > 0 ? parsed.users : INITIAL_USERS,
         desas: Array.isArray(parsed.desas) && parsed.desas.length > 0 ? parsed.desas : INITIAL_DESA_LIST,
         kecamatanProfile: parsed.kecamatanProfile || INITIAL_KECAMATAN_PROFILE,
-        selectedYear: typeof parsed.selectedYear === 'number' ? parsed.selectedYear : 2026,
+        selectedYear: typeof parsed.selectedYear === 'number' ? parsed.selectedYear : 0,
         updatedAt: parsed.updatedAt || new Date().toISOString(),
       };
     }
@@ -76,7 +76,7 @@ function loadDatabase(): DatabaseSchema {
     users: INITIAL_USERS,
     desas: INITIAL_DESA_LIST,
     kecamatanProfile: INITIAL_KECAMATAN_PROFILE,
-    selectedYear: 2026,
+    selectedYear: 0,
     updatedAt: new Date().toISOString(),
   };
   saveDatabase(defaultState);
@@ -177,19 +177,50 @@ async function startServer() {
     res.json(dbState);
   });
 
-  // Sync / batch update from client
+  // Sync / batch update from client (Non-destructive merge so devices never overwrite each other)
   app.post('/api/sync', (req, res) => {
     const payload = req.body;
     if (!payload || typeof payload !== 'object') {
       return res.status(400).json({ error: 'Payload tidak valid' });
     }
 
-    if (Array.isArray(payload.asets)) dbState.asets = payload.asets;
-    if (Array.isArray(payload.verifikasiList)) dbState.verifikasiList = payload.verifikasiList;
-    if (Array.isArray(payload.users)) dbState.users = payload.users;
-    if (Array.isArray(payload.desas)) dbState.desas = payload.desas;
-    if (payload.kecamatanProfile) dbState.kecamatanProfile = payload.kecamatanProfile;
-    if (typeof payload.selectedYear === 'number') dbState.selectedYear = payload.selectedYear;
+    if (Array.isArray(payload.asets)) {
+      const map = new Map<string, Aset>(dbState.asets.map((a) => [a.id, a]));
+      payload.asets.forEach((a: Aset) => {
+        if (a && a.id) map.set(a.id, a);
+      });
+      dbState.asets = Array.from(map.values());
+    }
+    if (Array.isArray(payload.verifikasiList)) {
+      const map = new Map<string, PermohonanVerifikasi>(dbState.verifikasiList.map((v) => [v.id, v]));
+      payload.verifikasiList.forEach((v: PermohonanVerifikasi) => {
+        if (v && v.id) map.set(v.id, v);
+      });
+      dbState.verifikasiList = Array.from(map.values());
+    }
+    if (Array.isArray(payload.users)) {
+      const map = new Map<string, User>(dbState.users.map((u) => [u.id, u]));
+      payload.users.forEach((u: User) => {
+        if (u && u.id) map.set(u.id, u);
+      });
+      dbState.users = Array.from(map.values());
+    }
+    if (Array.isArray(payload.desas)) {
+      const map = new Map<string, Desa>(dbState.desas.map((d) => [d.id, d]));
+      payload.desas.forEach((d: Desa) => {
+        if (d && d.id) {
+          const exist = map.get(d.id);
+          map.set(d.id, exist ? { ...exist, ...d } : d);
+        }
+      });
+      dbState.desas = Array.from(map.values());
+    }
+    if (payload.kecamatanProfile) {
+      dbState.kecamatanProfile = { ...dbState.kecamatanProfile, ...payload.kecamatanProfile };
+    }
+    if (typeof payload.selectedYear === 'number') {
+      dbState.selectedYear = payload.selectedYear;
+    }
 
     saveDatabase(dbState);
     res.json({ success: true, updatedAt: dbState.updatedAt });
@@ -419,7 +450,7 @@ async function startServer() {
       users: INITIAL_USERS,
       desas: INITIAL_DESA_LIST,
       kecamatanProfile: INITIAL_KECAMATAN_PROFILE,
-      selectedYear: 2026,
+      selectedYear: 0,
       updatedAt: new Date().toISOString(),
     };
     saveDatabase(dbState);

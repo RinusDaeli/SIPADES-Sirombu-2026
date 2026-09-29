@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { formatRupiah, exportToPermendagriPDF } from '../utils/reportGenerator';
+import { formatRupiah, exportToPermendagriPDF, formatNamaDesaTitleCase } from '../utils/reportGenerator';
 import { INITIAL_KECAMATAN_PROFILE, INITIAL_DESA_LIST } from '../data/initialData';
 import { NiasBaratLogo } from './NiasBaratLogo';
 import {
@@ -599,7 +599,7 @@ export const DesaInfoView: React.FC = () => {
                     REKAPITULASI ASET TETAP DESA SE-KECAMATAN SIROMBU
                   </div>
                   <div className="text-[8px] italic text-slate-600">
-                    Per 31 Desember {selectedYear} • Sesuai Lampiran Permendagri No. 20 Tahun 2018
+                    {selectedYear > 0 ? `Per 31 Desember ${selectedYear}` : 'Seluruh Tahun Anggaran'} • Sesuai Lampiran Permendagri No. 20 Tahun 2018
                   </div>
                 </div>
               </div>
@@ -609,7 +609,7 @@ export const DesaInfoView: React.FC = () => {
                 <div className="text-right">
                   <div className="inline-block text-center min-w-[220px] bg-slate-950/60 p-3 rounded-xl border border-slate-800">
                     <p className="text-[11px] text-slate-300">
-                      {camatFormData.tempatSurat || 'Tetesua'}, 31 Desember {selectedYear}
+                      {camatFormData.tempatSurat || 'Tetesua'}, {selectedYear > 0 ? `31 Desember ${selectedYear}` : `Tahun ${new Date().getFullYear()}`}
                     </p>
                     <p className="text-[11px] font-bold text-white uppercase mt-0.5">
                       {camatFormData.jabatanCamat || 'CAMAT SIROMBU'},
@@ -941,7 +941,7 @@ export const DesaInfoView: React.FC = () => {
 
                   <div className="pt-2 text-center">
                     <div className="text-[10px] font-black uppercase text-black tracking-wide">
-                      RINCIAN ASET TETAP DESA PER 31 DESEMBER {selectedYear}
+                      RINCIAN ASET TETAP DESA {selectedYear > 0 ? `PER 31 DESEMBER ${selectedYear}` : 'SELURUH TAHUN ANGGARAN'}
                     </div>
                     <div className="text-[8px] italic text-slate-600">
                       (Format Standar Berdasarkan Lampiran Permendagri Nomor 20 Tahun 2018)
@@ -969,7 +969,7 @@ export const DesaInfoView: React.FC = () => {
                       {previewKopType === 'admin' ? (
                         <div className="text-center min-w-[210px] bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
                           <p className="text-slate-300 text-[10px]">
-                            {kecamatanProfile.tempatSurat || 'Tetesua'}, 31 Des {selectedYear}
+                            {kecamatanProfile.tempatSurat || 'Tetesua'}, {selectedYear > 0 ? `31 Des ${selectedYear}` : new Date().getFullYear()}
                           </p>
                           <p className="font-bold text-white uppercase text-[10px] mt-0.5">
                             CAMAT SIROMBU,
@@ -987,10 +987,12 @@ export const DesaInfoView: React.FC = () => {
                       ) : (
                         <div className="text-center min-w-[210px] bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
                           <p className="text-slate-300 text-[10px]">
-                            {(targetDesa?.name || '').replace(/^DESA\s+/i, '')}, 31 Des {selectedYear}
+                            {formatNamaDesaTitleCase(targetDesa?.name)}, 31 Desember {selectedYear > 0 ? selectedYear : new Date().getFullYear()}
                           </p>
-                          <p className="font-bold text-white uppercase text-[10px] mt-0.5">
-                            Kepala Desa {(targetDesa?.name || '').replace(/^DESA\s+/i, '')}
+                          <p className="font-bold text-white text-[10px] mt-0.5">
+                            {formData.nipKepalaDesa && formData.nipKepalaDesa.trim() !== '' && formData.nipKepalaDesa.trim() !== '-' && formData.nipKepalaDesa.trim() !== 'NIP. -'
+                              ? `Pj. Kepala Desa ${formatNamaDesaTitleCase(targetDesa?.name)}`
+                              : `Kepala Desa ${formatNamaDesaTitleCase(targetDesa?.name)}`}
                           </p>
                           <div className="h-10 flex items-center justify-center text-[9px] text-slate-500 italic">
                             (Tanda Tangan & Cap Desa)
@@ -999,7 +1001,7 @@ export const DesaInfoView: React.FC = () => {
                             {formData.kepalaDesa || 'Nama Kepala Desa'}
                           </p>
                           <p className="text-[9px] text-slate-400 font-mono mt-0.5">
-                            {formData.nipKepalaDesa && formData.nipKepalaDesa.trim() !== '' && formData.nipKepalaDesa.trim() !== '-'
+                            {formData.nipKepalaDesa && formData.nipKepalaDesa.trim() !== '' && formData.nipKepalaDesa.trim() !== '-' && formData.nipKepalaDesa.trim() !== 'NIP. -'
                               ? `NIP. ${formData.nipKepalaDesa.trim()}`
                               : 'NIP. -'}
                           </p>

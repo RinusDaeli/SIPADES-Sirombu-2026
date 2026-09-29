@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Aset, KlasAset, KondisiAset, SumberDana } from '../types';
 import {
@@ -10,6 +10,9 @@ import {
 } from '../utils/reportGenerator';
 import { BarcodeModal } from './BarcodeModal';
 import { AsetDetailModal } from './AsetDetailModal';
+import { SyncDevicesModal } from './SyncDevicesModal';
+import { BackupRestoreModal } from './BackupRestoreModal';
+import { syncManager } from '../utils/cloudSyncService';
 import { fileToCompressedDataUrl } from '../utils/imageCompressor';
 import {
   Plus,
@@ -40,6 +43,8 @@ import {
   ChevronDown,
   ChevronUp,
   Tag,
+  Calendar,
+  Database,
 } from 'lucide-react';
 
 export const AsetManagementView: React.FC = () => {
@@ -54,9 +59,22 @@ export const AsetManagementView: React.FC = () => {
     ajukanMutasi,
     ajukanPenghapusan,
     selectedYear,
+    isServerConnected,
+    refreshServerData,
   } = useApp();
 
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [showBackupModal, setShowBackupModal] = useState(false);
+  const [peerCount, setPeerCount] = useState<number>(() => syncManager.getConnectedCount());
+
+  useEffect(() => {
+    return syncManager.onPeerCountChange((count) => {
+      setPeerCount(count);
+    });
+  }, []);
+
   const isDesaUser = currentUser?.role === 'admin_desa';
+  const isAdminOrSuper = currentUser?.role === 'super_admin' || currentUser?.role === 'admin_kecamatan';
   const defaultDesaId = isDesaUser ? currentUser.desaId || 'desa-21' : 'all';
 
   // Filters
@@ -64,6 +82,7 @@ export const AsetManagementView: React.FC = () => {
   const [filterKlasifikasi, setFilterKlasifikasi] = useState<string>('all');
   const [filterSumberDana, setFilterSumberDana] = useState<string>('all');
   const [filterKondisi, setFilterKondisi] = useState<string>('all');
+  const [filterTahun, setFilterTahun] = useState<number | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Modals state
@@ -88,7 +107,7 @@ export const AsetManagementView: React.FC = () => {
     buktiJenis: 'Kwitansi / BAST',
     buktiNomor: '',
     buktiTanggal: '',
-    tahunPerolehan: selectedYear,
+    tahunPerolehan: selectedYear > 0 ? selectedYear : new Date().getFullYear(),
     nilaiPerolehan: 0,
     kondisi: 'Baik' as KondisiAset,
     sumberDana: 'DDS' as SumberDana,
@@ -219,6 +238,7 @@ export const AsetManagementView: React.FC = () => {
           : (item.klasifikasi || '').replace(/^[I|V|X]+\.\s*/, '') === filterKlasifikasi;
       const matchDana = filterSumberDana === 'all' ? true : item.sumberDana === filterSumberDana;
       const matchKondisi = filterKondisi === 'all' ? true : item.kondisi === filterKondisi;
+      const matchTahun = filterTahun === 'all' ? true : item.tahunPerolehan === filterTahun;
 
       const query = searchQuery.toLowerCase().trim();
       const matchSearch =
@@ -229,9 +249,97 @@ export const AsetManagementView: React.FC = () => {
         (item.bukti?.nomor && item.bukti.nomor.toLowerCase().includes(query)) ||
         (item.keterangan && item.keterangan.toLowerCase().includes(query));
 
-      return matchDesa && matchKlas && matchDana && matchKondisi && matchSearch;
+      return matchDesa && matchKlas && matchDana && matchKondisi && matchTahun && matchSearch;
     });
-  }, [asets, isDesaUser, currentUser, filterDesa, filterKlasifikasi, filterSumberDana, filterKondisi, searchQuery]);
+  }, [asets, isDesaUser, currentUser, filterDesa, filterKlasifikasi, filterSumberDana, filterKondisi, filterTahun, searchQuery]);
+
+  // PENGELOMPOKKAN SESUAI PERMINTAAN USER:
+  // 1. Akun Desa: Kelompokkan data aset sesuai tahun baru (descending) kemudian sesuai nomor registrasi aset
+  const groupedDesaAsets = useMemo(() => {
+    if (!isDesaUser) return [];
+    const yearsMap = new Map<number, Aset[]>();
+    filteredList.forEach((item) => {
+      const yr = item.tahunPerolehan || 0;
+      if (!yearsMap.has(yr)) yearsMap.set(yr, []);
+      yearsMap.get(yr)!.push(item);
+    });
+
+    const sortedYears = Array.from(yearsMap.keys()).sort((a, b) => b - a);
+
+    return sortedYears.map((yr) => {
+      const rawItems = yearsMap.get(yr)!;
+      const sortedItems = [...rawItems].sort((a, b) => {
+        const regA = parseInt(a.nomorRegister || '0', 10) || 0;
+        const regB = parseInt(b.nomorRegister || '0', 10) || 0;
+        if (regA !== regB) return regA - regB;
+        return (a.kodeAset || '').localeCompare(b.kodeAset || '');
+      });
+      const totalNilai = sortedItems.reduce((sum, it) => sum + (it.nilaiPerolehan || 0), 0);
+      return {
+        year: yr,
+        items: sortedItems,
+        totalNilai,
+      };
+    });
+  }, [filteredList, isDesaUser]);
+
+  // 2. Akun Admin / Super Admin: Kelompokkan data aset per desa, sesuai tahun kemudian sesuai nomor registrasi aset
+  const groupedAdminAsets = useMemo(() => {
+    if (isDesaUser) return [];
+    const desaMap = new Map<string, Aset[]>();
+    filteredList.forEach((item) => {
+      const dId = item.desaId || 'unknown';
+      if (!desaMap.has(dId)) desaMap.set(dId, []);
+      desaMap.get(dId)!.push(item);
+    });
+
+    const sortedDesaIds = Array.from(desaMap.keys()).sort((a, b) => {
+      const desaA = desas.find((d) => d.id === a);
+      const desaB = desas.find((d) => d.id === b);
+      return (desaA?.name || a).localeCompare(desaB?.name || b);
+    });
+
+    return sortedDesaIds.map((dId) => {
+      const dItems = desaMap.get(dId)!;
+      const desaObj = desas.find((d) => d.id === dId);
+
+      const yearMap = new Map<number, Aset[]>();
+      dItems.forEach((item) => {
+        const yr = item.tahunPerolehan || 0;
+        if (!yearMap.has(yr)) yearMap.set(yr, []);
+        yearMap.get(yr)!.push(item);
+      });
+
+      const sortedYears = Array.from(yearMap.keys()).sort((a, b) => b - a);
+
+      const yearGroups = sortedYears.map((yr) => {
+        const rawItems = yearMap.get(yr)!;
+        const sortedItems = [...rawItems].sort((a, b) => {
+          const regA = parseInt(a.nomorRegister || '0', 10) || 0;
+          const regB = parseInt(b.nomorRegister || '0', 10) || 0;
+          if (regA !== regB) return regA - regB;
+          return (a.kodeAset || '').localeCompare(b.kodeAset || '');
+        });
+        const totalNilai = sortedItems.reduce((sum, it) => sum + (it.nilaiPerolehan || 0), 0);
+        return {
+          year: yr,
+          items: sortedItems,
+          totalNilai,
+        };
+      });
+
+      const totalNilai = dItems.reduce((sum, it) => sum + (it.nilaiPerolehan || 0), 0);
+
+      return {
+        desaId: dId,
+        desaName: desaObj?.name || dItems[0]?.desaName || 'DESA',
+        desaCode: desaObj?.code || '',
+        yearGroups,
+        totalNilai,
+        totalItems: dItems.length,
+      };
+    });
+  }, [filteredList, isDesaUser, desas]);
 
   // Open add modal
   const handleOpenAdd = () => {
@@ -307,7 +415,18 @@ export const AsetManagementView: React.FC = () => {
     }
 
     const desa = desas.find((d) => d && d.id === formData.desaId);
-    const count = Math.max(1, jumlahUnit);
+    let count = Math.max(1, jumlahUnit);
+    // Jika aset yang diisi lebih dari 1 (melalui stepper atau kolom volume), langsung gandakan otomatis
+    if (count === 1 && formData.volume) {
+      const volNumMatch = formData.volume.trim().match(/^(\d+)/);
+      if (volNumMatch) {
+        const parsed = parseInt(volNumMatch[1], 10);
+        if (parsed > 1 && parsed <= 500) {
+          count = parsed;
+        }
+      }
+    }
+
     const startSeq = typeof customStartSeq === 'number' && customStartSeq > 0 ? customStartSeq : undefined;
 
     // Compute fresh sequential codes for all units
@@ -511,10 +630,53 @@ export const AsetManagementView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+          {/* Panel Status Sinkronisasi Real-Time Multi-Perangkat (Dipindahkan ke bilah atas DATA ASET) */}
+          <button
+            type="button"
+            onClick={() => setShowSyncModal(true)}
+            className="p-2 sm:px-3 sm:py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-emerald-500/40 hover:border-emerald-400 flex items-center justify-between gap-3 shadow-md transition-all cursor-pointer text-left group"
+            title="Klik untuk melihat status sinkronisasi antar perangkat & kode transfer"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${peerCount > 0 || isServerConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              <div className="flex flex-col min-w-0">
+                <span className="font-bold text-white text-[11px] leading-tight truncate group-hover:text-emerald-300 transition-colors">
+                  {peerCount > 0 ? `Terhubung (${peerCount} Online)` : isServerConnected ? 'Terhubung Antar Laptop' : 'Mode Offline / Terputus'}
+                </span>
+                <span className="text-[10px] text-emerald-400/90 truncate font-mono">
+                  P2P & Cloud Relay Aktif
+                </span>
+              </div>
+            </div>
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                refreshServerData();
+              }}
+              className="p-1 rounded-lg bg-emerald-950/80 hover:bg-emerald-800 text-emerald-300 hover:text-white transition-colors cursor-pointer shrink-0"
+              title="Sinkronkan data sekarang"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </div>
+          </button>
+
+          {/* Panel Backup & Restore Data (Dipindahkan ke bilah atas DATA ASET) */}
+          {isAdminOrSuper && (
+            <button
+              type="button"
+              onClick={() => setShowBackupModal(true)}
+              className="p-2 sm:px-3 sm:py-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-emerald-500/40 hover:border-emerald-400 text-emerald-300 hover:text-white text-xs font-bold flex items-center gap-2 shadow-md transition-all cursor-pointer shrink-0"
+              title="Backup & Restore data aset (JSON / Cloud)"
+            >
+              <Database className="w-4 h-4 text-emerald-400" />
+              <span className="hidden sm:inline">Backup & Restore</span>
+            </button>
+          )}
+
           <button
             onClick={handleOpenAdd}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span>Tambah Aset Baru</span>
@@ -524,9 +686,9 @@ export const AsetManagementView: React.FC = () => {
 
       {/* Filter and Search Bar */}
       <div className="bg-[#0E1526] border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {/* Search box */}
-          <div className="relative lg:col-span-2">
+          <div className="relative sm:col-span-2 lg:col-span-2">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
             <input
               type="text"
@@ -538,7 +700,7 @@ export const AsetManagementView: React.FC = () => {
           </div>
 
           {/* Desa Filter (if not locked to desa) */}
-          {!isDesaUser && (
+          {!isDesaUser ? (
             <div>
               <select
                 value={filterDesa}
@@ -553,7 +715,30 @@ export const AsetManagementView: React.FC = () => {
                 ))}
               </select>
             </div>
+          ) : (
+            <div className="px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-800 text-xs font-semibold text-emerald-400 flex items-center gap-1.5 truncate">
+              <Building className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">{desas.find((d) => d.id === currentUser?.desaId)?.name || 'Desa'}</span>
+            </div>
           )}
+
+          {/* Tahun Anggaran Filter */}
+          <div>
+            <select
+              value={filterTahun}
+              onChange={(e) => setFilterTahun(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+              className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-400 cursor-pointer font-medium"
+            >
+              <option value="all">Semua Tahun Anggaran</option>
+              <option value={2026}>Tahun Anggaran 2026</option>
+              <option value={2025}>Tahun Anggaran 2025</option>
+              <option value={2024}>Tahun Anggaran 2024</option>
+              <option value={2023}>Tahun Anggaran 2023</option>
+              <option value={2022}>Tahun Anggaran 2022</option>
+              <option value={2021}>Tahun Anggaran 2021</option>
+              <option value={2020}>Tahun Anggaran 2020</option>
+            </select>
+          </div>
 
           {/* Klasifikasi Filter */}
           <div>
@@ -588,22 +773,41 @@ export const AsetManagementView: React.FC = () => {
         </div>
 
         {/* Second row tags */}
-        <div className="flex flex-wrap items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800">
-          <div className="flex items-center gap-2">
-            <span>Filter Kondisi:</span>
-            {['all', 'Baik', 'Rusak Ringan', 'Rusak Berat'].map((k) => (
-              <button
-                key={k}
-                onClick={() => setFilterKondisi(k)}
-                className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition-colors ${
-                  filterKondisi === k
-                    ? 'bg-amber-500 text-slate-950 font-bold'
-                    : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
-                }`}
-              >
-                {k === 'all' ? 'Semua Kondisi' : k}
-              </button>
-            ))}
+        <div className="flex flex-wrap items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800 gap-2">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-400">Tahun:</span>
+              {(['all', 2026, 2025, 2024, 2023] as const).map((yr) => (
+                <button
+                  key={yr}
+                  onClick={() => setFilterTahun(yr)}
+                  className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition-colors ${
+                    filterTahun === yr
+                      ? 'bg-amber-500 text-slate-950 font-bold'
+                      : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+                  }`}
+                >
+                  {yr === 'all' ? 'Semua Tahun' : yr}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-400">Kondisi:</span>
+              {['all', 'Baik', 'Rusak Ringan', 'Rusak Berat'].map((k) => (
+                <button
+                  key={k}
+                  onClick={() => setFilterKondisi(k)}
+                  className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition-colors ${
+                    filterKondisi === k
+                      ? 'bg-amber-500 text-slate-950 font-bold'
+                      : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+                  }`}
+                >
+                  {k === 'all' ? 'Semua' : k}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="font-semibold text-slate-300">
@@ -634,226 +838,525 @@ export const AsetManagementView: React.FC = () => {
             <tbody className="divide-y divide-slate-800/80">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center text-slate-500">
-                    <Boxes className="w-8 h-8 mx-auto mb-2 text-slate-600" />
-                    Belum ada data aset yang sesuai dengan kriteria filter.
+                  <td colSpan={11} className="py-16 text-center text-slate-500">
+                    <Boxes className="w-10 h-10 mx-auto mb-2 text-slate-600 opacity-60" />
+                    <p className="font-semibold text-slate-400">Belum ada data aset tercatat.</p>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Klik tombol <strong className="text-amber-400">"Tambah Aset Baru"</strong> di atas untuk mengentri data aset secara manual.
+                    </p>
                   </td>
                 </tr>
-              ) : (
-                filteredList.map((item, idx) => {
-                  const isMutasiDiajukan = item.status === 'mutasi_diajukan';
-                  const isHapusDiajukan = item.status === 'terhapus_diajukan';
-                  const isTerhapus = item.status === 'terhapus';
-
-                  return (
-                    <tr
-                      key={item.id}
-                      className={`hover:bg-slate-800/40 transition-colors ${
-                        isTerhapus ? 'opacity-50 line-through bg-slate-950/40' : ''
-                      }`}
-                    >
-                      <td className="py-3 px-3 text-slate-400 font-mono text-[11px]">
-                        {idx + 1}
-                      </td>
-                      <td className="py-3 px-3 min-w-[260px]">
-                        <div className="flex items-start gap-2.5">
-                          {/* Photo Thumbnail / Badge */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenDetail(item)}
-                            className="shrink-0 w-11 h-11 rounded-lg overflow-hidden border border-slate-700 bg-slate-900 flex items-center justify-center relative group hover:border-amber-400 transition-all cursor-pointer shadow-sm"
-                            title="Klik untuk Lihat Foto & Detail Aset"
-                          >
-                            {item.fotoAset && item.fotoAset.length > 0 && item.fotoAset[0] ? (
-                              <>
-                                <img
-                                  src={item.fotoAset[0]}
-                                  alt=""
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                                />
-                                {item.fotoAset.length > 1 && (
-                                  <span className="absolute bottom-0 right-0 bg-black/85 text-[8px] font-bold text-amber-300 px-1 rounded-tl">
-                                    +{item.fotoAset.length - 1}
-                                  </span>
-                                )}
-                              </>
-                            ) : (
-                              <Camera className="w-4 h-4 text-slate-500 group-hover:text-amber-400" />
-                            )}
-                          </button>
-
-                          <div className="min-w-0 flex-1">
-                            <span className="text-[10px] font-semibold text-amber-400 block truncate">
-                              {item.klasifikasi}
+              ) : isDesaUser ? (
+                // MODE AKUN DESA: Kelompokkan data aset sesuai tahun baru (descending) kemudian sesuai nomor registrasi aset
+                groupedDesaAsets.map((yearGroup) => (
+                  <React.Fragment key={`desa-year-${yearGroup.year}`}>
+                    {/* Header Grup Tahun Anggaran */}
+                    <tr className="bg-gradient-to-r from-amber-500/20 via-slate-900 to-slate-950 border-t-2 border-b border-amber-500/40">
+                      <td colSpan={11} className="py-2.5 px-4 font-bold text-amber-300">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-amber-400" />
+                            <span className="text-xs uppercase tracking-wide">
+                              TAHUN ANGGARAN {yearGroup.year}
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenDetail(item)}
-                              className="font-bold text-white leading-tight text-left hover:text-amber-300 transition-colors block cursor-pointer"
-                            >
-                              {item.namaAset}
-                            </button>
-                            {item.volume && (
-                              <div className="text-[10px] text-slate-400 mt-0.5">
-                                Volume: {item.volume}
-                              </div>
-                            )}
-                            {item.lokasi && (
-                              <div className="text-[10px] text-slate-400 truncate">
-                                Lokasi: {item.lokasi}
-                              </div>
-                            )}
-                            {item.keterangan && (
-                              <div
-                                className="mt-1 text-[10px] text-amber-200/90 bg-amber-950/40 border border-amber-500/30 rounded px-1.5 py-0.5 max-w-[280px] break-words"
-                                title={item.keterangan}
-                              >
-                                <span className="font-bold text-amber-400">Ket:</span> {item.keterangan}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3">
-                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300 font-semibold text-[10px] block truncate max-w-[120px]">
-                          {(item.desaName || 'Desa').replace('DESA ', '')}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 max-w-[180px]">
-                        <div className="font-semibold text-slate-200 text-[11px]">
-                          {item.bukti?.jenis || '-'}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-mono truncate">
-                          No: {item.bukti?.nomor || '-'}
-                        </div>
-                        <div className="text-[10px] text-slate-400">
-                          Tgl: {item.bukti?.tanggal || '-'}
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 font-mono text-[11px]">
-                        <div className="font-bold text-emerald-400 tracking-wide">
-                          {item.kodeAset}
-                        </div>
-                        {item.nomorRegister && (
-                          <div className="text-[10px] text-amber-300 font-mono flex items-center gap-1 mt-0.5">
-                            <span className="text-slate-500 font-sans">No. Reg:</span>
-                            <span className="px-1 py-0.2 rounded bg-amber-500/10 border border-amber-500/30 font-bold">
-                              {item.nomorRegister}
+                            <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              {yearGroup.items.length} Unit Aset
                             </span>
                           </div>
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-center font-bold text-slate-200">
-                        {item.tahunPerolehan}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono font-bold text-emerald-400">
-                        {formatRupiah(item.nilaiPerolehan)}
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                            item.kondisi === 'Baik'
-                              ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300'
-                              : item.kondisi === 'Rusak Ringan'
-                              ? 'bg-amber-950/80 border-amber-500/40 text-amber-300'
-                              : 'bg-red-950/80 border-red-500/40 text-red-300'
-                          }`}
-                        >
-                          {item.kondisi}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-amber-300 font-mono text-[10px] font-bold">
-                          {item.sumberDana}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        {isMutasiDiajukan ? (
-                          <span className="px-2 py-0.5 rounded-full bg-blue-950/80 border border-blue-500/40 text-blue-300 text-[10px] font-bold flex items-center gap-1 justify-center">
-                            <Clock className="w-3 h-3" /> Mutasi
-                          </span>
-                        ) : isHapusDiajukan ? (
-                          <span className="px-2 py-0.5 rounded-full bg-red-950/80 border border-red-500/40 text-red-300 text-[10px] font-bold flex items-center gap-1 justify-center">
-                            <Clock className="w-3 h-3" /> Hapus
-                          </span>
-                        ) : isTerhapus ? (
-                          <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold">
-                            Terhapus
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold">
-                            Aktif
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {/* Cetak Barcode button */}
-                          <button
-                            onClick={() => handleOpenBarcode(item)}
-                            className="p-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-400 border border-amber-500/40 text-amber-300 hover:text-slate-950 transition-colors cursor-pointer"
-                            title="Cetak Barcode & Label Inventaris Aset"
-                          >
-                            <QrCode className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Lihat Foto & Detail button */}
-                          <button
-                            onClick={() => handleOpenDetail(item)}
-                            className="p-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-600 border border-emerald-500/30 text-emerald-300 hover:text-white transition-colors cursor-pointer"
-                            title="Lihat Foto Fisik & BAST Aset"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-
-                          {!isTerhapus && (
-                            <>
-                              {/* Edit button */}
-                              <button
-                                onClick={() => handleOpenEdit(item)}
-                                disabled={isMutasiDiajukan || isHapusDiajukan}
-                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                title="Edit Data Aset"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-
-                              {/* Mutasi button */}
-                              <button
-                                onClick={() => handleOpenMutasi(item)}
-                                disabled={isMutasiDiajukan || isHapusDiajukan}
-                                className="p-1.5 rounded-lg bg-blue-950/60 hover:bg-blue-900 border border-blue-500/30 text-blue-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                title="Ajukan Mutasi Aset ke Kecamatan"
-                              >
-                                <ArrowRightLeft className="w-3.5 h-3.5" />
-                              </button>
-
-                              {/* Penghapusan button */}
-                              <button
-                                onClick={() => handleOpenHapus(item)}
-                                disabled={isMutasiDiajukan || isHapusDiajukan}
-                                className="p-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900 border border-amber-500/30 text-amber-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                title="Ajukan Penghapusan Aset ke Kecamatan"
-                              >
-                                <FileMinus className="w-3.5 h-3.5" />
-                              </button>
-
-                              {/* Direct delete (if active & draft) */}
-                              <button
-                                onClick={() => handleDeleteDirect(item.id, item.namaAset)}
-                                disabled={isMutasiDiajukan || isHapusDiajukan}
-                                className="p-1.5 rounded-lg bg-red-950/60 hover:bg-red-900 border border-red-500/30 text-red-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                title="Hapus Data Aset Langsung"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </>
-                          )}
+                          <div className="font-mono text-xs text-emerald-400">
+                            Subtotal Tahun {yearGroup.year}: {formatRupiah(yearGroup.totalNilai)}
+                          </div>
                         </div>
                       </td>
                     </tr>
-                  );
-                })
+
+                    {/* Daftar Aset dalam Tahun ini terurut berdasarkan Nomor Registrasi */}
+                    {yearGroup.items.map((item, idx) => {
+                      const isMutasiDiajukan = item.status === 'mutasi_diajukan';
+                      const isHapusDiajukan = item.status === 'terhapus_diajukan';
+                      const isTerhapus = item.status === 'terhapus';
+
+                      return (
+                        <tr
+                          key={item.id}
+                          className={`hover:bg-slate-800/40 transition-colors ${
+                            isTerhapus ? 'opacity-50 line-through bg-slate-950/40' : ''
+                          }`}
+                        >
+                          <td className="py-3 px-3 text-slate-400 font-mono text-[11px]">
+                            {idx + 1}
+                          </td>
+                          <td className="py-3 px-3 min-w-[260px]">
+                            <div className="flex items-start gap-2.5">
+                              {/* Photo Thumbnail / Badge */}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenDetail(item)}
+                                className="shrink-0 w-11 h-11 rounded-lg overflow-hidden border border-slate-700 bg-slate-900 flex items-center justify-center relative group hover:border-amber-400 transition-all cursor-pointer shadow-sm"
+                                title="Klik untuk Lihat Foto & Detail Aset"
+                              >
+                                {item.fotoAset && item.fotoAset.length > 0 && item.fotoAset[0] ? (
+                                  <>
+                                    <img
+                                      src={item.fotoAset[0]}
+                                      alt=""
+                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                    />
+                                    {item.fotoAset.length > 1 && (
+                                      <span className="absolute bottom-0 right-0 bg-black/85 text-[8px] font-bold text-amber-300 px-1 rounded-tl">
+                                        +{item.fotoAset.length - 1}
+                                      </span>
+                                    )}
+                                  </>
+                                ) : (
+                                  <Camera className="w-4 h-4 text-slate-500 group-hover:text-amber-400" />
+                                )}
+                              </button>
+
+                              <div className="min-w-0 flex-1">
+                                <span className="text-[10px] font-semibold text-amber-400 block truncate">
+                                  {item.klasifikasi}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenDetail(item)}
+                                  className="font-bold text-white leading-tight text-left hover:text-amber-300 transition-colors block cursor-pointer"
+                                >
+                                  {item.namaAset}
+                                </button>
+                                {item.volume && (
+                                  <div className="text-[10px] text-slate-400 mt-0.5">
+                                    Volume: {item.volume}
+                                  </div>
+                                )}
+                                {item.lokasi && (
+                                  <div className="text-[10px] text-slate-400 truncate">
+                                    Lokasi: {item.lokasi}
+                                  </div>
+                                )}
+                                {item.keterangan && (
+                                  <div
+                                    className="mt-1 text-[10px] text-amber-200/90 bg-amber-950/40 border border-amber-500/30 rounded px-1.5 py-0.5 max-w-[280px] break-words"
+                                    title={item.keterangan}
+                                  >
+                                    <span className="font-bold text-amber-400">Ket:</span> {item.keterangan}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300 font-semibold text-[10px] block truncate max-w-[120px]">
+                              {(item.desaName || 'Desa').replace('DESA ', '')}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 max-w-[180px]">
+                            <div className="font-semibold text-slate-200 text-[11px]">
+                              {item.bukti?.jenis || '-'}
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono truncate">
+                              No: {item.bukti?.nomor || '-'}
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              Tgl: {item.bukti?.tanggal || '-'}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 font-mono text-[11px]">
+                            <div className="font-bold text-emerald-400 tracking-wide">
+                              {item.kodeAset}
+                            </div>
+                            {item.nomorRegister && (
+                              <div className="text-[10px] text-amber-300 font-mono flex items-center gap-1 mt-0.5">
+                                <span className="text-slate-500 font-sans">No. Reg:</span>
+                                <span className="px-1 py-0.2 rounded bg-amber-500/10 border border-amber-500/30 font-bold">
+                                  {item.nomorRegister}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-center font-bold text-slate-200">
+                            {item.tahunPerolehan}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono font-bold text-emerald-400">
+                            {formatRupiah(item.nilaiPerolehan)}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                item.kondisi === 'Baik'
+                                  ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300'
+                                  : item.kondisi === 'Rusak Ringan'
+                                  ? 'bg-amber-950/80 border-amber-500/40 text-amber-300'
+                                  : 'bg-red-950/80 border-red-500/40 text-red-300'
+                              }`}
+                            >
+                              {item.kondisi}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-amber-300 font-mono text-[10px] font-bold">
+                              {item.sumberDana}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            {isMutasiDiajukan ? (
+                              <span className="px-2 py-0.5 rounded-full bg-blue-950/80 border border-blue-500/40 text-blue-300 text-[10px] font-bold flex items-center gap-1 justify-center">
+                                <Clock className="w-3 h-3" /> Mutasi
+                              </span>
+                            ) : isHapusDiajukan ? (
+                              <span className="px-2 py-0.5 rounded-full bg-red-950/80 border border-red-500/40 text-red-300 text-[10px] font-bold flex items-center gap-1 justify-center">
+                                <Clock className="w-3 h-3" /> Hapus
+                              </span>
+                            ) : isTerhapus ? (
+                              <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold">
+                                Terhapus
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold">
+                                Aktif
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              {/* Cetak Barcode button */}
+                              <button
+                                onClick={() => handleOpenBarcode(item)}
+                                className="p-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-400 border border-amber-500/40 text-amber-300 hover:text-slate-950 transition-colors cursor-pointer"
+                                title="Cetak Barcode & Label Inventaris Aset"
+                              >
+                                <QrCode className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Lihat Foto & Detail button */}
+                              <button
+                                onClick={() => handleOpenDetail(item)}
+                                className="p-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-600 border border-emerald-500/30 text-emerald-300 hover:text-white transition-colors cursor-pointer"
+                                title="Lihat Foto Fisik & BAST Aset"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+
+                              {!isTerhapus && (
+                                <>
+                                  {/* Edit button */}
+                                  <button
+                                    onClick={() => handleOpenEdit(item)}
+                                    disabled={isMutasiDiajukan || isHapusDiajukan}
+                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    title="Edit Data Aset"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {/* Mutasi button */}
+                                  <button
+                                    onClick={() => handleOpenMutasi(item)}
+                                    disabled={isMutasiDiajukan || isHapusDiajukan}
+                                    className="p-1.5 rounded-lg bg-blue-950/60 hover:bg-blue-900 border border-blue-500/30 text-blue-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    title="Ajukan Mutasi Aset ke Kecamatan"
+                                  >
+                                    <ArrowRightLeft className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {/* Penghapusan button */}
+                                  <button
+                                    onClick={() => handleOpenHapus(item)}
+                                    disabled={isMutasiDiajukan || isHapusDiajukan}
+                                    className="p-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900 border border-amber-500/30 text-amber-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    title="Ajukan Penghapusan Aset ke Kecamatan"
+                                  >
+                                    <FileMinus className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {/* Direct delete (if active & draft) */}
+                                  <button
+                                    onClick={() => handleDeleteDirect(item.id, item.namaAset)}
+                                    disabled={isMutasiDiajukan || isHapusDiajukan}
+                                    className="p-1.5 rounded-lg bg-red-950/60 hover:bg-red-900 border border-red-500/30 text-red-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    title="Hapus Data Aset Langsung"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                ))
+              ) : (
+                // MODE AKUN ADMIN / SUPER ADMIN: Kelompokkan data aset per desa, sesuai tahun kemudian sesuai nomor registrasi aset
+                groupedAdminAsets.map((desaGroup, dIdx) => (
+                  <React.Fragment key={`admin-desa-${desaGroup.desaId}`}>
+                    {/* Level 1: Header Grup Desa */}
+                    <tr className="bg-gradient-to-r from-blue-950 via-slate-900 to-slate-950 border-t-2 border-b border-blue-600/80">
+                      <td colSpan={11} className="py-3 px-4">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <span className="w-6 h-6 rounded-lg bg-blue-500/20 border border-blue-400/40 text-blue-300 flex items-center justify-center font-bold text-xs">
+                              {dIdx + 1}
+                            </span>
+                            <Building className="w-4 h-4 text-blue-400" />
+                            <span className="text-xs font-black text-white uppercase tracking-wide">
+                              DESA {desaGroup.desaName.toUpperCase().replace(/^DESA\s+/i, '')}
+                            </span>
+                            <span className="text-[11px] text-blue-300 font-mono">
+                              (Kode: {desaGroup.desaCode || '-'})
+                            </span>
+                            <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold">
+                              {desaGroup.totalItems} Unit Aset
+                            </span>
+                          </div>
+                          <div className="font-mono text-xs font-bold text-emerald-400">
+                            Total Nilai Aset Desa: {formatRupiah(desaGroup.totalNilai)}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* Level 2: Header Grup Tahun dalam Desa ini */}
+                    {desaGroup.yearGroups.map((yearGroup) => (
+                      <React.Fragment key={`admin-desa-${desaGroup.desaId}-year-${yearGroup.year}`}>
+                        <tr className="bg-slate-900/90 border-b border-slate-800">
+                          <td colSpan={11} className="py-2 px-6 font-bold text-amber-300">
+                            <div className="flex items-center justify-between flex-wrap gap-2 text-[11px]">
+                              <div className="flex items-center gap-2">
+                                <span className="text-slate-500 font-mono">↳</span>
+                                <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                                <span>Tahun Anggaran {yearGroup.year}</span>
+                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400">
+                                  {yearGroup.items.length} Unit
+                                </span>
+                              </div>
+                              <div className="font-mono text-[11px] text-emerald-400">
+                                Subtotal TA {yearGroup.year}: {formatRupiah(yearGroup.totalNilai)}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* Baris-baris aset dalam tahun ini terurut sesuai nomor registrasi */}
+                        {yearGroup.items.map((item, idx) => {
+                          const isMutasiDiajukan = item.status === 'mutasi_diajukan';
+                          const isHapusDiajukan = item.status === 'terhapus_diajukan';
+                          const isTerhapus = item.status === 'terhapus';
+
+                          return (
+                            <tr
+                              key={item.id}
+                              className={`hover:bg-slate-800/40 transition-colors ${
+                                isTerhapus ? 'opacity-50 line-through bg-slate-950/40' : ''
+                              }`}
+                            >
+                              <td className="py-3 px-3 text-slate-400 font-mono text-[11px]">
+                                {idx + 1}
+                              </td>
+                              <td className="py-3 px-3 min-w-[260px]">
+                                <div className="flex items-start gap-2.5">
+                                  {/* Photo Thumbnail / Badge */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenDetail(item)}
+                                    className="shrink-0 w-11 h-11 rounded-lg overflow-hidden border border-slate-700 bg-slate-900 flex items-center justify-center relative group hover:border-amber-400 transition-all cursor-pointer shadow-sm"
+                                    title="Klik untuk Lihat Foto & Detail Aset"
+                                  >
+                                    {item.fotoAset && item.fotoAset.length > 0 && item.fotoAset[0] ? (
+                                      <>
+                                        <img
+                                          src={item.fotoAset[0]}
+                                          alt=""
+                                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                        />
+                                        {item.fotoAset.length > 1 && (
+                                          <span className="absolute bottom-0 right-0 bg-black/85 text-[8px] font-bold text-amber-300 px-1 rounded-tl">
+                                            +{item.fotoAset.length - 1}
+                                          </span>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <Camera className="w-4 h-4 text-slate-500 group-hover:text-amber-400" />
+                                    )}
+                                  </button>
+
+                                  <div className="min-w-0 flex-1">
+                                    <span className="text-[10px] font-semibold text-amber-400 block truncate">
+                                      {item.klasifikasi}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenDetail(item)}
+                                      className="font-bold text-white leading-tight text-left hover:text-amber-300 transition-colors block cursor-pointer"
+                                    >
+                                      {item.namaAset}
+                                    </button>
+                                    {item.volume && (
+                                      <div className="text-[10px] text-slate-400 mt-0.5">
+                                        Volume: {item.volume}
+                                      </div>
+                                    )}
+                                    {item.lokasi && (
+                                      <div className="text-[10px] text-slate-400 truncate">
+                                        Lokasi: {item.lokasi}
+                                      </div>
+                                    )}
+                                    {item.keterangan && (
+                                      <div
+                                        className="mt-1 text-[10px] text-amber-200/90 bg-amber-950/40 border border-amber-500/30 rounded px-1.5 py-0.5 max-w-[280px] break-words"
+                                        title={item.keterangan}
+                                      >
+                                        <span className="font-bold text-amber-400">Ket:</span> {item.keterangan}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3">
+                                <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300 font-semibold text-[10px] block truncate max-w-[120px]">
+                                  {(item.desaName || 'Desa').replace('DESA ', '')}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 max-w-[180px]">
+                                <div className="font-semibold text-slate-200 text-[11px]">
+                                  {item.bukti?.jenis || '-'}
+                                </div>
+                                <div className="text-[10px] text-slate-400 font-mono truncate">
+                                  No: {item.bukti?.nomor || '-'}
+                                </div>
+                                <div className="text-[10px] text-slate-400">
+                                  Tgl: {item.bukti?.tanggal || '-'}
+                                </div>
+                              </td>
+                              <td className="py-3 px-3 font-mono text-[11px]">
+                                <div className="font-bold text-emerald-400 tracking-wide">
+                                  {item.kodeAset}
+                                </div>
+                                {item.nomorRegister && (
+                                  <div className="text-[10px] text-amber-300 font-mono flex items-center gap-1 mt-0.5">
+                                    <span className="text-slate-500 font-sans">No. Reg:</span>
+                                    <span className="px-1 py-0.2 rounded bg-amber-500/10 border border-amber-500/30 font-bold">
+                                      {item.nomorRegister}
+                                    </span>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-3 px-3 text-center font-bold text-slate-200">
+                                {item.tahunPerolehan}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono font-bold text-emerald-400">
+                                {formatRupiah(item.nilaiPerolehan)}
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                    item.kondisi === 'Baik'
+                                      ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300'
+                                      : item.kondisi === 'Rusak Ringan'
+                                      ? 'bg-amber-950/80 border-amber-500/40 text-amber-300'
+                                      : 'bg-red-950/80 border-red-500/40 text-red-300'
+                                  }`}
+                                >
+                                  {item.kondisi}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-amber-300 font-mono text-[10px] font-bold">
+                                  {item.sumberDana}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                {isMutasiDiajukan ? (
+                                  <span className="px-2 py-0.5 rounded-full bg-blue-950/80 border border-blue-500/40 text-blue-300 text-[10px] font-bold flex items-center gap-1 justify-center">
+                                    <Clock className="w-3 h-3" /> Mutasi
+                                  </span>
+                                ) : isHapusDiajukan ? (
+                                  <span className="px-2 py-0.5 rounded-full bg-red-950/80 border border-red-500/40 text-red-300 text-[10px] font-bold flex items-center gap-1 justify-center">
+                                    <Clock className="w-3 h-3" /> Hapus
+                                  </span>
+                                ) : isTerhapus ? (
+                                  <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold">
+                                    Terhapus
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold">
+                                    Aktif
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  {/* Cetak Barcode button */}
+                                  <button
+                                    onClick={() => handleOpenBarcode(item)}
+                                    className="p-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-400 border border-amber-500/40 text-amber-300 hover:text-slate-950 transition-colors cursor-pointer"
+                                    title="Cetak Barcode & Label Inventaris Aset"
+                                  >
+                                    <QrCode className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {/* Lihat Foto & Detail button */}
+                                  <button
+                                    onClick={() => handleOpenDetail(item)}
+                                    className="p-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-600 border border-emerald-500/30 text-emerald-300 hover:text-white transition-colors cursor-pointer"
+                                    title="Lihat Foto Fisik & BAST Aset"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {!isTerhapus && (
+                                    <>
+                                      {/* Edit button */}
+                                      <button
+                                        onClick={() => handleOpenEdit(item)}
+                                        disabled={isMutasiDiajukan || isHapusDiajukan}
+                                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                        title="Edit Data Aset"
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                      </button>
+
+                                      {/* Mutasi button */}
+                                      <button
+                                        onClick={() => handleOpenMutasi(item)}
+                                        disabled={isMutasiDiajukan || isHapusDiajukan}
+                                        className="p-1.5 rounded-lg bg-blue-950/60 hover:bg-blue-900 border border-blue-500/30 text-blue-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                        title="Ajukan Mutasi Aset ke Kecamatan"
+                                      >
+                                        <ArrowRightLeft className="w-3.5 h-3.5" />
+                                      </button>
+
+                                      {/* Penghapusan button */}
+                                      <button
+                                        onClick={() => handleOpenHapus(item)}
+                                        disabled={isMutasiDiajukan || isHapusDiajukan}
+                                        className="p-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900 border border-amber-500/30 text-amber-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                        title="Ajukan Penghapusan Aset ke Kecamatan"
+                                      >
+                                        <FileMinus className="w-3.5 h-3.5" />
+                                      </button>
+
+                                      {/* Direct delete (if active & draft) */}
+                                      <button
+                                        onClick={() => handleDeleteDirect(item.id, item.namaAset)}
+                                        disabled={isMutasiDiajukan || isHapusDiajukan}
+                                        className="p-1.5 rounded-lg bg-red-950/60 hover:bg-red-900 border border-red-500/30 text-red-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                        title="Hapus Data Aset Langsung"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    ))}
+                  </React.Fragment>
+                ))
               )}
             </tbody>
           </table>
@@ -1342,11 +1845,26 @@ export const AsetManagementView: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    placeholder="Contoh: 2200 m², 1 Unit, 800m"
+                    placeholder="Contoh: 1 Unit, 5 Unit, 2200 m²"
                     value={formData.volume}
-                    onChange={(e) => setFormData({ ...formData, volume: e.target.value })}
+                    onChange={(e) => {
+                      const newVol = e.target.value;
+                      setFormData({ ...formData, volume: newVol });
+                      const numMatch = newVol.match(/^(\d+)\s*(unit|buah|set|paket|item|pcs|meja|kursi|laptop|titik)?/i);
+                      if (numMatch) {
+                        const parsed = parseInt(numMatch[1], 10);
+                        if (parsed >= 1 && parsed <= 200 && parsed !== jumlahUnit) {
+                          setJumlahUnit(parsed);
+                        }
+                      }
+                    }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
                   />
+                  {jumlahUnit > 1 && (
+                    <span className="text-[10px] text-amber-400 font-semibold block mt-1">
+                      ⚡ Terdeteksi {jumlahUnit} unit: Aset otomatis digandakan menjadi {jumlahUnit} nomor registrasi berbeda.
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -2143,6 +2661,20 @@ export const AsetManagementView: React.FC = () => {
           aset={barcodeAset}
           isOpen={showBarcodeModal}
           onClose={() => setShowBarcodeModal(false)}
+        />
+      )}
+
+      {/* MODAL: Sinkronisasi Antar Perangkat Real-Time */}
+      <SyncDevicesModal
+        isOpen={showSyncModal}
+        onClose={() => setShowSyncModal(false)}
+      />
+
+      {/* MODAL: Backup & Restore Data (Dipindahkan ke bilah atas DATA ASET) */}
+      {isAdminOrSuper && (
+        <BackupRestoreModal
+          isOpen={showBackupModal}
+          onClose={() => setShowBackupModal(false)}
         />
       )}
     </div>

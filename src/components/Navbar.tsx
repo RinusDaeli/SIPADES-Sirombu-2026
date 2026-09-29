@@ -94,14 +94,14 @@ export const Navbar: React.FC = () => {
 
         {/* Right Action Bar */}
         <div className="flex items-center gap-2.5 sm:gap-4">
-          {/* Real-time Server Sync Status */}
+          {/* Real-time Firebase & Server Sync Status */}
           <button
             onClick={() => refreshServerData()}
             className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-[11px] font-medium text-slate-300 hover:text-white transition-all cursor-pointer"
-            title="Sinkronisasi Terpusat Real-time (Klik untuk menyinkronkan data sekarang)"
+            title="Sinkronisasi Terpusat Cloud Firebase & Server Real-time (Data otomatis sinkron antar laptop / perangkat)"
           >
             <span className={`w-2 h-2 rounded-full ${isServerConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-            <span className="text-slate-400 font-semibold">{isServerConnected ? 'Server Terhubung' : 'Offline'}</span>
+            <span className="text-slate-300 font-semibold">{isServerConnected ? 'Firebase & Server Aktif' : 'Offline'}</span>
             <RefreshCw className="w-3 h-3 text-slate-400" />
           </button>
 
@@ -114,10 +114,14 @@ export const Navbar: React.FC = () => {
               onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
               className="bg-transparent text-amber-400 font-semibold focus:outline-none cursor-pointer"
             >
-              <option value={2026} className="bg-slate-900 text-white">2026</option>
-              <option value={2025} className="bg-slate-900 text-white">2025</option>
-              <option value={2024} className="bg-slate-900 text-white">2024</option>
-              <option value={2023} className="bg-slate-900 text-white">2023</option>
+              <option value={0} className="bg-slate-900 text-amber-300 font-bold">★ Semua Tahun Anggaran</option>
+              <option value={2026} className="bg-slate-900 text-white">Tahun 2026</option>
+              <option value={2025} className="bg-slate-900 text-white">Tahun 2025</option>
+              <option value={2024} className="bg-slate-900 text-white">Tahun 2024</option>
+              <option value={2023} className="bg-slate-900 text-white">Tahun 2023</option>
+              <option value={2022} className="bg-slate-900 text-white">Tahun 2022</option>
+              <option value={2021} className="bg-slate-900 text-white">Tahun 2021</option>
+              <option value={2020} className="bg-slate-900 text-white">Tahun 2020</option>
             </select>
           </div>
 

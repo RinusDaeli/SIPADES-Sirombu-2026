@@ -117,12 +117,12 @@ export const ThreeDColumnChart: React.FC<ThreeDColumnChartProps> = ({
   return (
     <div className="space-y-3">
       {/* Chart Controls Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-slate-100">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-slate-800">
         {title && (
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-            <h3 className="text-sm font-bold text-slate-900 tracking-tight">{title}</h3>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-700">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            <h3 className="text-sm font-bold text-white tracking-tight">{title}</h3>
+            <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/30 text-[10px] font-bold text-emerald-300">
               3-D Isometric
             </span>
           </div>
@@ -130,14 +130,14 @@ export const ThreeDColumnChart: React.FC<ThreeDColumnChartProps> = ({
 
         <div className="flex items-center gap-2 ml-auto">
           {/* Toggle Unit vs Rupiah */}
-          <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[11px] font-bold">
+          <div className="flex bg-slate-900 p-0.5 rounded-lg border border-slate-700/80 text-[11px] font-bold">
             <button
               type="button"
               onClick={() => setMetricType('unit')}
               className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
                 metricType === 'unit'
-                  ? 'bg-white text-emerald-800 shadow-xs font-black'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-emerald-700 text-white shadow-xs font-black'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               Jumlah Unit
@@ -147,8 +147,8 @@ export const ThreeDColumnChart: React.FC<ThreeDColumnChartProps> = ({
               onClick={() => setMetricType('nilai')}
               className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
                 metricType === 'nilai'
-                  ? 'bg-white text-emerald-800 shadow-xs font-black'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-emerald-700 text-white shadow-xs font-black'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               Nilai Rupiah
@@ -162,8 +162,8 @@ export const ThreeDColumnChart: React.FC<ThreeDColumnChartProps> = ({
               onClick={() => setSortOrder((prev) => (prev === 'default' ? 'desc' : 'default'))}
               className={`px-2 py-1 rounded-lg border text-[11px] font-semibold transition-colors cursor-pointer ${
                 sortOrder === 'desc'
-                  ? 'bg-amber-50 border-amber-300 text-amber-900'
-                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  ? 'bg-amber-950/70 border-amber-500/50 text-amber-300'
+                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
               }`}
               title="Urutkan dari yang terbesar"
             >
@@ -174,7 +174,7 @@ export const ThreeDColumnChart: React.FC<ThreeDColumnChartProps> = ({
       </div>
 
       {/* Visual Chart Container */}
-      <div className="relative overflow-x-auto rounded-xl bg-gradient-to-b from-slate-50/70 via-white to-slate-50/90 border border-slate-200/80 p-2 shadow-inner">
+      <div className="relative overflow-x-auto rounded-xl bg-gradient-to-b from-[#0A101D] via-[#0E172B] to-[#0A101D] border border-slate-800 p-2 shadow-inner">
         <svg
           viewBox={`0 0 ${dynamicSvgWidth} ${chartHeight}`}
           className="w-full h-auto min-h-[250px] overflow-visible select-none"
@@ -198,7 +198,7 @@ export const ThreeDColumnChart: React.FC<ThreeDColumnChartProps> = ({
 
             {/* Base Grid 3D Shadow Filter */}
             <filter id="shadow3d" x="-20%" y="-20%" width="150%" height="150%">
-              <feDropShadow dx="2" dy="4" stdDeviation="3" floodColor="#0f172a" floodOpacity="0.15" />
+              <feDropShadow dx="2" dy="4" stdDeviation="3" floodColor="#000000" floodOpacity="0.4" />
             </filter>
           </defs>
 
@@ -207,8 +207,8 @@ export const ThreeDColumnChart: React.FC<ThreeDColumnChartProps> = ({
             points={`${paddingLeft - 10},${zeroY} ${paddingLeft + availableWidth + 15},${zeroY} ${
               paddingLeft + availableWidth + 15 + dx * 2
             },${zeroY + dy * 2} ${paddingLeft - 10 + dx * 2},${zeroY + dy * 2}`}
-            fill="#f1f5f9"
-            opacity="0.8"
+            fill="#09101d"
+            opacity="0.9"
           />
 
           {/* Grid lines & Y-axis labels */}
@@ -223,7 +223,7 @@ export const ThreeDColumnChart: React.FC<ThreeDColumnChartProps> = ({
                   y1={yPos}
                   x2={paddingLeft + availableWidth}
                   y2={yPos}
-                  stroke="#e2e8f0"
+                  stroke="#1e293b"
                   strokeWidth="1"
                   strokeDasharray="3 3"
                 />
@@ -232,7 +232,7 @@ export const ThreeDColumnChart: React.FC<ThreeDColumnChartProps> = ({
                   y1={yPos}
                   x2={paddingLeft + availableWidth + dx}
                   y2={yPos + dy}
-                  stroke="#cbd5e1"
+                  stroke="#334155"
                   strokeWidth="1"
                   strokeDasharray="2 2"
                 />
@@ -242,7 +242,7 @@ export const ThreeDColumnChart: React.FC<ThreeDColumnChartProps> = ({
                   textAnchor="end"
                   fontSize="9.5"
                   fontWeight="600"
-                  fill="#64748b"
+                  fill="#94a3b8"
                   fontFamily="monospace"
                 >
                   {metricType === 'unit'
@@ -287,7 +287,7 @@ export const ThreeDColumnChart: React.FC<ThreeDColumnChartProps> = ({
                     x + dx
                   },${zeroY + dy}`}
                   fill="#000000"
-                  opacity={isHovered ? '0.22' : '0.12'}
+                  opacity={isHovered ? '0.4' : '0.2'}
                   filter="url(#shadow3d)"
                 />
 
@@ -329,7 +329,7 @@ export const ThreeDColumnChart: React.FC<ThreeDColumnChartProps> = ({
                   textAnchor="middle"
                   fontSize="10"
                   fontWeight="bold"
-                  fill={isHovered ? '#0f172a' : '#475569'}
+                  fill={isHovered ? '#ffffff' : '#cbd5e1'}
                   className="transition-colors"
                 >
                   {metricType === 'unit'
@@ -348,7 +348,7 @@ export const ThreeDColumnChart: React.FC<ThreeDColumnChartProps> = ({
                     transform={shouldTilt ? 'rotate(-42)' : 'none'}
                     fontSize={isDesaComparison ? '9.5' : '10'}
                     fontWeight={isHovered ? '800' : '600'}
-                    fill={isHovered ? '#047857' : '#334155'}
+                    fill={isHovered ? '#34d399' : '#94a3b8'}
                     className="transition-colors"
                   >
                     {(item?.label || '').replace(/^DESA\s+/i, '')}

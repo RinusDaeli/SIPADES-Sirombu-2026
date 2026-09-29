@@ -31,6 +31,80 @@ function cleanForFirestore<T>(data: T): T {
   return JSON.parse(JSON.stringify(data));
 }
 
+export interface InitialCloudData {
+  asets: Aset[];
+  desas: Desa[];
+  verifikasiList: PermohonanVerifikasi[];
+  pengesahanList: PengesahanLaporan[];
+  users: User[];
+  kecamatanProfile?: KecamatanProfile;
+}
+
+/**
+ * Directly fetch all authoritative data from Google Cloud Firestore on initial app boot.
+ * This guarantees every device (laptop, mobile phone, tablet) loads the EXACT same live cloud data
+ * instead of relying on stale local device cache.
+ */
+export async function fetchInitialFirestoreData(): Promise<InitialCloudData | null> {
+  try {
+    const [asetsSnap, desasSnap, verifSnap, pengesahanSnap, usersSnap, kecSnap] = await Promise.all([
+      getDocs(collection(db, 'asets')),
+      getDocs(collection(db, 'desas')),
+      getDocs(collection(db, 'verifikasiList')),
+      getDocs(collection(db, 'pengesahanList')),
+      getDocs(collection(db, 'users')),
+      getDoc(doc(db, 'system', 'kecamatanProfile')),
+    ]);
+
+    const asets: Aset[] = [];
+    asetsSnap.forEach((d) => {
+      const data = d.data() as Aset;
+      if (data && data.id) asets.push(data);
+    });
+
+    const desas: Desa[] = [];
+    desasSnap.forEach((d) => {
+      const data = d.data() as Desa;
+      if (data && data.id) desas.push(data);
+    });
+
+    const verifikasiList: PermohonanVerifikasi[] = [];
+    verifSnap.forEach((d) => {
+      const data = d.data() as PermohonanVerifikasi;
+      if (data && data.id) verifikasiList.push(data);
+    });
+
+    const pengesahanList: PengesahanLaporan[] = [];
+    pengesahanSnap.forEach((d) => {
+      const data = d.data() as PengesahanLaporan;
+      if (data && data.id) pengesahanList.push(data);
+    });
+
+    const users: User[] = [];
+    usersSnap.forEach((d) => {
+      const data = d.data() as User;
+      if (data && data.id) users.push(data);
+    });
+
+    let kecamatanProfile: KecamatanProfile | undefined = undefined;
+    if (kecSnap.exists()) {
+      kecamatanProfile = kecSnap.data() as KecamatanProfile;
+    }
+
+    return {
+      asets,
+      desas,
+      verifikasiList,
+      pengesahanList,
+      users,
+      kecamatanProfile,
+    };
+  } catch (error) {
+    console.warn('[Firestore] fetchInitialFirestoreData note:', error);
+    return null;
+  }
+}
+
 // ==================== SUBSCRIPTIONS (REAL-TIME MULTI-DEVICE SYNC) ====================
 
 export function subscribeAsets(callback: (asets: Aset[]) => void): () => void {

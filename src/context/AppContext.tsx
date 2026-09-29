@@ -17,7 +17,7 @@ import {
   INITIAL_PENGESAHAN,
   INITIAL_KECAMATAN_PROFILE,
 } from '../data/initialData';
-import { formatTanggalIndonesia } from '../utils/reportGenerator';
+import { formatTanggalIndonesia, generateSequentialKodeAset } from '../utils/reportGenerator';
 import {
   safeLocalStorageSetItem,
   saveAsetsToIndexedDB,
@@ -41,6 +41,7 @@ import {
   saveUserToCloud,
   deleteUserFromCloud,
   bootstrapFirestoreIfEmpty,
+  fetchInitialFirestoreData,
 } from '../lib/firestoreService';
 
 export interface AuthSession {
@@ -157,9 +158,9 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
   AUTH_SESSION: 'sipades_sirombu_session_24h',
-  USERS: 'sipad_users_v2',
-  DESAS: 'sipad_desas_v3',
-  ASETS: 'sipad_asets_v2',
+  USERS: 'sipad_users_v3',
+  DESAS: 'sipad_desas_v6',
+  ASETS: 'sipad_asets_v6',
   DELETED_ASETS: 'sipad_deleted_asets_v2',
   VERIFIKASI: 'sipad_verifikasi_v2',
   PENGESAHAN: 'sipad_pengesahan_v2',
@@ -168,7 +169,7 @@ const STORAGE_KEYS = {
 };
 
 /**
- * Deduplicate assets by unique identity (desaId + kodeAset + nomorRegister + namaAset)
+ * Deduplicate assets by unique identity (desaId + kodeAset + nomorRegister)
  * and strictly filter out any permanently deleted IDs and dummy sample assets.
  */
 export function deduplicateAsets(list: Aset[], deletedIds?: Set<string>): Aset[] {
@@ -183,15 +184,18 @@ export function deduplicateAsets(list: Aset[], deletedIds?: Set<string>): Aset[]
     if (deletedIds && deletedIds.has(a.id)) continue; // Never allow deleted assets to reappear
     if (seenId.has(a.id)) continue; // Avoid duplicate IDs
 
-    // Unique identity key per asset in a desa
+    // Unique identity key per asset in a desa: only deduplicate if both non-empty kodeAset and nomorRegister match
     const reg = a.nomorRegister ? a.nomorRegister.replace(/^0+/, '') : '';
-    const uniqueKey = `${a.desaId || ''}_${(a.kodeAset || '').trim()}_${reg}_${(a.namaAset || '').trim().toLowerCase()}`;
-    if (seenKey.has(uniqueKey)) {
-      continue; // Duplicate entry of the same asset!
+    const kode = (a.kodeAset || '').trim();
+    if (kode && reg) {
+      const uniqueKey = `${a.desaId || ''}_${kode}_${reg}`;
+      if (seenKey.has(uniqueKey)) {
+        continue; // Duplicate entry of the same asset!
+      }
+      seenKey.add(uniqueKey);
     }
 
     seenId.add(a.id);
-    seenKey.add(uniqueKey);
     result.push(a);
   }
 
@@ -360,11 +364,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedYear, setSelectedYear] = useState<number>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.YEAR);
-      return saved ? parseInt(saved, 10) || 2026 : 2026;
+      if (saved !== null) {
+        const parsed = parseInt(saved, 10);
+        return isNaN(parsed) ? 0 : parsed;
+      }
+      return 0; // Default: Seluruh Tahun Anggaran (0)
     } catch {
-      return 2026;
+      return 0;
     }
   });
+
+  const handleSetSelectedYear = useCallback((year: number) => {
+    setSelectedYear(year);
+    safeLocalStorageSetItem(STORAGE_KEYS.YEAR, year.toString());
+  }, []);
 
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [selectedDesaFilter, setSelectedDesaFilter] = useState<string>('all');
@@ -417,7 +430,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (serverData && typeof serverData === 'object') {
           if (Array.isArray(serverData.asets)) {
             setAsets((prev) => {
-              const cleanAsets = deduplicateAsets(serverData.asets, deletedAssetIds);
+              // Non-destructive merge: preserve both local state and server state
+              const map = new Map<string, Aset>(prev.map((a) => [a.id, a]));
+              serverData.asets.forEach((incoming: Aset) => {
+                if (incoming && incoming.id && !deletedAssetIds.has(incoming.id)) {
+                  const exist = map.get(incoming.id);
+                  if (!exist) {
+                    map.set(incoming.id, incoming);
+                  } else {
+                    const timeExist = new Date(exist.updatedAt || exist.createdAt || 0).getTime();
+                    const timeInc = new Date(incoming.updatedAt || incoming.createdAt || 0).getTime();
+                    if (timeInc >= timeExist) {
+                      map.set(incoming.id, incoming);
+                    }
+                  }
+                }
+              });
+              const cleanAsets = deduplicateAsets(Array.from(map.values()), deletedAssetIds);
               if (JSON.stringify(prev) === JSON.stringify(cleanAsets)) return prev;
               persistAsetsSafely(cleanAsets);
               return cleanAsets;
@@ -425,23 +454,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
           if (Array.isArray(serverData.verifikasiList)) {
             setVerifikasiList((prev) => {
-              if (JSON.stringify(prev) === JSON.stringify(serverData.verifikasiList)) return prev;
-              safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(serverData.verifikasiList));
-              return serverData.verifikasiList;
+              const map = new Map<string, PermohonanVerifikasi>(prev.map((v) => [v.id, v]));
+              serverData.verifikasiList.forEach((v: PermohonanVerifikasi) => {
+                if (v && v.id) map.set(v.id, v);
+              });
+              const merged = Array.from(map.values());
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(merged));
+              return merged;
             });
           }
           if (Array.isArray(serverData.users) && serverData.users.length > 0) {
             setUsers((prev) => {
-              if (JSON.stringify(prev) === JSON.stringify(serverData.users)) return prev;
-              safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(serverData.users));
-              return serverData.users;
+              const map = new Map<string, User>(prev.map((u) => [u.id, u]));
+              serverData.users.forEach((u: User) => {
+                if (u && u.id) map.set(u.id, u);
+              });
+              const merged = Array.from(map.values());
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(merged));
+              return merged;
             });
           }
           if (Array.isArray(serverData.desas) && serverData.desas.length > 0) {
             setDesas((prev) => {
-              if (JSON.stringify(prev) === JSON.stringify(serverData.desas)) return prev;
-              safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(serverData.desas));
-              return serverData.desas;
+              const merged = prev.map((current) => {
+                const srv = serverData.desas.find((d: Desa) => d.id === current.id);
+                if (!srv) return current;
+                return {
+                  ...current,
+                  ...srv,
+                };
+              });
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(merged));
+              return merged;
             });
           }
           if (serverData.kecamatanProfile && typeof serverData.kecamatanProfile === 'object') {
@@ -449,13 +496,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               if (JSON.stringify(prev) === JSON.stringify(serverData.kecamatanProfile)) return prev;
               safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(serverData.kecamatanProfile));
               return serverData.kecamatanProfile;
-            });
-          }
-          if (typeof serverData.selectedYear === 'number') {
-            setSelectedYear((prev) => {
-              if (prev === serverData.selectedYear) return prev;
-              safeLocalStorageSetItem(STORAGE_KEYS.YEAR, serverData.selectedYear.toString());
-              return serverData.selectedYear;
             });
           }
         }
@@ -472,9 +512,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     bootstrapFirestoreIfEmpty();
 
+    // Directly fetch live authoritative data from Google Cloud Firestore FIRST on boot
+    // so every laptop, mobile phone, and tablet starts with the exact same cloud data
+    fetchInitialFirestoreData().then((cloudData) => {
+      if (cloudData) {
+        if (Array.isArray(cloudData.asets)) {
+          const clean = deduplicateAsets(cloudData.asets, deletedAssetIds);
+          setAsets(clean);
+          persistAsetsSafely(clean);
+        }
+        if (Array.isArray(cloudData.desas) && cloudData.desas.length > 0) {
+          setDesas(cloudData.desas);
+          safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(cloudData.desas));
+        }
+        if (Array.isArray(cloudData.users) && cloudData.users.length > 0) {
+          setUsers(cloudData.users);
+          safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(cloudData.users));
+        }
+        if (Array.isArray(cloudData.verifikasiList)) {
+          setVerifikasiList(cloudData.verifikasiList);
+          safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(cloudData.verifikasiList));
+        }
+        if (Array.isArray(cloudData.pengesahanList)) {
+          setPengesahanList(cloudData.pengesahanList);
+          safeLocalStorageSetItem(STORAGE_KEYS.PENGESAHAN, JSON.stringify(cloudData.pengesahanList));
+        }
+        if (cloudData.kecamatanProfile) {
+          setKecamatanProfile(cloudData.kecamatanProfile);
+          safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(cloudData.kecamatanProfile));
+        }
+        setIsServerConnected(true);
+        setLastSyncTime(new Date());
+      }
+    }).catch((e) => {
+      console.warn('[Firestore] Initial direct fetch note:', e);
+    });
+
     const unsubAsets = subscribeAsets((cloudAsets) => {
       if (cloudAsets) {
         setAsets((prev) => {
+          // Cloud Firestore is the primary authoritative source of truth across all devices.
+          // Initial & live data loaded strictly matches Cloud Firestore so every device sees identical data.
           const cleanCloud = deduplicateAsets(cloudAsets, deletedAssetIds);
           if (JSON.stringify(prev) === JSON.stringify(cleanCloud)) return prev;
           persistAsetsSafely(cleanCloud);
@@ -508,9 +586,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubDesas = subscribeDesas((cloudDesas) => {
       if (cloudDesas && cloudDesas.length > 0) {
         setDesas((prev) => {
-          if (JSON.stringify(prev) === JSON.stringify(cloudDesas)) return prev;
-          safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(cloudDesas));
-          return cloudDesas;
+          const merged = prev.map((current) => {
+            const cloud = cloudDesas.find((cd) => cd && cd.id === current.id);
+            if (!cloud) return current;
+            return {
+              ...current,
+              ...cloud,
+            };
+          });
+          if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+          safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(merged));
+          return merged;
         });
       }
     });
@@ -968,7 +1054,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addAset = (data: Omit<Aset, 'id' | 'createdAt' | 'updatedAt' | 'status'>) => {
-    addAsetBatch([data]);
+    // Jika aset yang diisi lebih dari 1 (misal volume: "5 Unit", "10 Buah", atau volume angka > 1),
+    // langsung gandakan aset tersebut dengan nomor registrasi yang berbeda-beda secara otomatis
+    let unitCount = 1;
+    if (data.volume) {
+      const match = data.volume.trim().match(/^(\d+)/);
+      if (match) {
+        const n = parseInt(match[1], 10);
+        if (n > 1 && n <= 500) {
+          unitCount = n;
+        }
+      }
+    }
+
+    if (unitCount > 1) {
+      const totalNilai = Number(data.nilaiPerolehan || 0);
+      const unitPrice = Math.round(totalNilai / unitCount);
+      const codes = generateSequentialKodeAset(data.desaId, data.klasifikasi, unitCount, asets, desas);
+      const batchItems = codes.map((codeInfo) => ({
+        ...data,
+        kodeAset: codeInfo.kodeAset,
+        nomorRegister: codeInfo.nomorRegister,
+        nilaiPerolehan: unitPrice,
+        volume: '1 Unit',
+      }));
+      addAsetBatch(batchItems);
+    } else {
+      addAsetBatch([data]);
+    }
   };
 
   const updateAset = (id: string, data: Partial<Aset>) => {
@@ -1285,6 +1398,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       }).catch((e) => console.warn('[Sync] Desa update failed:', e));
+
+      syncManager.broadcastChange({
+        version: 2,
+        timestamp: new Date().toISOString(),
+        senderId: 'client',
+        asets,
+        verifikasiList,
+        pengesahanList,
+        desas: finalDesas.length > 0 ? finalDesas : desas.map((d) => (d.id === id ? { ...d, ...data } : d)),
+        users,
+        kecamatanProfile,
+      });
     }
 
     return { success: true };
@@ -1514,7 +1639,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setVerifikasiList(INITIAL_VERIFIKASI);
     setPengesahanList(INITIAL_PENGESAHAN);
     setKecamatanProfile(INITIAL_KECAMATAN_PROFILE);
-    setSelectedYear(2026);
+    setSelectedYear(0);
     setSelectedDesaFilter('all');
     setActiveTab('dashboard');
   };
@@ -1531,7 +1656,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         kecamatanProfile,
         updateKecamatanProfile,
         selectedYear,
-        setSelectedYear,
+        setSelectedYear: handleSetSelectedYear,
         activeTab,
         setActiveTab,
         selectedDesaFilter,
