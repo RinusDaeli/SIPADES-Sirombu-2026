@@ -123,10 +123,11 @@ export const VerifikasiView: React.FC = () => {
       actionType === 'approve' ? nomorSK : undefined
     );
 
+    const assetName = selectedVerif.asetSnapshot?.namaAset || 'Aset';
     const msg =
       actionType === 'approve'
-        ? `Permohonan ${selectedVerif.asetSnapshot.namaAset} berhasil disetujui!`
-        : `Permohonan ${selectedVerif.asetSnapshot.namaAset} ditolak dan dikembalikan untuk revisi.`;
+        ? `Permohonan ${assetName} berhasil disetujui!`
+        : `Permohonan ${assetName} ditolak dan dikembalikan untuk revisi.`;
 
     setSelectedVerif(null);
     setActionType(null);
@@ -444,25 +445,25 @@ export const VerifikasiView: React.FC = () => {
                       Objek Aset Tetap Terkait
                     </div>
                     <div className="font-bold text-white text-sm">
-                      {verif.asetSnapshot.namaAset}
+                      {verif.asetSnapshot?.namaAset || 'Aset'}
                     </div>
                     <div className="text-slate-400 font-mono text-[11px]">
-                      Kode: {verif.asetSnapshot.kodeAset}
+                      Kode: {verif.asetSnapshot?.kodeAset || '-'}
                     </div>
                     <div className="text-slate-400">
-                      Klasifikasi: <span className="text-slate-200">{verif.asetSnapshot.klasifikasi}</span>
+                      Klasifikasi: <span className="text-slate-200">{verif.asetSnapshot?.klasifikasi || '-'}</span>
                     </div>
                     <div className="text-slate-400">
                       Nilai Perolehan:{' '}
                       <span className="text-emerald-400 font-bold font-mono">
-                        {formatRupiah(verif.asetSnapshot.nilaiPerolehan)}
+                        {formatRupiah(verif.asetSnapshot?.nilaiPerolehan || 0)}
                       </span>
                     </div>
                     <div className="text-slate-400">
-                      Tahun Perolehan: <span className="text-slate-200">{verif.asetSnapshot.tahunPerolehan}</span> ({verif.asetSnapshot.sumberDana})
+                      Tahun Perolehan: <span className="text-slate-200">{verif.asetSnapshot?.tahunPerolehan || '-'}</span> ({verif.asetSnapshot?.sumberDana || '-'})
                     </div>
                     <div className="text-slate-400">
-                      Kondisi Fisik: <span className="text-amber-300 font-bold">{verif.asetSnapshot.kondisi}</span>
+                      Kondisi Fisik: <span className="text-amber-300 font-bold">{verif.asetSnapshot?.kondisi || '-'}</span>
                     </div>
                   </div>
 
@@ -621,7 +622,7 @@ export const VerifikasiView: React.FC = () => {
                     : 'Penolakan / Catatan Perbaikan Permohonan'}
                 </h3>
                 <p className="text-xs text-slate-400 font-mono">
-                  {selectedVerif.desaName} • {selectedVerif.asetSnapshot.namaAset}
+                  {selectedVerif.desaName} • {selectedVerif.asetSnapshot?.namaAset || 'Aset'}
                 </p>
               </div>
             </div>
@@ -718,7 +719,7 @@ export const VerifikasiView: React.FC = () => {
                   Revisi & Ajukan Ulang Permohonan {revisiModalVerif.tipe === 'mutasi' ? 'Mutasi' : 'Penghapusan'}
                 </h3>
                 <p className="text-xs text-amber-300/80 font-mono">
-                  {revisiModalVerif.desaName} • {revisiModalVerif.asetSnapshot.namaAset}
+                  {revisiModalVerif.desaName} • {revisiModalVerif.asetSnapshot?.namaAset || 'Aset'}
                 </p>
               </div>
             </div>
@@ -841,7 +842,7 @@ export const VerifikasiView: React.FC = () => {
                   Hapus Pengajuan Mutasi / Penghapusan
                 </h3>
                 <p className="text-xs text-red-300/80 font-mono">
-                  {deleteModalVerif.desaName} • {deleteModalVerif.asetSnapshot.namaAset}
+                  {deleteModalVerif.desaName} • {deleteModalVerif.asetSnapshot?.namaAset || 'Aset'}
                 </p>
               </div>
             </div>
@@ -851,7 +852,7 @@ export const VerifikasiView: React.FC = () => {
                 Apakah Anda yakin ingin menghapus data permohonan {deleteModalVerif.tipe === 'mutasi' ? 'mutasi' : 'penghapusan'} untuk aset:
               </p>
               <div className="p-2 rounded bg-slate-800 font-bold text-white">
-                {deleteModalVerif.asetSnapshot.namaAset} (Kode: {deleteModalVerif.asetSnapshot.kodeAset})
+                {deleteModalVerif.asetSnapshot?.namaAset || 'Aset'} (Kode: {deleteModalVerif.asetSnapshot?.kodeAset || '-'})
               </div>
               <p className="text-[11px] text-amber-300">
                 Data permohonan akan dihapus secara permanen dari daftar verifikasi, dan status mutasi aset terkait akan dikembalikan ke normal (aktif).

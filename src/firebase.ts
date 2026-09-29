@@ -1,9 +1,9 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
-const app = initializeApp(firebaseConfig);
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId); /* CRITICAL: The app will break without this line */
 export const auth = getAuth(app);
 
@@ -60,8 +60,10 @@ export async function testFirestoreConnection() {
     console.log('Firestore connection verified successfully.');
     return true;
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration.');
+    if (error instanceof Error && (error.message.includes('Quota limit exceeded') || error.message.includes('resource-exhausted'))) {
+      console.warn('[Firestore] Kuota Firestore tercapai. Sinkronisasi antar laptop menggunakan Server Real-time.');
+    } else if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.warn('[Firestore] Client is offline, using offline cache & server sync.');
     }
     return false;
   }

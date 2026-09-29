@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   X,
   Database,
+  RefreshCw,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -22,7 +23,15 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner }) => {
-  const { activeTab, setActiveTab, currentUser, logout, verifikasiList } = useApp();
+  const {
+    activeTab,
+    setActiveTab,
+    currentUser,
+    logout,
+    verifikasiList,
+    isServerConnected,
+    refreshServerData,
+  } = useApp();
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
 
@@ -64,16 +73,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner }) => {
     },
     {
       id: 'laporan',
-      label: 'REKAP ANTAR DESA',
+      label: currentUser?.role === 'admin_desa' ? 'REKAP ASET DESA' : 'REKAP ANTAR DESA',
       icon: BarChart3,
       badge: null,
     },
-    {
-      id: 'users',
-      label: 'PENGGUNA',
-      icon: Users,
-      badge: isSuperAdmin ? 'Super' : null,
-    },
+    ...(isAdminOrSuper
+      ? [
+          {
+            id: 'users',
+            label: 'PENGGUNA',
+            icon: Users,
+            badge: isSuperAdmin ? 'Super' : 'Admin',
+          },
+        ]
+      : []),
   ];
 
   const handleItemClick = (item: typeof menuItems[0]) => {
@@ -89,7 +102,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner }) => {
             <NiasBaratLogo size={42} />
             <div>
               <h1 className="text-sm font-extrabold tracking-wider text-white uppercase leading-tight">
-                ADMIN KECAMATAN
+                {currentUser?.role === 'admin_desa'
+                  ? (currentUser.desaName || 'ADMIN DESA')
+                  : currentUser?.role === 'super_admin'
+                  ? 'SUPER ADMIN'
+                  : 'ADMIN KECAMATAN'}
               </h1>
               <p className="text-[11px] text-emerald-200/70 font-medium">
                 Kec. Sirombu — Nias Barat
@@ -176,6 +193,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner }) => {
               <span>Backup & Restore Data</span>
             </button>
           )}
+
+          {/* Real-time Multi-Laptop Connection Status */}
+          <div className="p-2.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 flex items-center justify-between gap-2 shadow-sm">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isServerConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              <div className="flex flex-col min-w-0">
+                <span className="font-bold text-white text-[11px] leading-tight truncate">
+                  {isServerConnected ? 'Terhubung Antar Laptop' : 'Mode Offline / Terputus'}
+                </span>
+                <span className="text-[10px] text-emerald-300/80 truncate">
+                  Sinkronisasi Real-Time
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => refreshServerData()}
+              className="p-1.5 rounded-lg bg-emerald-900/60 hover:bg-emerald-800 text-emerald-300 hover:text-white transition-colors cursor-pointer shrink-0"
+              title="Sinkronkan data dengan laptop lain sekarang"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          </div>
 
           {/* Logout Button */}
           <button

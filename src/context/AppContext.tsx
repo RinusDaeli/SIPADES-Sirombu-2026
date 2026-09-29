@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   User,
   Desa,
@@ -6,6 +6,7 @@ import {
   KlasAset,
   PermohonanVerifikasi,
   PengesahanLaporan,
+  TipeVerifikasi,
   KecamatanProfile,
 } from '../types';
 import {
@@ -17,19 +18,30 @@ import {
   INITIAL_KECAMATAN_PROFILE,
 } from '../data/initialData';
 import { formatTanggalIndonesia } from '../utils/reportGenerator';
-import { db, handleFirestoreError, OperationType } from '../firebase';
 import {
-  collection,
-  doc,
-  setDoc,
-  deleteDoc,
-  onSnapshot,
-  getDocs,
-  writeBatch,
-} from 'firebase/firestore';
-import { cleanObject } from '../utils/firestoreHelper';
+  subscribeAsets,
+  subscribeVerifikasi,
+  subscribePengesahan,
+  subscribeDesas,
+  subscribeKecamatanProfile,
+  subscribeUsers,
+  saveAsetToCloud,
+  deleteAsetFromCloud,
+  saveVerifikasiToCloud,
+  deleteVerifikasiFromCloud,
+  savePengesahanToCloud,
+  saveDesaToCloud,
+  saveKecamatanProfileToCloud,
+  saveUserToCloud,
+  deleteUserFromCloud,
+  bootstrapFirestoreIfEmpty,
+} from '../lib/firestoreService';
 
-export type CloudSyncStatus = 'connected' | 'syncing' | 'offline';
+export interface AuthSession {
+  user: User;
+  loginTime: number;
+  expiresAt: number; // 24 hours timestamp
+}
 
 interface AppContextType {
   currentUser: User | null;
@@ -46,10 +58,15 @@ interface AppContextType {
   setActiveTab: (tab: string) => void;
   selectedDesaFilter: string; // 'all' or desaId
   setSelectedDesaFilter: (desaId: string) => void;
-  
-  // Cloud Sync
-  cloudSyncStatus: CloudSyncStatus;
-  isCloudSynced: boolean;
+  isServerConnected: boolean;
+  lastSyncTime: Date;
+  refreshServerData: () => Promise<void>;
+  saveMasterToSourceCode: (overrides?: {
+    desas?: Desa[];
+    kecamatanProfile?: KecamatanProfile;
+    users?: User[];
+    asets?: Aset[];
+  }) => Promise<{ success: boolean; message: string }>;
   
   // Auth
   login: (email: string, pass: string) => { success: boolean; message?: string };
@@ -63,9 +80,9 @@ interface AppContextType {
   
   // Assets
   addAset: (data: Omit<Aset, 'id' | 'createdAt' | 'updatedAt' | 'status'>) => void;
+  addAsetBatch: (items: Omit<Aset, 'id' | 'createdAt' | 'updatedAt' | 'status'>[]) => Promise<{ success: boolean; count: number }>;
   updateAset: (id: string, data: Partial<Aset>) => void;
   deleteAset: (id: string) => { success: boolean; message?: string };
-  clearAllAsetsDanMutasi: () => Promise<{ success: boolean; message?: string }>;
   
   // Verifikasi Mutasi & Penghapusan (Kecamatan Control)
   ajukanMutasi: (
@@ -113,11 +130,11 @@ interface AppContextType {
 
   // Backup & Restore
   getBackupData: () => any;
-  restoreBackupData: (backupJson: any) => Promise<{
+  restoreBackupData: (backupJson: any) => {
     success: boolean;
     message?: string;
     stats?: { asets: number; verifikasi: number; desas: number; users: number };
-  }>;
+  };
 
   // Desa Information Update
   updateDesa: (id: string, data: Partial<Desa>) => { success: boolean; message?: string };
@@ -129,119 +146,407 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
-  CURRENT_USER: 'sipad_current_user_v2',
+  AUTH_SESSION: 'sipades_sirombu_session_24h',
   USERS: 'sipad_users_v2',
-  DESAS: 'sipad_desas_v3',
-  ASETS: 'sipad_clean_asets_v3',
-  VERIFIKASI: 'sipad_clean_verifikasi_v3',
-  PENGESAHAN: 'sipad_clean_pengesahan_v3',
+  DESAS: 'sipad_desas_v2',
+  ASETS: 'sipad_asets_v2',
+  VERIFIKASI: 'sipad_verifikasi_v2',
+  PENGESAHAN: 'sipad_pengesahan_v2',
   KECAMATAN_PROFILE: 'sipad_kecamatan_profile_v2',
   YEAR: 'sipad_year_v2',
 };
 
+const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>('syncing');
+  // Session Persistence with 24-hour expiration:
+  // - If session exists and < 24 hours: remain logged in across page refreshes
+  // - If user logs out or session > 24 hours: show login page
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.AUTH_SESSION);
+      if (saved) {
+        const session: AuthSession = JSON.parse(saved);
+        const now = Date.now();
+        if (session && session.user && typeof session.user === 'object' && session.user.id && session.expiresAt && now < session.expiresAt) {
+          return session.user;
+        }
+        localStorage.removeItem(STORAGE_KEYS.AUTH_SESSION);
+      }
+    } catch (e) {
+      console.error('[Auth] Failed to parse session:', e);
+      try { localStorage.removeItem(STORAGE_KEYS.AUTH_SESSION); } catch {}
+    }
+    return null;
+  });
 
   const [desas, setDesas] = useState<Desa[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.DESAS);
-    if (saved) {
-      try {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.DESAS);
+      if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return INITIAL_DESA_LIST.map((init) => {
+            const found = parsed.find((p: Desa) => p && p.id === init.id);
+            if (!found) return init;
+            return {
+              ...init,
+              ...found,
+            };
+          });
         }
-      } catch (e) {
-        console.error(e);
       }
+    } catch (e) {
+      console.error(e);
     }
     return INITIAL_DESA_LIST;
   });
   
   const [users, setUsers] = useState<User[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.USERS);
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { console.error(e); }
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.USERS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.filter((u: any) => u && u.id && u.email);
+        }
+      }
+    } catch (e) {
+      console.error(e);
     }
     return INITIAL_USERS;
   });
 
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { console.error(e); }
-    }
-    return INITIAL_USERS[0];
-  });
-
-  // Assets default to empty array (clean slate for fresh 1-by-1 entry)
   const [asets, setAsets] = useState<Aset[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.ASETS);
-    if (saved) {
-      try {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ASETS);
+      if (saved) {
         const parsed: Aset[] = JSON.parse(saved);
-        return parsed;
-      } catch (e) {
-        console.error(e);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((a: any) => a && a.id).map((a) => ({
+            ...a,
+            klasifikasi: (a?.klasifikasi ? a.klasifikasi.replace(/^[I|V|X]+\.\s*/, '') : 'Tanah') as KlasAset,
+          }));
+        }
       }
+    } catch (e) {
+      console.error(e);
     }
     return INITIAL_ASETS;
   });
 
-  // Mutations default to empty array
   const [verifikasiList, setVerifikasiList] = useState<PermohonanVerifikasi[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.VERIFIKASI);
-    if (saved) {
-      try {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.VERIFIKASI);
+      if (saved) {
         const parsed: PermohonanVerifikasi[] = JSON.parse(saved);
-        return parsed;
-      } catch (e) {
-        console.error(e);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((v: any) => v && v.id).map((v) => ({
+            ...v,
+            asetSnapshot: v?.asetSnapshot
+              ? {
+                  ...v.asetSnapshot,
+                  klasifikasi: (v.asetSnapshot.klasifikasi
+                    ? v.asetSnapshot.klasifikasi.replace(/^[I|V|X]+\.\s*/, '')
+                    : 'Tanah') as KlasAset,
+                }
+              : v?.asetSnapshot,
+          }));
+        }
       }
+    } catch (e) {
+      console.error(e);
     }
     return INITIAL_VERIFIKASI;
   });
 
   const [pengesahanList, setPengesahanList] = useState<PengesahanLaporan[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.PENGESAHAN);
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { console.error(e); }
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.PENGESAHAN);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.error(e);
     }
     return INITIAL_PENGESAHAN;
   });
 
   const [kecamatanProfile, setKecamatanProfile] = useState<KecamatanProfile>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.KECAMATAN_PROFILE);
-    if (saved) {
-      try {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.KECAMATAN_PROFILE);
+      if (saved) {
         const parsed = JSON.parse(saved);
-        return { ...INITIAL_KECAMATAN_PROFILE, ...parsed };
-      } catch (e) {
-        console.error(e);
+        if (parsed && typeof parsed === 'object') {
+          return { ...INITIAL_KECAMATAN_PROFILE, ...parsed };
+        }
       }
+    } catch (e) {
+      console.error(e);
     }
     return INITIAL_KECAMATAN_PROFILE;
   });
 
   const [selectedYear, setSelectedYear] = useState<number>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.YEAR);
-    return saved ? parseInt(saved, 10) : 2024;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.YEAR);
+      return saved ? parseInt(saved, 10) || 2026 : 2026;
+    } catch {
+      return 2026;
+    }
   });
 
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [selectedDesaFilter, setSelectedDesaFilter] = useState<string>('all');
+  const [isServerConnected, setIsServerConnected] = useState<boolean>(true);
+  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
 
-  // Persistence to localStorage for offline cache
+  // Check 24-hour session expiry periodically
+  useEffect(() => {
+    const checkSession = () => {
+      const saved = localStorage.getItem(STORAGE_KEYS.AUTH_SESSION);
+      if (saved) {
+        try {
+          const session: AuthSession = JSON.parse(saved);
+          if (session && session.expiresAt && Date.now() >= session.expiresAt) {
+            localStorage.removeItem(STORAGE_KEYS.AUTH_SESSION);
+            setCurrentUser(null);
+            setActiveTab('dashboard');
+          }
+        } catch {
+          localStorage.removeItem(STORAGE_KEYS.AUTH_SESSION);
+          setCurrentUser(null);
+        }
+      }
+    };
+
+    const interval = setInterval(checkSession, 60000); // check every 1 minute
+    return () => clearInterval(interval);
+  }, []);
+
+  // Central Server Synchronization
+  const refreshServerData = useCallback(async () => {
+    try {
+      const res = await fetch('/api/data');
+      if (res.ok) {
+        const cType = res.headers.get('content-type');
+        if (!cType || !cType.includes('application/json')) {
+          // Response is not JSON (e.g. static host/Vercel SPA fallback to index.html)
+          return;
+        }
+        const serverData = await res.json();
+        setIsServerConnected(true);
+        setLastSyncTime(new Date());
+
+        if (serverData && typeof serverData === 'object') {
+          if (Array.isArray(serverData.asets)) {
+            setAsets((prev) => {
+              if (JSON.stringify(prev) === JSON.stringify(serverData.asets)) return prev;
+              localStorage.setItem(STORAGE_KEYS.ASETS, JSON.stringify(serverData.asets));
+              return serverData.asets;
+            });
+          }
+          if (Array.isArray(serverData.verifikasiList)) {
+            setVerifikasiList((prev) => {
+              if (JSON.stringify(prev) === JSON.stringify(serverData.verifikasiList)) return prev;
+              localStorage.setItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(serverData.verifikasiList));
+              return serverData.verifikasiList;
+            });
+          }
+          if (Array.isArray(serverData.users) && serverData.users.length > 0) {
+            setUsers((prev) => {
+              if (JSON.stringify(prev) === JSON.stringify(serverData.users)) return prev;
+              localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(serverData.users));
+              return serverData.users;
+            });
+          }
+          if (Array.isArray(serverData.desas) && serverData.desas.length > 0) {
+            setDesas((prev) => {
+              if (JSON.stringify(prev) === JSON.stringify(serverData.desas)) return prev;
+              localStorage.setItem(STORAGE_KEYS.DESAS, JSON.stringify(serverData.desas));
+              return serverData.desas;
+            });
+          }
+          if (serverData.kecamatanProfile && typeof serverData.kecamatanProfile === 'object') {
+            setKecamatanProfile((prev) => {
+              if (JSON.stringify(prev) === JSON.stringify(serverData.kecamatanProfile)) return prev;
+              localStorage.setItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(serverData.kecamatanProfile));
+              return serverData.kecamatanProfile;
+            });
+          }
+          if (typeof serverData.selectedYear === 'number') {
+            setSelectedYear((prev) => {
+              if (prev === serverData.selectedYear) return prev;
+              localStorage.setItem(STORAGE_KEYS.YEAR, serverData.selectedYear.toString());
+              return serverData.selectedYear;
+            });
+          }
+        }
+      } else {
+        setIsServerConnected(false);
+      }
+    } catch {
+      // Offline fallback
+      setIsServerConnected(false);
+    }
+  }, []);
+
+  // Cloud Firestore Real-Time Multi-Device Synchronization
+  useEffect(() => {
+    bootstrapFirestoreIfEmpty();
+
+    const unsubAsets = subscribeAsets((cloudAsets) => {
+      if (cloudAsets) {
+        setAsets((prev) => {
+          if (JSON.stringify(prev) === JSON.stringify(cloudAsets)) return prev;
+          localStorage.setItem(STORAGE_KEYS.ASETS, JSON.stringify(cloudAsets));
+          return cloudAsets;
+        });
+        setIsServerConnected(true);
+        setLastSyncTime(new Date());
+      }
+    });
+
+    const unsubVerif = subscribeVerifikasi((cloudVerif) => {
+      if (cloudVerif) {
+        setVerifikasiList((prev) => {
+          if (JSON.stringify(prev) === JSON.stringify(cloudVerif)) return prev;
+          localStorage.setItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(cloudVerif));
+          return cloudVerif;
+        });
+      }
+    });
+
+    const unsubPengesahan = subscribePengesahan((cloudPengesahan) => {
+      if (cloudPengesahan) {
+        setPengesahanList((prev) => {
+          if (JSON.stringify(prev) === JSON.stringify(cloudPengesahan)) return prev;
+          localStorage.setItem(STORAGE_KEYS.PENGESAHAN, JSON.stringify(cloudPengesahan));
+          return cloudPengesahan;
+        });
+      }
+    });
+
+    const unsubDesas = subscribeDesas((cloudDesas) => {
+      if (cloudDesas && cloudDesas.length > 0) {
+        setDesas((prev) => {
+          if (JSON.stringify(prev) === JSON.stringify(cloudDesas)) return prev;
+          localStorage.setItem(STORAGE_KEYS.DESAS, JSON.stringify(cloudDesas));
+          return cloudDesas;
+        });
+      }
+    });
+
+    const unsubKecamatan = subscribeKecamatanProfile((cloudProfile) => {
+      if (cloudProfile && cloudProfile.namaKecamatan) {
+        setKecamatanProfile((prev) => {
+          if (JSON.stringify(prev) === JSON.stringify(cloudProfile)) return prev;
+          localStorage.setItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(cloudProfile));
+          return cloudProfile;
+        });
+      }
+    });
+
+    const unsubUsers = subscribeUsers((cloudUsers) => {
+      if (cloudUsers && cloudUsers.length > 0) {
+        setUsers((prev) => {
+          if (JSON.stringify(prev) === JSON.stringify(cloudUsers)) return prev;
+          localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(cloudUsers));
+          return cloudUsers;
+        });
+      }
+    });
+
+    return () => {
+      unsubAsets();
+      unsubVerif();
+      unsubPengesahan();
+      unsubDesas();
+      unsubKecamatan();
+      unsubUsers();
+    };
+  }, []);
+
+  // Real-time Multi-Laptop Synchronization via SSE & Central Server
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: any = null;
+
+    const connectSSE = () => {
+      try {
+        eventSource = new EventSource('/api/events');
+        eventSource.onmessage = (e) => {
+          try {
+            const payload = JSON.parse(e.data);
+            if (payload && payload.type === 'DATA_CHANGED' && payload.data) {
+              const serverData = payload.data;
+              if (Array.isArray(serverData.asets)) {
+                setAsets(serverData.asets);
+                localStorage.setItem(STORAGE_KEYS.ASETS, JSON.stringify(serverData.asets));
+              }
+              if (Array.isArray(serverData.verifikasiList)) {
+                setVerifikasiList(serverData.verifikasiList);
+                localStorage.setItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(serverData.verifikasiList));
+              }
+              if (Array.isArray(serverData.users) && serverData.users.length > 0) {
+                setUsers(serverData.users);
+                localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(serverData.users));
+              }
+              if (Array.isArray(serverData.desas) && serverData.desas.length > 0) {
+                setDesas(serverData.desas);
+                localStorage.setItem(STORAGE_KEYS.DESAS, JSON.stringify(serverData.desas));
+              }
+              if (serverData.kecamatanProfile) {
+                setKecamatanProfile(serverData.kecamatanProfile);
+                localStorage.setItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(serverData.kecamatanProfile));
+              }
+              setIsServerConnected(true);
+              setLastSyncTime(new Date());
+            }
+          } catch (err) {
+            console.warn('[SSE] Event parse notice:', err);
+          }
+        };
+
+        eventSource.onerror = () => {
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
+          // Retry connection after 5 seconds
+          clearTimeout(reconnectTimeout);
+          reconnectTimeout = setTimeout(connectSSE, 5000);
+        };
+      } catch {
+        // SSE not supported or blocked, polling fallback will handle it
+      }
+    };
+
+    connectSSE();
+
+    return () => {
+      clearTimeout(reconnectTimeout);
+      if (eventSource) eventSource.close();
+    };
+  }, []);
+
+  // Initial load and fast periodic polling (every 4 seconds) to guarantee sync across all devices
+  useEffect(() => {
+    refreshServerData();
+    const interval = setInterval(refreshServerData, 4000);
+    const onFocus = () => refreshServerData();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [refreshServerData]);
+
+  // Local storage persistence fallbacks
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
   }, [users]);
-
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
-    }
-  }, [currentUser]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.ASETS, JSON.stringify(asets));
@@ -267,170 +572,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(STORAGE_KEYS.YEAR, selectedYear.toString());
   }, [selectedYear]);
 
-  // ============================================================
-  // REAL-TIME FIRESTORE SYNCHRONIZATION ACROSS LAPTOPS / DEVICES
-  // ============================================================
-  useEffect(() => {
-    let unsubAsets: (() => void) | undefined;
-    let unsubVerifikasi: (() => void) | undefined;
-    let unsubPengesahan: (() => void) | undefined;
-    let unsubDesas: (() => void) | undefined;
-    let unsubUsers: (() => void) | undefined;
-    let unsubProfile: (() => void) | undefined;
-
-    try {
-      // 1. Subscribe to Aset Collection
-      const asetsCol = collection(db, 'asets');
-      unsubAsets = onSnapshot(
-        asetsCol,
-        (snapshot) => {
-          const list: Aset[] = [];
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data() as Aset;
-            list.push({ ...data, id: docSnap.id });
-          });
-          // Sort newest updated or created first
-          list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-          setAsets(list);
-          setCloudSyncStatus('connected');
-        },
-        (error) => {
-          handleFirestoreError(error, OperationType.GET, 'asets');
-          setCloudSyncStatus('offline');
-        }
-      );
-
-      // 2. Subscribe to Verifikasi (Mutasi & Penghapusan) Collection
-      const verifikasiCol = collection(db, 'verifikasi');
-      unsubVerifikasi = onSnapshot(
-        verifikasiCol,
-        (snapshot) => {
-          const list: PermohonanVerifikasi[] = [];
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data() as PermohonanVerifikasi;
-            list.push({ ...data, id: docSnap.id });
-          });
-          list.sort((a, b) => (b.tanggalPengajuan || '').localeCompare(a.tanggalPengajuan || ''));
-          setVerifikasiList(list);
-          setCloudSyncStatus('connected');
-        },
-        (error) => {
-          handleFirestoreError(error, OperationType.GET, 'verifikasi');
-        }
-      );
-
-      // 3. Subscribe to Pengesahan Laporan Collection
-      const pengesahanCol = collection(db, 'pengesahan');
-      unsubPengesahan = onSnapshot(
-        pengesahanCol,
-        (snapshot) => {
-          const list: PengesahanLaporan[] = [];
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data() as PengesahanLaporan;
-            list.push({ ...data, id: docSnap.id });
-          });
-          setPengesahanList(list);
-        },
-        (error) => {
-          handleFirestoreError(error, OperationType.GET, 'pengesahan');
-        }
-      );
-
-      // 4. Subscribe to Desas Collection
-      const desasCol = collection(db, 'desas');
-      unsubDesas = onSnapshot(
-        desasCol,
-        async (snapshot) => {
-          if (snapshot.empty) {
-            // Seed initial desa list to Firestore
-            try {
-              const batch = writeBatch(db);
-              INITIAL_DESA_LIST.forEach((d) => {
-                batch.set(doc(db, 'desas', d.id), cleanObject(d));
-              });
-              await batch.commit();
-            } catch (err) {
-              console.error('Failed to seed initial desas to Firestore:', err);
-            }
-          } else {
-            const list: Desa[] = [];
-            snapshot.forEach((docSnap) => {
-              list.push(docSnap.data() as Desa);
-            });
-            // Keep numerical or code order
-            list.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
-            setDesas(list);
-          }
-        },
-        (error) => {
-          handleFirestoreError(error, OperationType.GET, 'desas');
-        }
-      );
-
-      // 5. Subscribe to Users Collection
-      const usersCol = collection(db, 'users');
-      unsubUsers = onSnapshot(
-        usersCol,
-        async (snapshot) => {
-          if (snapshot.empty) {
-            // Seed initial users to Firestore
-            try {
-              const batch = writeBatch(db);
-              INITIAL_USERS.forEach((u) => {
-                batch.set(doc(db, 'users', u.id), cleanObject(u));
-              });
-              await batch.commit();
-            } catch (err) {
-              console.error('Failed to seed initial users to Firestore:', err);
-            }
-          } else {
-            const list: User[] = [];
-            snapshot.forEach((docSnap) => {
-              list.push(docSnap.data() as User);
-            });
-            setUsers(list);
-          }
-        },
-        (error) => {
-          handleFirestoreError(error, OperationType.GET, 'users');
-        }
-      );
-
-      // 6. Subscribe to Kecamatan Profile Document
-      const profileDocRef = doc(db, 'system', 'kecamatan_profile');
-      unsubProfile = onSnapshot(
-        profileDocRef,
-        async (docSnap) => {
-          if (!docSnap.exists()) {
-            try {
-              await setDoc(profileDocRef, cleanObject(INITIAL_KECAMATAN_PROFILE));
-            } catch (err) {
-              console.error('Failed to seed kecamatan profile:', err);
-            }
-          } else {
-            setKecamatanProfile(docSnap.data() as KecamatanProfile);
-          }
-        },
-        (error) => {
-          handleFirestoreError(error, OperationType.GET, 'system/kecamatan_profile');
-        }
-      );
-
-    } catch (err) {
-      console.error('Error establishing Firestore listeners:', err);
-      setCloudSyncStatus('offline');
-    }
-
-    return () => {
-      if (unsubAsets) unsubAsets();
-      if (unsubVerifikasi) unsubVerifikasi();
-      if (unsubPengesahan) unsubPengesahan();
-      if (unsubDesas) unsubDesas();
-      if (unsubUsers) unsubUsers();
-      if (unsubProfile) unsubProfile();
-    };
-  }, []);
-
   // Auth Handlers
   const login = (email: string, pass: string) => {
     const normalizedEmail = email.trim().toLowerCase();
@@ -438,22 +579,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (u) => u.email.toLowerCase() === normalizedEmail && u.password === pass.trim()
     );
     if (user) {
+      const now = Date.now();
+      const session: AuthSession = {
+        user,
+        loginTime: now,
+        expiresAt: now + SESSION_DURATION_MS, // 24 hours
+      };
+      localStorage.setItem(STORAGE_KEYS.AUTH_SESSION, JSON.stringify(session));
       setCurrentUser(user);
+      setActiveTab('dashboard');
       return { success: true };
     }
     return { success: false, message: 'Email atau kata sandi tidak cocok. Silakan periksa kembali!' };
   };
 
   const logout = () => {
+    localStorage.removeItem(STORAGE_KEYS.AUTH_SESSION);
     setCurrentUser(null);
+    setActiveTab('dashboard');
   };
 
   const switchUser = (user: User) => {
+    const now = Date.now();
+    const session: AuthSession = {
+      user,
+      loginTime: now,
+      expiresAt: now + SESSION_DURATION_MS,
+    };
+    localStorage.setItem(STORAGE_KEYS.AUTH_SESSION, JSON.stringify(session));
     setCurrentUser(user);
   };
 
-  // User Management with Firestore Sync
+  // User Management
   const addUser = (data: Omit<User, 'id' | 'createdAt'>) => {
+    if (data.role === 'super_admin' && currentUser?.role !== 'super_admin') {
+      return { success: false, message: 'Hanya Super Admin yang berhak menambahkan akun Super Admin!' };
+    }
     if (users.some((u) => u.email.toLowerCase() === data.email.toLowerCase())) {
       return { success: false, message: 'Email / ID pengguna sudah terdaftar!' };
     }
@@ -464,90 +625,161 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setUsers((prev) => [newUser, ...prev]);
 
-    // Save to Firestore
-    setDoc(doc(db, 'users', newUser.id), cleanObject(newUser)).catch((err) => {
-      handleFirestoreError(err, OperationType.WRITE, `users/${newUser.id}`);
-    });
+    // Push to Google Cloud Firestore & local server
+    saveUserToCloud(newUser).catch((e) => console.warn('[Cloud] User add failed:', e));
+    fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user: newUser, requestRole: currentUser?.role }),
+    }).catch((e) => console.warn('[Sync] User add failed:', e));
 
     return { success: true };
   };
 
   const updateUser = (id: string, data: Partial<User>) => {
-    if (data.email && users.some((u) => u.id !== id && u.email.toLowerCase() === data.email?.toLowerCase())) {
-      return { success: false, message: 'Email / ID pengguna sudah digunakan akun lain!' };
+    const target = users.find((u) => u.id === id);
+    if (target?.role === 'super_admin' && currentUser?.role !== 'super_admin') {
+      return { success: false, message: 'Hanya Super Admin yang berhak mengubah akun Super Admin!' };
     }
-    setUsers((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, ...data } : u))
-    );
-    if (currentUser?.id === id) {
-      setCurrentUser((prev) => (prev ? { ...prev, ...data } : null));
+    if (data.role === 'super_admin' && currentUser?.role !== 'super_admin') {
+      return { success: false, message: 'Hanya Super Admin yang dapat menetapkan peran Super Admin!' };
     }
 
-    // Update in Firestore
-    setDoc(doc(db, 'users', id), cleanObject(data), { merge: true }).catch((err) => {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${id}`);
-    });
+    const updatedUser = { ...target, ...data } as User;
+    setUsers((prev) =>
+      prev.map((u) => (u.id === id ? updatedUser : u))
+    );
+
+    if (currentUser?.id === id) {
+      const updatedSelf = { ...currentUser, ...data };
+      setCurrentUser(updatedSelf);
+      const saved = localStorage.getItem(STORAGE_KEYS.AUTH_SESSION);
+      if (saved) {
+        try {
+          const sess: AuthSession = JSON.parse(saved);
+          sess.user = updatedSelf;
+          localStorage.setItem(STORAGE_KEYS.AUTH_SESSION, JSON.stringify(sess));
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    // Push to Google Cloud Firestore & local server
+    if (target) {
+      saveUserToCloud(updatedUser).catch((e) => console.warn('[Cloud] User update failed:', e));
+    }
+    fetch(`/api/users/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data, requestRole: currentUser?.role }),
+    }).catch((e) => console.warn('[Sync] User update failed:', e));
 
     return { success: true };
   };
 
   const deleteUser = (id: string) => {
     const target = users.find((u) => u.id === id);
-    if (!target) return { success: false, message: 'User tidak ditemukan' };
+    if (!target) return { success: false, message: 'Pengguna tidak ditemukan!' };
+
     if (target.email === 'udniat.01@gmail.com') {
-      return { success: false, message: 'Super Admin utama tidak dapat dihapus!' };
+      return { success: false, message: 'Akun Super Admin Utama tidak dapat dihapus!' };
     }
+
+    if (currentUser?.role !== 'super_admin') {
+      return { success: false, message: 'Hanya Super Admin yang berhak menghapus akun pengguna!' };
+    }
+
     if (currentUser?.id === id) {
       return { success: false, message: 'Tidak dapat menghapus akun yang sedang aktif digunakan!' };
     }
+
     setUsers((prev) => prev.filter((u) => u.id !== id));
 
-    // Delete in Firestore
-    deleteDoc(doc(db, 'users', id)).catch((err) => {
-      handleFirestoreError(err, OperationType.DELETE, `users/${id}`);
-    });
+    deleteUserFromCloud(id).catch((e) => console.warn('[Cloud] User delete failed:', e));
+    fetch(`/api/users/${id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestRole: currentUser?.role }),
+    }).catch((e) => console.warn('[Sync] User delete failed:', e));
 
     return { success: true };
   };
 
-  // Asset Handlers with Firestore Sync
-  const addAset = (data: Omit<Aset, 'id' | 'createdAt' | 'updatedAt' | 'status'>) => {
-    const newAset: Aset = {
-      ...data,
-      id: `ast-${Date.now()}`,
-      status: 'aktif',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setAsets((prev) => [newAset, ...prev]);
-
-    // Save to Firestore
-    setDoc(doc(db, 'asets', newAset.id), cleanObject(newAset)).catch((err) => {
-      handleFirestoreError(err, OperationType.CREATE, `asets/${newAset.id}`);
+  // Asset Management
+  const addAsetBatch = async (items: Omit<Aset, 'id' | 'createdAt' | 'updatedAt' | 'status'>[]) => {
+    if (!items || items.length === 0) return { success: false, count: 0 };
+    const now = new Date().toISOString();
+    const newAsets: Aset[] = items.map((data, idx) => {
+      const desa = desas.find((d) => d && d.id === data.desaId);
+      return {
+        ...data,
+        id: `ast-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
+        desaName: desa?.name || 'Desa',
+        status: 'aktif',
+        createdAt: now,
+        updatedAt: now,
+      };
     });
+
+    setAsets((prev) => [...newAsets, ...prev]);
+
+    // Push all to Google Cloud Firestore in parallel
+    Promise.all(newAsets.map((item) => saveAsetToCloud(item))).catch((err) =>
+      console.warn('[Cloud] Batch aset save failed:', err)
+    );
+
+    // Sync to local server
+    fetch('/api/asets/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ asets: newAsets }),
+    }).catch(() => {
+      // Fallback single post if batch endpoint is not available
+      newAsets.forEach((a) => {
+        fetch('/api/asets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(a),
+        }).catch(() => {});
+      });
+    });
+
+    return { success: true, count: newAsets.length };
+  };
+
+  const addAset = (data: Omit<Aset, 'id' | 'createdAt' | 'updatedAt' | 'status'>) => {
+    addAsetBatch([data]);
   };
 
   const updateAset = (id: string, data: Partial<Aset>) => {
-    const updatePayload = {
-      ...data,
-      updatedAt: new Date().toISOString(),
-    };
-
-    setAsets((prev) =>
-      prev.map((a) =>
-        a.id === id ? { ...a, ...updatePayload } : a
-      )
-    );
-
-    // Save to Firestore
-    setDoc(doc(db, 'asets', id), cleanObject(updatePayload), { merge: true }).catch((err) => {
-      handleFirestoreError(err, OperationType.UPDATE, `asets/${id}`);
+    setAsets((prev) => {
+      const updated = prev.map((a) => {
+        if (a.id === id) {
+          return {
+            ...a,
+            ...data,
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        return a;
+      });
+      const target = updated.find((a) => a.id === id);
+      if (target) {
+        saveAsetToCloud(target).catch((err) => console.warn('[Cloud] Aset update failed:', err));
+        fetch(`/api/asets/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(target),
+        }).catch((e) => console.warn('[Sync] Asset update failed:', e));
+      }
+      return updated;
     });
   };
 
   const deleteAset = (id: string) => {
     const target = asets.find((a) => a.id === id);
-    if (!target) return { success: false, message: 'Aset tidak ditemukan' };
+    if (!target) return { success: false, message: 'Aset tidak ditemukan!' };
     if (target.status === 'mutasi_diajukan' || target.status === 'terhapus_diajukan') {
       return {
         success: false,
@@ -556,44 +788,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     setAsets((prev) => prev.filter((a) => a.id !== id));
 
-    // Delete in Firestore
-    deleteDoc(doc(db, 'asets', id)).catch((err) => {
-      handleFirestoreError(err, OperationType.DELETE, `asets/${id}`);
-    });
+    deleteAsetFromCloud(id).catch((err) => console.warn('[Cloud] Aset delete failed:', err));
+    fetch(`/api/asets/${id}`, {
+      method: 'DELETE',
+    }).catch((e) => console.warn('[Sync] Asset delete failed:', e));
 
     return { success: true };
   };
 
-  // Kosongkan semua data aset & mutasi (untuk mulai input bersih dari awal)
-  const clearAllAsetsDanMutasi = async () => {
-    try {
-      setAsets([]);
-      setVerifikasiList([]);
-      setPengesahanList([]);
-      localStorage.removeItem(STORAGE_KEYS.ASETS);
-      localStorage.removeItem(STORAGE_KEYS.VERIFIKASI);
-      localStorage.removeItem(STORAGE_KEYS.PENGESAHAN);
-
-      // Clean Firestore collections in batch
-      const asetsSnap = await getDocs(collection(db, 'asets'));
-      const verifSnap = await getDocs(collection(db, 'verifikasi'));
-      const pengesahanSnap = await getDocs(collection(db, 'pengesahan'));
-
-      const batch = writeBatch(db);
-      asetsSnap.forEach((d) => batch.delete(d.ref));
-      verifSnap.forEach((d) => batch.delete(d.ref));
-      pengesahanSnap.forEach((d) => batch.delete(d.ref));
-
-      await batch.commit();
-
-      return { success: true, message: 'Seluruh data aset dan mutasi percobaan telah berhasil dikosongkan. Anda dapat mulai menginput data baru dari awal 1 per satu!' };
-    } catch (err: any) {
-      console.error('Error clearing data:', err);
-      return { success: false, message: `Gagal mengosongkan data di server: ${err?.message || 'Error'}` };
-    }
-  };
-
-  // Mutasi & Penghapusan Verifikasi with Firestore Sync
+  // Mutasi & Penghapusan Verifikasi
   const ajukanMutasi = (
     asetId: string,
     alasan: string,
@@ -622,10 +825,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setVerifikasiList((prev) => [newReq, ...prev]);
     updateAset(asetId, { status: 'mutasi_diajukan' });
 
-    // Save to Firestore
-    setDoc(doc(db, 'verifikasi', newReq.id), cleanObject(newReq)).catch((err) => {
-      handleFirestoreError(err, OperationType.CREATE, `verifikasi/${newReq.id}`);
-    });
+    saveVerifikasiToCloud(newReq).catch((err) => console.warn('[Cloud] Verifikasi save failed:', err));
+    fetch('/api/verifikasi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newReq),
+    }).catch((e) => console.warn('[Sync] Mutasi request failed:', e));
   };
 
   const ajukanPenghapusan = (
@@ -654,10 +859,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setVerifikasiList((prev) => [newReq, ...prev]);
     updateAset(asetId, { status: 'terhapus_diajukan' });
 
-    // Save to Firestore
-    setDoc(doc(db, 'verifikasi', newReq.id), cleanObject(newReq)).catch((err) => {
-      handleFirestoreError(err, OperationType.CREATE, `verifikasi/${newReq.id}`);
-    });
+    saveVerifikasiToCloud(newReq).catch((err) => console.warn('[Cloud] Verifikasi save failed:', err));
+    fetch('/api/verifikasi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newReq),
+    }).catch((e) => console.warn('[Sync] Penghapusan request failed:', e));
   };
 
   const prosesVerifikasi = (
@@ -673,7 +880,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const now = new Date().toISOString();
     const finalSK = nomorSKKecamatan || (status === 'disetujui' ? `SK-KEC-SRB/${new Date().getFullYear()}/${verif.id.slice(-4)}` : undefined);
 
-    const updatedVerif: Partial<PermohonanVerifikasi> = {
+    const updatedVerif: PermohonanVerifikasi = {
+      ...verif,
       status,
       tanggalDiproses: now,
       diverifikasiOleh: verifierName,
@@ -682,17 +890,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setVerifikasiList((prev) =>
-      prev.map((v) =>
-        v.id === verifikasiId ? { ...v, ...updatedVerif } : v
-      )
+      prev.map((v) => (v.id === verifikasiId ? updatedVerif : v))
     );
 
-    // Save verifikasi update to Firestore
-    setDoc(doc(db, 'verifikasi', verifikasiId), cleanObject(updatedVerif), { merge: true }).catch((err) => {
-      handleFirestoreError(err, OperationType.UPDATE, `verifikasi/${verifikasiId}`);
-    });
+    saveVerifikasiToCloud(updatedVerif).catch((err) => console.warn('[Cloud] Verifikasi update failed:', err));
+    fetch(`/api/verifikasi/${verifikasiId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status,
+        tanggalDiproses: now,
+        diverifikasiOleh: verifierName,
+        catatanKecamatan,
+        nomorSKKecamatan: finalSK,
+      }),
+    }).catch((e) => console.warn('[Sync] Process verifikasi failed:', e));
 
-    // Update the asset status accordingly
+    // Update asset status
     const targetAset = asets.find((a) => a.id === verif.asetId);
     const prevKeterangan = targetAset?.keterangan ? targetAset.keterangan.trim() : '';
     const prefixKet = prevKeterangan ? `${prevKeterangan} | ` : '';
@@ -708,13 +922,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const tujuanClean = (verif.tujuanMutasi || '').trim();
         const keteranganMutasi = `${prefixKet}Telah dilakukan mutasi dari ${verif.desaName} ke ${tujuanClean} pada tanggal ${tanggalFormatted} (SK Kecamatan Sirombu No. ${finalSK || 'SK-KEC-SRB'})`;
 
-        // Check if destination is a village in Sirombu
         const targetDesa = desas.find((d) => {
           const dNameClean = d.name.toLowerCase().replace(/^desa\s+/i, '').trim();
           const tClean = tujuanClean.toLowerCase().replace(/^desa\s+/i, '').trim();
           return (
             d.id.toLowerCase() === tujuanClean.toLowerCase() ||
-            d.name.toLowerCase() === destinationClean(tClean) ||
+            d.name.toLowerCase() === tujuanClean.toLowerCase() ||
             dNameClean === tClean ||
             tujuanClean.toLowerCase().includes(dNameClean)
           );
@@ -737,43 +950,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } else {
       updateAset(verif.asetId, {
         status: 'aktif',
-        keterangan: `${verif.asetSnapshot?.keterangan || ''} (Pengajuan ${verif.tipe} ditolak Kecamatan: ${catatanKecamatan})`,
+        keterangan: `${verif.asetSnapshot.keterangan || ''} (Pengajuan ${verif.tipe} ditolak Kecamatan: ${catatanKecamatan})`,
       });
     }
   };
 
-  const destinationClean = (name: string) => name.toLowerCase().replace(/^desa\s+/i, '').trim();
-
-  // Approval Laporan Tahunan with Firestore Sync
   const ajukanPengesahan = (desaId: string, tahun: number) => {
     const desa = desas.find((d) => d.id === desaId);
     const desaName = desa ? desa.name : 'DESA';
     const existing = pengesahanList.find((p) => p.desaId === desaId && p.tahun === tahun);
-    const pengesahanId = existing ? existing.id : `png-${desaId}-${tahun}`;
 
-    const newObj: PengesahanLaporan = {
-      id: pengesahanId,
-      desaId,
-      desaName,
-      tahun,
-      status: 'diajukan',
-      diajukanPada: new Date().toISOString(),
-      catatanKecamatan: existing?.catatanKecamatan,
-    };
-
-    setPengesahanList((prev) => {
-      const idx = prev.findIndex((p) => p.id === pengesahanId);
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = newObj;
-        return copy;
-      }
-      return [newObj, ...prev];
-    });
-
-    setDoc(doc(db, 'pengesahan', pengesahanId), cleanObject(newObj), { merge: true }).catch((err) => {
-      handleFirestoreError(err, OperationType.WRITE, `pengesahan/${pengesahanId}`);
-    });
+    let targetPengesahan: PengesahanLaporan;
+    if (existing) {
+      targetPengesahan = { ...existing, status: 'diajukan', diajukanPada: new Date().toISOString() };
+      setPengesahanList((prev) =>
+        prev.map((p) => (p.id === existing.id ? targetPengesahan : p))
+      );
+    } else {
+      targetPengesahan = {
+        id: `png-${desaId}-${tahun}`,
+        desaId,
+        desaName,
+        tahun,
+        status: 'diajukan',
+        diajukanPada: new Date().toISOString(),
+      };
+      setPengesahanList((prev) => [targetPengesahan, ...prev]);
+    }
+    savePengesahanToCloud(targetPengesahan).catch((e) => console.warn('[Cloud] Pengesahan save failed:', e));
   };
 
   const prosesPengesahan = (
@@ -785,44 +989,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const existing = pengesahanList.find((p) => p.desaId === desaId && p.tahun === tahun);
     const verifierName = currentUser?.name || 'Dodi Tribuana (Admin Kecamatan Sirombu)';
     const now = new Date().toISOString();
-    const pengesahanId = existing ? existing.id : `png-${desaId}-${tahun}`;
-    const desa = desas.find((d) => d.id === desaId);
 
-    const updatePayload: PengesahanLaporan = {
-      id: pengesahanId,
-      desaId,
-      desaName: desa?.name || 'DESA',
-      tahun,
-      status,
-      catatanKecamatan: catatan,
-      diajukanPada: existing?.diajukanPada || now,
-      disetujuiPada: status === 'disetujui' ? now : undefined,
-      disetujuiOleh: status === 'disetujui' ? verifierName : undefined,
-    };
-
-    setPengesahanList((prev) => {
-      const idx = prev.findIndex((p) => p.id === pengesahanId);
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = updatePayload;
-        return copy;
-      }
-      return [updatePayload, ...prev];
-    });
-
-    setDoc(doc(db, 'pengesahan', pengesahanId), cleanObject(updatePayload), { merge: true }).catch((err) => {
-      handleFirestoreError(err, OperationType.WRITE, `pengesahan/${pengesahanId}`);
-    });
+    let targetPengesahan: PengesahanLaporan;
+    if (existing) {
+      targetPengesahan = {
+        ...existing,
+        status,
+        catatanKecamatan: catatan,
+        disetujuiPada: status === 'disetujui' ? now : undefined,
+        disetujuiOleh: status === 'disetujui' ? verifierName : undefined,
+      };
+      setPengesahanList((prev) =>
+        prev.map((p) => (p.id === existing.id ? targetPengesahan : p))
+      );
+    } else {
+      const desa = desas.find((d) => d.id === desaId);
+      targetPengesahan = {
+        id: `png-${desaId}-${tahun}`,
+        desaId,
+        desaName: desa?.name || 'DESA',
+        tahun,
+        status,
+        catatanKecamatan: catatan,
+        disetujuiPada: status === 'disetujui' ? now : undefined,
+        disetujuiOleh: status === 'disetujui' ? verifierName : undefined,
+      };
+      setPengesahanList((prev) => [targetPengesahan, ...prev]);
+    }
+    savePengesahanToCloud(targetPengesahan).catch((e) => console.warn('[Cloud] Pengesahan save failed:', e));
   };
 
   const updateDesa = (id: string, data: Partial<Desa>) => {
-    setDesas((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, ...data } : d))
-    );
-
-    setDoc(doc(db, 'desas', id), cleanObject(data), { merge: true }).catch((err) => {
-      handleFirestoreError(err, OperationType.UPDATE, `desas/${id}`);
+    let finalDesas: Desa[] = [];
+    setDesas((prev) => {
+      finalDesas = prev.map((d) => (d.id === id ? { ...d, ...data } : d));
+      localStorage.setItem(STORAGE_KEYS.DESAS, JSON.stringify(finalDesas));
+      return finalDesas;
     });
+
+    const target = desas.find((d) => d.id === id);
+    const updated = target ? { ...target, ...data } : null;
+    if (updated) {
+      saveDesaToCloud(updated).catch((e) => console.warn('[Cloud] Desa save failed:', e));
+      fetch('/api/desa/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      }).catch((e) => console.warn('[Sync] Desa update failed:', e));
+    }
 
     return { success: true };
   };
@@ -840,7 +1054,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!target) return { success: false, message: 'Permohonan mutasi tidak ditemukan!' };
 
     const now = new Date().toISOString();
-    const updatedData: Partial<PermohonanVerifikasi> = {
+    const updatedVerif: PermohonanVerifikasi = {
+      ...target,
       alasan: data.alasan,
       nomorSuratDesa: data.nomorSuratDesa,
       dokumenPendukung: data.dokumenPendukung,
@@ -853,18 +1068,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setVerifikasiList((prev) =>
-      prev.map((v) => (v.id === verifikasiId ? { ...v, ...updatedData } : v))
+      prev.map((v) => (v.id === verifikasiId ? updatedVerif : v))
     );
 
     const newStatus = target.tipe === 'mutasi' ? 'mutasi_diajukan' : 'terhapus_diajukan';
     updateAset(target.asetId, {
       status: newStatus,
-      keterangan: `${target.asetSnapshot?.keterangan || ''} (Revisi permohonan telah diajukan kembali ke Kecamatan Sirombu)`,
+      keterangan: `${target.asetSnapshot.keterangan || ''} (Revisi permohonan telah diajukan kembali ke Kecamatan Sirombu)`,
     });
 
-    setDoc(doc(db, 'verifikasi', verifikasiId), cleanObject(updatedData), { merge: true }).catch((err) => {
-      handleFirestoreError(err, OperationType.UPDATE, `verifikasi/${verifikasiId}`);
-    });
+    saveVerifikasiToCloud(updatedVerif).catch((e) => console.warn('[Cloud] Revisi verifikasi failed:', e));
+    fetch(`/api/verifikasi/${verifikasiId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        alasan: data.alasan,
+        nomorSuratDesa: data.nomorSuratDesa,
+        dokumenPendukung: data.dokumenPendukung,
+        tujuanMutasi: data.tujuanMutasi ?? target.tujuanMutasi,
+        status: 'menunggu_verifikasi',
+        tanggalPengajuan: now,
+      }),
+    }).catch((e) => console.warn('[Sync] Revisi mutasi failed:', e));
 
     return { success: true, message: 'Permohonan berhasil direvisi dan diajukan ulang!' };
   };
@@ -875,23 +1100,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const relatedAset = asets.find((a) => a.id === target.asetId);
     if (relatedAset && (relatedAset.status === 'mutasi_diajukan' || relatedAset.status === 'terhapus_diajukan')) {
-      updateAset(target.asetId, { status: 'aktif' });
+      updateAset(target.asetId, {
+        status: 'aktif',
+      });
     }
 
     setVerifikasiList((prev) => prev.filter((v) => v.id !== verifikasiId));
 
-    deleteDoc(doc(db, 'verifikasi', verifikasiId)).catch((err) => {
-      handleFirestoreError(err, OperationType.DELETE, `verifikasi/${verifikasiId}`);
-    });
+    deleteVerifikasiFromCloud(verifikasiId).catch((e) => console.warn('[Cloud] Delete verifikasi failed:', e));
+    fetch(`/api/verifikasi/${verifikasiId}`, {
+      method: 'DELETE',
+    }).catch((e) => console.warn('[Sync] Delete verifikasi failed:', e));
 
     return { success: true, message: 'Data permohonan mutasi berhasil dihapus!' };
   };
 
-  // Backup & Restore with Firestore Sync
   const getBackupData = () => {
     return {
       appName: 'SIPADES SIROMBU - Nias Barat',
-      version: '2.0.0 (Cloud Synced)',
+      version: '2.0.0',
       exportDate: new Date().toISOString(),
       timestamp: Date.now(),
       data: {
@@ -906,7 +1133,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
-  const restoreBackupData = async (backupJson: any) => {
+  const restoreBackupData = (backupJson: any) => {
     try {
       if (!backupJson || typeof backupJson !== 'object') {
         return { success: false, message: 'Format berkas JSON cadangan tidak valid!' };
@@ -920,46 +1147,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (Array.isArray(payload.desas) && payload.desas.length > 0) {
         setDesas(payload.desas);
+        localStorage.setItem(STORAGE_KEYS.DESAS, JSON.stringify(payload.desas));
       }
       if (Array.isArray(payload.users) && payload.users.length > 0) {
         setUsers(payload.users);
+        localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(payload.users));
       }
       if (Array.isArray(payload.asets)) {
         setAsets(payload.asets);
+        localStorage.setItem(STORAGE_KEYS.ASETS, JSON.stringify(payload.asets));
       }
       if (Array.isArray(payload.verifikasiList)) {
         setVerifikasiList(payload.verifikasiList);
+        localStorage.setItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(payload.verifikasiList));
       }
       if (Array.isArray(payload.pengesahanList)) {
         setPengesahanList(payload.pengesahanList);
+        localStorage.setItem(STORAGE_KEYS.PENGESAHAN, JSON.stringify(payload.pengesahanList));
       }
       if (payload.kecamatanProfile) {
         setKecamatanProfile(payload.kecamatanProfile);
+        localStorage.setItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(payload.kecamatanProfile));
       }
       if (payload.selectedYear) {
         setSelectedYear(payload.selectedYear);
       }
 
-      // Sync restore data to Firestore so other laptops get it immediately
-      const batch = writeBatch(db);
-      if (Array.isArray(payload.asets)) {
-        payload.asets.forEach((a: Aset) => {
-          if (a.id) batch.set(doc(db, 'asets', a.id), cleanObject(a));
-        });
-      }
-      if (Array.isArray(payload.verifikasiList)) {
-        payload.verifikasiList.forEach((v: PermohonanVerifikasi) => {
-          if (v.id) batch.set(doc(db, 'verifikasi', v.id), cleanObject(v));
-        });
-      }
-      if (payload.kecamatanProfile) {
-        batch.set(doc(db, 'system', 'kecamatan_profile'), cleanObject(payload.kecamatanProfile));
-      }
-      await batch.commit();
+      // Sync restored data to central server
+      fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          desas: payload.desas,
+          users: payload.users,
+          asets: payload.asets,
+          verifikasiList: payload.verifikasiList,
+          kecamatanProfile: payload.kecamatanProfile,
+          selectedYear: payload.selectedYear,
+        }),
+      }).catch((e) => console.warn('[Sync] Restore sync failed:', e));
 
       return {
         success: true,
-        message: 'Data SIPADES berhasil dipulihkan secara menyeluruh dan disinkronkan ke seluruh laptop!',
+        message: 'Data SIPADES berhasil dipulihkan dan disinkronkan ke server!',
         stats: {
           asets: Array.isArray(payload.asets) ? payload.asets.length : 0,
           verifikasi: Array.isArray(payload.verifikasiList) ? payload.verifikasiList.length : 0,
@@ -973,24 +1203,71 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateKecamatanProfile = (data: Partial<KecamatanProfile>) => {
-    setKecamatanProfile((prev) => ({ ...prev, ...data }));
-    setDoc(doc(db, 'system', 'kecamatan_profile'), cleanObject(data), { merge: true }).catch((err) => {
-      handleFirestoreError(err, OperationType.UPDATE, 'system/kecamatan_profile');
+    let updated: KecamatanProfile = kecamatanProfile;
+    setKecamatanProfile((prev) => {
+      updated = { ...prev, ...data };
+      localStorage.setItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(updated));
+      return updated;
     });
-    return { success: true, message: 'Data Camat & Kantor Kecamatan Sirombu berhasil diperbarui dan tersinkronkan!' };
+    saveKecamatanProfileToCloud(updated).catch((e) => console.warn('[Cloud] Kecamatan save failed:', e));
+    fetch('/api/kecamatan/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    }).catch((e) => console.warn('[Sync] Kecamatan update failed:', e));
+    return { success: true, message: 'Data Camat & Kantor Kecamatan Sirombu berhasil diperbarui!' };
+  };
+
+  const saveMasterToSourceCode = async (overrides?: {
+    desas?: Desa[];
+    kecamatanProfile?: KecamatanProfile;
+    users?: User[];
+    asets?: Aset[];
+  }): Promise<{ success: boolean; message: string }> => {
+    try {
+      const payloadDesas = overrides?.desas || desas;
+      const payloadKecamatan = overrides?.kecamatanProfile || kecamatanProfile;
+      const payloadUsers = overrides?.users || users;
+      const payloadAsets = overrides?.asets || asets;
+
+      const response = await fetch('/api/sync-master', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          desas: payloadDesas,
+          kecamatanProfile: payloadKecamatan,
+          users: payloadUsers,
+          asets: payloadAsets,
+        }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setIsServerConnected(true);
+        setLastSyncTime(new Date());
+        return {
+          success: true,
+          message: 'Semua data berhasil disimpan permanen ke Master Source Code (src/data/initialData.ts) dan Basis Data Server. Aman untuk di-share ke GitHub tanpa kembali ke setelan awal!',
+        };
+      }
+      return { success: false, message: data.message || 'Gagal menyimpan ke master source code.' };
+    } catch (err: any) {
+      return { success: false, message: `Gagal menghubungkan ke server: ${err?.message || 'Koneksi terputus'}` };
+    }
   };
 
   const resetToDefault = () => {
     localStorage.clear();
+    fetch('/api/reset', { method: 'POST' }).catch(() => {});
     setDesas(INITIAL_DESA_LIST);
     setUsers(INITIAL_USERS);
-    setCurrentUser(INITIAL_USERS[0]);
-    setAsets([]);
-    setVerifikasiList([]);
-    setPengesahanList([]);
+    setCurrentUser(null);
+    setAsets(INITIAL_ASETS);
+    setVerifikasiList(INITIAL_VERIFIKASI);
+    setPengesahanList(INITIAL_PENGESAHAN);
     setKecamatanProfile(INITIAL_KECAMATAN_PROFILE);
-    setSelectedYear(2024);
+    setSelectedYear(2026);
     setSelectedDesaFilter('all');
+    setActiveTab('dashboard');
   };
 
   return (
@@ -1010,8 +1287,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveTab,
         selectedDesaFilter,
         setSelectedDesaFilter,
-        cloudSyncStatus,
-        isCloudSynced: cloudSyncStatus === 'connected',
+        isServerConnected,
+        lastSyncTime,
+        refreshServerData,
         login,
         logout,
         switchUser,
@@ -1019,9 +1297,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateUser,
         deleteUser,
         addAset,
+        addAsetBatch,
         updateAset,
         deleteAset,
-        clearAllAsetsDanMutasi,
         ajukanMutasi,
         ajukanPenghapusan,
         prosesVerifikasi,
@@ -1032,6 +1310,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         getBackupData,
         restoreBackupData,
         updateDesa,
+        saveMasterToSourceCode,
         resetToDefault,
       }}
     >
@@ -1040,7 +1319,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
 };
 
-export const useApp = () => {
+export const useApp = (): AppContextType => {
   const context = useContext(AppContext);
   if (!context) {
     throw new Error('useApp must be used within an AppProvider');

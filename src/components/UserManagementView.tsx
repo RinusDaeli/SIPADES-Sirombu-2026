@@ -20,6 +20,7 @@ export const UserManagementView: React.FC = () => {
   const { users, desas, currentUser, addUser, updateUser, deleteUser } = useApp();
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
+  const isAdminKecamatan = currentUser?.role === 'admin_kecamatan';
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRole, setFilterRole] = useState<'all' | UserRole>('all');
@@ -38,25 +39,32 @@ export const UserManagementView: React.FC = () => {
 
   const [formError, setFormError] = useState('');
 
-  // Filter users
-  const filteredUsers = users.filter((u) => {
+  // Filter users: non-super-admins cannot see super_admin user accounts!
+  const visibleUsers = users.filter((u) => {
+    if (!isSuperAdmin && u.role === 'super_admin') {
+      return false;
+    }
+    return true;
+  });
+
+  const filteredUsers = visibleUsers.filter((u) => {
     const matchRole = filterRole === 'all' ? true : u.role === filterRole;
     const q = searchQuery.toLowerCase().trim();
     const matchQuery =
       !q ||
-      u.name.toLowerCase().includes(q) ||
-      u.email.toLowerCase().includes(q) ||
+      (u.name || '').toLowerCase().includes(q) ||
+      (u.email || '').toLowerCase().includes(q) ||
       (u.desaName && u.desaName.toLowerCase().includes(q));
     return matchRole && matchQuery;
   });
 
-  if (!isSuperAdmin) {
+  if (!isSuperAdmin && !isAdminKecamatan) {
     return (
-      <div className="bg-[#0E1526] border border-red-500/40 rounded-2xl p-8 text-center text-slate-300">
-        <ShieldCheck className="w-12 h-12 text-red-500 mx-auto mb-3" />
+      <div className="bg-[#0E1526] border border-amber-500/40 rounded-2xl p-8 text-center text-slate-300">
+        <ShieldCheck className="w-12 h-12 text-amber-500 mx-auto mb-3" />
         <h3 className="text-lg font-bold text-white">Akses Dibatasi</h3>
         <p className="text-xs text-slate-400 mt-1">
-          Hanya Super Admin (<span className="text-amber-400 font-mono">udniat.01@gmail.com</span>) yang memiliki hak akses untuk menambah, mengedit, dan menghapus administrator.
+          Menu Pengguna hanya dapat diakses oleh Admin Kecamatan dan Super Admin.
         </p>
       </div>
     );
@@ -148,28 +156,38 @@ export const UserManagementView: React.FC = () => {
       <div className="bg-[#0E1526] border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-red-500/20 text-red-300 border border-red-500/30">
-              Hak Akses Super Admin
+            <span
+              className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                isSuperAdmin
+                  ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                  : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+              }`}
+            >
+              {isSuperAdmin ? 'Hak Akses Super Admin' : 'Hak Akses Administrator'}
             </span>
             <span className="text-xs text-slate-400">
               Kecamatan Sirombu • Nias Barat
             </span>
           </div>
           <h2 className="text-xl font-black text-white tracking-tight">
-            Manajemen Pengguna & Administrator
+            Data Pengguna & Administrator
           </h2>
           <p className="text-xs text-slate-400">
-            Kelola akun Super Admin, Admin Kontrol Kecamatan, dan Admin Pendataan 25 Desa.
+            {isSuperAdmin
+              ? 'Kelola akun Super Admin, Admin Kontrol Kecamatan, dan Admin Pendataan 25 Desa.'
+              : 'Daftar data pengguna dan akun administrator Kecamatan dan 25 Desa di Sirombu.'}
           </p>
         </div>
 
-        <button
-          onClick={handleOpenAdd}
-          className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-red-600/20 transition-all cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Tambah Admin Baru</span>
-        </button>
+        {isSuperAdmin && (
+          <button
+            onClick={handleOpenAdd}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-red-600/20 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Tambah Admin Baru</span>
+          </button>
+        )}
       </div>
 
       {/* Filter and Search Bar */}
@@ -193,10 +211,10 @@ export const UserManagementView: React.FC = () => {
             <select
               value={filterRole}
               onChange={(e) => setFilterRole(e.target.value as any)}
-              className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none"
+              className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none cursor-pointer"
             >
-              <option value="all">Semua Peran ({users.length})</option>
-              <option value="super_admin">Super Admin</option>
+              <option value="all">Semua Peran ({visibleUsers.length})</option>
+              {isSuperAdmin && <option value="super_admin">Super Admin</option>}
               <option value="admin_kecamatan">Admin Kecamatan</option>
               <option value="admin_desa">Admin Desa</option>
             </select>
@@ -267,22 +285,30 @@ export const UserManagementView: React.FC = () => {
                     </td>
                     <td className="py-3 px-3 text-center">
                       <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => handleOpenEdit(u)}
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
-                          title="Edit Pengguna"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
+                        {(isSuperAdmin || (isAdminKecamatan && u.role === 'admin_desa')) && (
+                          <button
+                            onClick={() => handleOpenEdit(u)}
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                            title="Edit Pengguna"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
 
-                        <button
-                          onClick={() => handleDelete(u)}
-                          disabled={u.email === 'udniat.01@gmail.com'}
-                          className="p-1.5 rounded-lg bg-red-950/60 hover:bg-red-900 border border-red-500/30 text-red-300 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
-                          title="Hapus Pengguna"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {isSuperAdmin && (
+                          <button
+                            onClick={() => handleDelete(u)}
+                            disabled={u.email === 'udniat.01@gmail.com'}
+                            className="p-1.5 rounded-lg bg-red-950/60 hover:bg-red-900 border border-red-500/30 text-red-300 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                            title="Hapus Pengguna"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+
+                        {!isSuperAdmin && !isAdminKecamatan && (
+                          <span className="text-[11px] text-slate-500">-</span>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -500,14 +526,14 @@ export const UserManagementView: React.FC = () => {
                   Tingkat Peran (Role)
                 </label>
                 <select
-                  disabled={selectedUser.email === 'udniat.01@gmail.com'}
+                  disabled={selectedUser.email === 'udniat.01@gmail.com' || !isSuperAdmin}
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-semibold disabled:opacity-50"
                 >
                   <option value="admin_desa">Admin Desa (Penginput Aset)</option>
-                  <option value="admin_kecamatan">Admin Kecamatan (Kontrol & Verifikasi)</option>
-                  <option value="super_admin">Super Admin (Kontrol Penuh)</option>
+                  {isSuperAdmin && <option value="admin_kecamatan">Admin Kecamatan (Kontrol & Verifikasi)</option>}
+                  {isSuperAdmin && <option value="super_admin">Super Admin (Kontrol Penuh)</option>}
                 </select>
               </div>
 

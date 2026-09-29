@@ -1,7 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { Aset, KlasAset, KondisiAset, SumberDana } from '../types';
-import { KLASIFIKASI_LIST, formatRupiah, formatNumber } from '../utils/reportGenerator';
+import {
+  KLASIFIKASI_LIST,
+  formatRupiah,
+  formatNumber,
+  generateAutoKodeAset,
+  generateSequentialKodeAset,
+} from '../utils/reportGenerator';
 import { BarcodeModal } from './BarcodeModal';
 import { AsetDetailModal } from './AsetDetailModal';
 import { fileToCompressedDataUrl } from '../utils/imageCompressor';
@@ -26,7 +32,14 @@ import {
   Camera,
   Eye,
   QrCode,
-  FileCheck2
+  FileCheck2,
+  RefreshCw,
+  Sparkles,
+  Hash,
+  Info,
+  ChevronDown,
+  ChevronUp,
+  Tag,
 } from 'lucide-react';
 
 export const AsetManagementView: React.FC = () => {
@@ -35,6 +48,7 @@ export const AsetManagementView: React.FC = () => {
     desas,
     currentUser,
     addAset,
+    addAsetBatch,
     updateAset,
     deleteAset,
     ajukanMutasi,
@@ -85,6 +99,50 @@ export const AsetManagementView: React.FC = () => {
     fotoBast: '' as string,
   });
   const [photoError, setPhotoError] = useState<string>('');
+
+  // Multi-unit purchase and auto sequential registration state
+  const [jumlahUnit, setJumlahUnit] = useState<number>(1);
+  const [tipeHarga, setTipeHarga] = useState<'satuan' | 'total'>('satuan');
+  const [showPreviewRegister, setShowPreviewRegister] = useState<boolean>(true);
+  const [customStartSeq, setCustomStartSeq] = useState<number | ''>('');
+  const [showCustomSeq, setShowCustomSeq] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 6000);
+  };
+
+  // Compute real-time sequential codes for the current selection and quantity
+  const sequentialCodes = useMemo(() => {
+    const count = Math.max(1, jumlahUnit);
+    const startSeq = typeof customStartSeq === 'number' && customStartSeq > 0 ? customStartSeq : undefined;
+    return generateSequentialKodeAset(
+      formData.desaId,
+      formData.klasifikasi,
+      count,
+      asets,
+      desas,
+      startSeq
+    );
+  }, [formData.desaId, formData.klasifikasi, jumlahUnit, asets, desas, customStartSeq]);
+
+  const autoKodeAwal = sequentialCodes[0]?.kodeAset || '';
+  const autoKodeAkhir = sequentialCodes[sequentialCodes.length - 1]?.kodeAset || '';
+
+  // Value calculation for multi-unit
+  const inputNilai = Number(formData.nilaiPerolehan) || 0;
+  const hargaPerUnit = useMemo(() => {
+    if (jumlahUnit <= 1) return inputNilai;
+    if (tipeHarga === 'satuan') return inputNilai;
+    return jumlahUnit > 0 ? Math.round(inputNilai / jumlahUnit) : 0;
+  }, [inputNilai, jumlahUnit, tipeHarga]);
+
+  const hargaTotal = useMemo(() => {
+    if (jumlahUnit <= 1) return inputNilai;
+    if (tipeHarga === 'total') return inputNilai;
+    return inputNilai * jumlahUnit;
+  }, [inputNilai, jumlahUnit, tipeHarga]);
 
   // Photo handlers
   const handlePhotoUpload = async (index: number, file: File) => {
@@ -178,11 +236,22 @@ export const AsetManagementView: React.FC = () => {
   // Open add modal
   const handleOpenAdd = () => {
     setPhotoError('');
+    setJumlahUnit(1);
+    setTipeHarga('satuan');
+    setCustomStartSeq('');
+    setShowCustomSeq(false);
+    setShowPreviewRegister(true);
+
+    const targetDesaId = isDesaUser ? currentUser.desaId || 'desa-21' : desas[0]?.id || 'desa-01';
+    const targetKlas: KlasAset = 'Peralatan, Mesin, dan Alat Berat';
+    const initialCodes = generateSequentialKodeAset(targetDesaId, targetKlas, 1, asets, desas);
+    const autoKode = initialCodes[0]?.kodeAset || '';
+
     setFormData({
-      desaId: isDesaUser ? currentUser.desaId || 'desa-21' : desas[0]?.id || 'desa-01',
-      klasifikasi: 'Tanah',
+      desaId: targetDesaId,
+      klasifikasi: targetKlas,
       namaAset: '',
-      kodeAset: '',
+      kodeAset: autoKode,
       buktiJenis: 'Kwitansi / BAST',
       buktiNomor: '',
       buktiTanggal: new Date().toLocaleDateString('id-ID'),
@@ -190,7 +259,7 @@ export const AsetManagementView: React.FC = () => {
       nilaiPerolehan: 0,
       kondisi: 'Baik',
       sumberDana: 'DDS',
-      volume: '',
+      volume: '1 Unit',
       lokasi: '',
       keterangan: '',
       fotoAset: ['', '', '', '', ''],
@@ -212,9 +281,9 @@ export const AsetManagementView: React.FC = () => {
       klasifikasi: item.klasifikasi,
       namaAset: item.namaAset,
       kodeAset: item.kodeAset,
-      buktiJenis: item.bukti.jenis,
-      buktiNomor: item.bukti.nomor,
-      buktiTanggal: item.bukti.tanggal,
+      buktiJenis: item.bukti?.jenis || 'Kwitansi / BAST',
+      buktiNomor: item.bukti?.nomor || '',
+      buktiTanggal: item.bukti?.tanggal || '',
       tahunPerolehan: item.tahunPerolehan,
       nilaiPerolehan: item.nilaiPerolehan,
       kondisi: item.kondisi,
@@ -229,7 +298,7 @@ export const AsetManagementView: React.FC = () => {
   };
 
   // Handle submit add
-  const handleSaveAdd = (e: React.FormEvent) => {
+  const handleSaveAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     const validPhotos = formData.fotoAset.filter((p) => p && p.trim().length > 0);
     if (validPhotos.length === 0) {
@@ -237,28 +306,78 @@ export const AsetManagementView: React.FC = () => {
       return;
     }
 
-    const desa = desas.find((d) => d.id === formData.desaId);
-    addAset({
-      desaId: formData.desaId,
-      desaName: desa?.name || 'DESA',
-      klasifikasi: formData.klasifikasi,
-      namaAset: formData.namaAset,
-      kodeAset: formData.kodeAset || `0${KLASIFIKASI_LIST.indexOf(formData.klasifikasi) + 1}.01.${Date.now().toString().slice(-4)}`,
-      bukti: {
-        jenis: formData.buktiJenis,
-        nomor: formData.buktiNomor,
-        tanggal: formData.buktiTanggal,
-      },
-      tahunPerolehan: Number(formData.tahunPerolehan),
-      nilaiPerolehan: Number(formData.nilaiPerolehan),
-      kondisi: formData.kondisi,
-      sumberDana: formData.sumberDana,
-      volume: formData.volume,
-      lokasi: formData.lokasi,
-      keterangan: formData.keterangan,
-      fotoAset: validPhotos,
-      fotoBast: formData.fotoBast || undefined,
-    });
+    const desa = desas.find((d) => d && d.id === formData.desaId);
+    const count = Math.max(1, jumlahUnit);
+    const startSeq = typeof customStartSeq === 'number' && customStartSeq > 0 ? customStartSeq : undefined;
+
+    // Compute fresh sequential codes for all units
+    const freshCodes = generateSequentialKodeAset(
+      formData.desaId,
+      formData.klasifikasi,
+      count,
+      asets,
+      desas,
+      startSeq
+    );
+
+    if (count === 1) {
+      const singleCode = freshCodes[0];
+      addAset({
+        desaId: formData.desaId,
+        desaName: desa?.name || 'DESA',
+        klasifikasi: formData.klasifikasi,
+        namaAset: formData.namaAset,
+        kodeAset: singleCode.kodeAset,
+        nomorRegister: singleCode.nomorRegister,
+        bukti: {
+          jenis: formData.buktiJenis,
+          nomor: formData.buktiNomor,
+          tanggal: formData.buktiTanggal,
+        },
+        tahunPerolehan: Number(formData.tahunPerolehan),
+        nilaiPerolehan: Number(formData.nilaiPerolehan),
+        kondisi: formData.kondisi,
+        sumberDana: formData.sumberDana,
+        volume: formData.volume || '1 Unit',
+        lokasi: formData.lokasi,
+        keterangan: formData.keterangan,
+        fotoAset: validPhotos,
+        fotoBast: formData.fotoBast || undefined,
+      });
+      showToast(`Berhasil menambahkan 1 unit aset: ${formData.namaAset} (${singleCode.kodeAset} • No. Reg: ${singleCode.nomorRegister})`);
+    } else {
+      // Multiple units purchase: ciptakan data barang yang sama persis, cuma kode asetnya yang berbeda (otomatis)
+      const batchItems = freshCodes.map((codeInfo) => {
+        return {
+          desaId: formData.desaId,
+          desaName: desa?.name || 'DESA',
+          klasifikasi: formData.klasifikasi,
+          namaAset: formData.namaAset, // Data barang sama persis
+          kodeAset: codeInfo.kodeAset, // Cuma kode aset yang berbeda (otomatis)
+          nomorRegister: codeInfo.nomorRegister, // Nomor urut register berurutan
+          bukti: {
+            jenis: formData.buktiJenis,
+            nomor: formData.buktiNomor,
+            tanggal: formData.buktiTanggal,
+          },
+          tahunPerolehan: Number(formData.tahunPerolehan),
+          nilaiPerolehan: Number(hargaPerUnit),
+          kondisi: formData.kondisi,
+          sumberDana: formData.sumberDana,
+          volume: formData.volume || '1 Unit',
+          lokasi: formData.lokasi,
+          keterangan: formData.keterangan,
+          fotoAset: validPhotos,
+          fotoBast: formData.fotoBast || undefined,
+        };
+      });
+
+      await addAsetBatch(batchItems);
+      showToast(
+        `Berhasil mendaftarkan ${count} unit barang "${formData.namaAset}" dengan data sama & kode aset urut otomatis: ${freshCodes[0].kodeAset} s/d ${freshCodes[count - 1].kodeAset}`
+      );
+    }
+
     setShowAddModal(false);
   };
 
@@ -295,9 +414,10 @@ export const AsetManagementView: React.FC = () => {
   // Handle open Mutasi Modal
   const handleOpenMutasi = (item: Aset) => {
     setSelectedAset(item);
+    const cleanDesa = (item.desaName || '').replace('DESA ', '') || 'DESA';
     setMutasiForm({
       alasan: '',
-      nomorSuratDesa: `141/${Math.floor(Math.random() * 900 + 100)}/DS-${item.desaName.replace('DESA ', '')}/2024`,
+      nomorSuratDesa: `141/${Math.floor(Math.random() * 900 + 100)}/DS-${cleanDesa}/2024`,
       dokumenPendukung: 'Berita Acara Musyawarah Desa & SK Pemindahtanganan',
       tujuanMutasi: 'BUMDes / Pemerintah Kabupaten Nias Barat',
     });
@@ -321,9 +441,10 @@ export const AsetManagementView: React.FC = () => {
   // Handle open Penghapusan Modal
   const handleOpenHapus = (item: Aset) => {
     setSelectedAset(item);
+    const cleanDesa = (item.desaName || '').replace('DESA ', '') || 'DESA';
     setHapusForm({
       alasan: item.kondisi === 'Rusak Berat' ? 'Aset mengalami kerusakan berat dan biaya perbaikan melebihi nilai ekonomis.' : '',
-      nomorSuratDesa: `141/${Math.floor(Math.random() * 900 + 100)}/DS-${item.desaName.replace('DESA ', '')}/2024`,
+      nomorSuratDesa: `141/${Math.floor(Math.random() * 900 + 100)}/DS-${cleanDesa}/2024`,
       dokumenPendukung: 'Berita Acara Musyawarah Desa Tentang Penghapusan Aset',
     });
     setShowHapusModal(true);
@@ -354,6 +475,23 @@ export const AsetManagementView: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification Banner */}
+      {toastMessage && (
+        <div className="bg-emerald-950/90 border border-emerald-500/50 rounded-2xl p-4 shadow-xl flex items-center justify-between gap-3 text-emerald-200 text-xs animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+            <span className="font-semibold">{toastMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            className="text-emerald-400 hover:text-white p-1 rounded-lg hover:bg-emerald-900/50 transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Header & Actions */}
       <div className="bg-[#0E1526] border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
@@ -578,22 +716,32 @@ export const AsetManagementView: React.FC = () => {
                       </td>
                       <td className="py-3 px-3">
                         <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300 font-semibold text-[10px] block truncate max-w-[120px]">
-                          {item.desaName.replace('DESA ', '')}
+                          {(item.desaName || 'Desa').replace('DESA ', '')}
                         </span>
                       </td>
                       <td className="py-3 px-3 max-w-[180px]">
                         <div className="font-semibold text-slate-200 text-[11px]">
-                          {item.bukti.jenis}
+                          {item.bukti?.jenis || '-'}
                         </div>
                         <div className="text-[10px] text-slate-400 font-mono truncate">
-                          No: {item.bukti.nomor || '-'}
+                          No: {item.bukti?.nomor || '-'}
                         </div>
                         <div className="text-[10px] text-slate-400">
-                          Tgl: {item.bukti.tanggal || '-'}
+                          Tgl: {item.bukti?.tanggal || '-'}
                         </div>
                       </td>
-                      <td className="py-3 px-3 font-mono text-slate-300 text-[11px]">
-                        {item.kodeAset}
+                      <td className="py-3 px-3 font-mono text-[11px]">
+                        <div className="font-bold text-emerald-400 tracking-wide">
+                          {item.kodeAset}
+                        </div>
+                        {item.nomorRegister && (
+                          <div className="text-[10px] text-amber-300 font-mono flex items-center gap-1 mt-0.5">
+                            <span className="text-slate-500 font-sans">No. Reg:</span>
+                            <span className="px-1 py-0.2 rounded bg-amber-500/10 border border-amber-500/30 font-bold">
+                              {item.nomorRegister}
+                            </span>
+                          </div>
+                        )}
                       </td>
                       <td className="py-3 px-3 text-center font-bold text-slate-200">
                         {item.tahunPerolehan}
@@ -747,7 +895,11 @@ export const AsetManagementView: React.FC = () => {
                   <select
                     disabled={isDesaUser}
                     value={formData.desaId}
-                    onChange={(e) => setFormData({ ...formData, desaId: e.target.value })}
+                    onChange={(e) => {
+                      const newDesaId = e.target.value;
+                      const autoKode = generateAutoKodeAset(newDesaId, formData.klasifikasi, asets, desas);
+                      setFormData({ ...formData, desaId: newDesaId, kodeAset: autoKode });
+                    }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-400"
                   >
                     {desas.map((d) => (
@@ -765,7 +917,11 @@ export const AsetManagementView: React.FC = () => {
                   </label>
                   <select
                     value={formData.klasifikasi}
-                    onChange={(e) => setFormData({ ...formData, klasifikasi: e.target.value as KlasAset })}
+                    onChange={(e) => {
+                      const newKlas = e.target.value as KlasAset;
+                      const autoKode = generateAutoKodeAset(formData.desaId, newKlas, asets, desas);
+                      setFormData({ ...formData, klasifikasi: newKlas, kodeAset: autoKode });
+                    }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-400"
                   >
                     {KLASIFIKASI_LIST.map((k) => (
@@ -785,11 +941,207 @@ export const AsetManagementView: React.FC = () => {
                 <input
                   type="text"
                   required
-                  placeholder="Contoh: Tanah Lapangan Pemuda / Genset Silent 5000W / Sepeda Motor Dinas"
+                  placeholder="Contoh: Laptop Asus Core i7 / Meja Rapat Kantor Desa / Genset Silent 5000W"
                   value={formData.namaAset}
                   onChange={(e) => setFormData({ ...formData, namaAset: e.target.value })}
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-400"
                 />
+              </div>
+
+              {/* PENGATURAN JUMLAH UNIT & PENOMORAN URUT OTOMATIS */}
+              <div className="p-4 rounded-xl bg-gradient-to-br from-slate-900/90 to-slate-950 border border-amber-500/40 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                      <Boxes className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <span className="text-xs font-bold text-white block">
+                        Jumlah Unit Barang yang Dibeli *
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        {jumlahUnit > 1
+                          ? `Pengadaan ${jumlahUnit} unit sekaligus • Masing-masing unit mendapat nomor register sendiri`
+                          : 'Pengadaan 1 unit tunggal'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Stepper Quantity Control */}
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                    <button
+                      type="button"
+                      disabled={jumlahUnit <= 1}
+                      onClick={() => setJumlahUnit((prev) => Math.max(1, prev - 1))}
+                      className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-slate-800 text-white font-bold flex items-center justify-center transition-colors cursor-pointer"
+                      title="Kurangi 1 unit"
+                    >
+                      -
+                    </button>
+                    <input
+                      type="number"
+                      min="1"
+                      max="200"
+                      value={jumlahUnit}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setJumlahUnit(isNaN(val) || val < 1 ? 1 : Math.min(200, val));
+                      }}
+                      className="w-16 bg-slate-950 border border-amber-500/50 rounded-lg px-2 py-1 text-center font-mono font-bold text-sm text-amber-300 focus:outline-none focus:border-amber-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setJumlahUnit((prev) => Math.min(200, prev + 1))}
+                      className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center transition-colors cursor-pointer"
+                      title="Tambah 1 unit"
+                    >
+                      +
+                    </button>
+                    <span className="text-xs text-slate-300 font-semibold ml-1">Unit</span>
+                  </div>
+                </div>
+
+                {/* Quick Unit Presets */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  <span className="text-[10px] text-slate-400 font-medium mr-1">Pilihan Cepat:</span>
+                  {[1, 2, 3, 5, 10, 20].map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setJumlahUnit(num)}
+                      className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
+                        jumlahUnit === num
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 shadow'
+                          : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-500'
+                      }`}
+                    >
+                      {num} Unit
+                    </button>
+                  ))}
+                </div>
+
+                {/* Panel Multi-Unit (Jika > 1 Unit) */}
+                {jumlahUnit > 1 && (
+                  <div className="mt-3 pt-3 border-t border-slate-800 space-y-3">
+                    {/* Mode Penginputan Harga */}
+                    <div className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                      <span className="text-[11px] font-semibold text-slate-300">
+                        Perhitungan Harga Belanja ({jumlahUnit} Unit):
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="tipeHargaAdd"
+                            checked={tipeHarga === 'satuan'}
+                            onChange={() => setTipeHarga('satuan')}
+                            className="accent-amber-400 cursor-pointer"
+                          />
+                          <span>Harga Satuan / Unit</span>
+                        </label>
+                        <span className="text-slate-600">|</span>
+                        <label className="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="tipeHargaAdd"
+                            checked={tipeHarga === 'total'}
+                            onChange={() => setTipeHarga('total')}
+                            className="accent-amber-400 cursor-pointer"
+                          />
+                          <span>Total Belanja Semua Unit</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Ringkasan Konversi Nilai */}
+                    <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                      <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block">Harga Per Unit</span>
+                        <span className="font-mono font-bold text-emerald-400 text-xs sm:text-sm">
+                          {formatRupiah(hargaPerUnit)}
+                        </span>
+                      </div>
+                      <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block">
+                          Total Belanja ({jumlahUnit} Unit)
+                        </span>
+                        <span className="font-mono font-bold text-amber-400 text-xs sm:text-sm">
+                          {formatRupiah(hargaTotal)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Highlight Penomoran Urut Otomatis */}
+                    <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span className="font-bold text-emerald-300 text-xs">
+                            {jumlahUnit} Nomor Register & Kode Aset Dibuat Otomatis Berurutan:
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowPreviewRegister((prev) => !prev)}
+                          className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 cursor-pointer hover:underline"
+                        >
+                          {showPreviewRegister ? (
+                            <>
+                              <ChevronUp className="w-3 h-3" /> Tutup Rincian
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="w-3 h-3" /> Lihat Rincian Unit
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      <div className="font-mono text-xs text-white font-bold bg-slate-950/80 px-3 py-1.5 rounded-lg border border-emerald-500/30 flex items-center justify-between">
+                        <span>{autoKodeAwal}</span>
+                        <span className="text-emerald-400 text-[11px] font-sans font-normal">s/d</span>
+                        <span>{autoKodeAkhir}</span>
+                      </div>
+
+                      {/* Tabel / List Pratinjau Seluruh Unit */}
+                      {showPreviewRegister && (
+                        <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 p-2 space-y-1.5">
+                          <div className="text-[10px] font-bold text-slate-400 px-1 pb-1 border-b border-slate-800 flex justify-between">
+                            <span>Unit Barang</span>
+                            <span>No. Register & Kode Aset Tetap</span>
+                          </div>
+                          {sequentialCodes.map((item, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between p-1.5 rounded bg-slate-900/60 hover:bg-slate-900 text-[11px]"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold text-[10px]">
+                                  Unit {idx + 1}
+                                </span>
+                                <span className="text-slate-300 truncate max-w-[140px] sm:max-w-[200px]">
+                                  {formData.namaAset || 'Aset Tetap'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-emerald-400 text-[11px]">
+                                  {item.kodeAset}
+                                </span>
+                                <span className="px-1 py-0.2 rounded bg-slate-800 text-[10px] text-amber-300 font-mono">
+                                  Reg: {item.nomorRegister}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <p className="text-[10px] text-emerald-300/80">
+                        ✓ Setiap unit akan didaftarkan sebagai baris aset tersendiri di inventaris desa, masing-masing dengan barcode inventaris dan nomor register Permendagri No. 20/2018.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Bukti Kepemilikan */}
@@ -831,20 +1183,82 @@ export const AsetManagementView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Kode Aset & Tahun Perolehan */}
+              {/* Kode Aset & Tahun Perolehan & Nilai Perolehan */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block font-semibold text-slate-300 mb-1">
-                    Kode Aset Tetap
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Contoh: 01.01.01.04.001"
-                    value={formData.kodeAset}
-                    onChange={(e) => setFormData({ ...formData, kodeAset: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-semibold text-slate-300 text-xs">
+                      {jumlahUnit > 1 ? 'Rentang Kode Aset Tetap' : 'Kode Aset Tetap / ID Register'}
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-medium flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5 text-emerald-400" />
+                        Otomatis
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomStartSeq('');
+                        }}
+                        className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 hover:underline cursor-pointer"
+                        title="Buat ulang nomor register urut otomatis"
+                      >
+                        <RefreshCw className="w-2.5 h-2.5" />
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+
+                  {jumlahUnit > 1 ? (
+                    <div className="w-full bg-slate-900 border border-emerald-500/50 rounded-xl px-3 py-2 text-emerald-400 font-mono text-xs font-semibold tracking-wider">
+                      {autoKodeAwal} s/d {autoKodeAkhir}
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      readOnly
+                      placeholder="Contoh: 01.01.01.21.0001"
+                      value={autoKodeAwal}
+                      className="w-full bg-slate-900 border border-emerald-500/50 rounded-xl px-3 py-2 text-emerald-400 font-mono text-sm font-semibold tracking-wider focus:outline-none"
+                    />
+                  )}
+
+                  <div className="flex items-center justify-between mt-1">
+                    <p className="text-[10px] text-slate-400">
+                      Format: <span className="font-mono text-slate-300">Klasifikasi.Desa.Urut</span>
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomSeq((prev) => !prev)}
+                      className="text-[10px] text-slate-400 hover:text-amber-300 underline cursor-pointer"
+                    >
+                      {showCustomSeq ? 'Tutup Atur Urut' : 'Atur No. Urut Awal'}
+                    </button>
+                  </div>
+
+                  {showCustomSeq && (
+                    <div className="mt-1.5 p-2 bg-slate-950 border border-slate-800 rounded-lg space-y-1">
+                      <label className="text-[10px] text-slate-300 block font-semibold">
+                        Nomor Register Urut Awal (Opsional):
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Contoh: 1, 15, 100"
+                        value={customStartSeq}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? '' : parseInt(e.target.value, 10);
+                          setCustomStartSeq(val);
+                        }}
+                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white font-mono"
+                      />
+                      <span className="text-[9px] text-slate-400 block">
+                        Kosongkan untuk otomatis melanjutkan nomor urut terakhir di database.
+                      </span>
+                    </div>
+                  )}
                 </div>
+
                 <div>
                   <label className="block font-semibold text-slate-300 mb-1">
                     Tahun Perolehan *
@@ -859,9 +1273,14 @@ export const AsetManagementView: React.FC = () => {
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold"
                   />
                 </div>
+
                 <div>
                   <label className="block font-semibold text-slate-300 mb-1">
-                    Nilai Perolehan (Rp) *
+                    {jumlahUnit > 1
+                      ? tipeHarga === 'satuan'
+                        ? 'Harga Satuan per Unit (Rp) *'
+                        : `Total Belanja ${jumlahUnit} Unit (Rp) *`
+                      : 'Nilai Perolehan (Rp) *'}
                   </label>
                   <input
                     type="number"
@@ -871,9 +1290,18 @@ export const AsetManagementView: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, nilaiPerolehan: Number(e.target.value) })}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono font-bold"
                   />
-                  <span className="text-[10px] text-emerald-400 mt-1 block">
-                    {formatRupiah(formData.nilaiPerolehan)}
-                  </span>
+                  <div className="text-[10px] mt-1 space-y-0.5">
+                    <span className="text-emerald-400 block font-mono font-semibold">
+                      {formatRupiah(formData.nilaiPerolehan)}
+                    </span>
+                    {jumlahUnit > 1 && (
+                      <span className="text-amber-300 text-[9px] block">
+                        {tipeHarga === 'satuan'
+                          ? `Total ${jumlahUnit} unit: ${formatRupiah(hargaTotal)}`
+                          : `Harga per unit: ${formatRupiah(hargaPerUnit)}`}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1217,14 +1645,28 @@ export const AsetManagementView: React.FC = () => {
               {/* Kode Aset & Nilai */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block font-semibold text-slate-300 mb-1">
-                    Kode Aset Tetap
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-semibold text-slate-300 text-xs">
+                      Kode Aset Tetap
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const freshKode = generateAutoKodeAset(formData.desaId, formData.klasifikasi, asets, desas);
+                        setFormData((prev) => ({ ...prev, kodeAset: freshKode }));
+                      }}
+                      className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 hover:underline cursor-pointer"
+                      title="Hitung kode register otomatis"
+                    >
+                      <RefreshCw className="w-2.5 h-2.5" />
+                      Set Otomatis
+                    </button>
+                  </div>
                   <input
                     type="text"
                     value={formData.kodeAset}
                     onChange={(e) => setFormData({ ...formData, kodeAset: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-amber-400"
                   />
                 </div>
                 <div>

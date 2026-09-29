@@ -1,55 +1,31 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Global catch-all default deny
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
-    // Helper functions
     function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128;
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    // Koleksi Aset Desa (Sinkronisasi Antar-Laptop)
     match /asets/{asetId} {
-      allow read: if true;
-      allow write: if isValidId(asetId);
+      allow read, write: if true;
     }
 
-    // Koleksi Permohonan Verifikasi Mutasi & Penghapusan
-    match /verifikasi/{verifikasiId} {
-      allow read: if true;
-      allow write: if isValidId(verifikasiId);
+    match /verifikasiList/{verifId} {
+      allow read, write: if true;
     }
 
-    // Koleksi Pengesahan Laporan Tahunan
-    match /pengesahan/{pengesahanId} {
-      allow read: if true;
-      allow write: if isValidId(pengesahanId);
+    match /pengesahanList/{pengesahanId} {
+      allow read, write: if true;
     }
 
-    // Profil Desa
     match /desas/{desaId} {
-      allow read: if true;
-      allow write: if isValidId(desaId);
+      allow read, write: if true;
     }
 
-    // Pengguna Sistem
+    match /system/{docId} {
+      allow read, write: if true;
+    }
+
     match /users/{userId} {
-      allow read: if true;
-      allow write: if isValidId(userId);
-    }
-
-    // Konfigurasi & Profil Kantor Kecamatan
-    match /system/{configId} {
-      allow read: if true;
-      allow write: if isValidId(configId);
-    }
-
-    // Collection test untuk pengecekan koneksi
-    match /test/{testId} {
       allow read, write: if true;
     }
   }

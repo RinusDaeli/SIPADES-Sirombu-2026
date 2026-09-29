@@ -71,6 +71,128 @@ export const ROMAN_KLASIFIKASI: RomanKlasifikasi[] = [
   { roman: 'X', title: 'KONSTRUKSI DALAM PENGERJAAN', key: 'Konstruksi dalam Pengerjaan' },
 ];
 
+export const KLASIFIKASI_KODE_PREFIX: Record<KlasAset, string> = {
+  'Tanah': '01.01.01',
+  'Peralatan, Mesin, dan Alat Berat': '02.01.01',
+  'Kendaraan': '02.02.01',
+  'Gedung dan Bangunan': '03.01.01',
+  'Jalan': '04.01.01',
+  'Jembatan': '04.02.01',
+  'Irigasi/Embung/Air Sungai/Drainase': '04.03.01',
+  'Jaringan/Instalasi': '04.04.01',
+  'Aset Tetap Lainnya': '05.01.01',
+  'Konstruksi dalam Pengerjaan': '06.01.01',
+};
+
+/**
+ * Generate standard Permendagri No. 1/2016 Asset Code / Register Number automatically
+ * Format: [Golongan.Bidang.Kelompok].[KodeDesa].[NomorRegister]
+ * Example: 01.01.01.21.0001 (Tanah pertama di Desa Sirombu)
+ */
+export interface GeneratedKodeAsetInfo {
+  kodeAset: string;
+  nomorRegister: string;
+  sequenceNumber: number;
+}
+
+/**
+ * Generate sequential Permendagri No. 20/2018 Asset Codes / Register Numbers for 1 or more units
+ * Format: [Golongan.Bidang.Kelompok].[KodeDesa].[NomorRegister]
+ * Example: 02.01.01.21.0001 s/d 02.01.01.21.0005 (jika membeli 5 unit laptop di Desa Sirombu)
+ */
+export const generateSequentialKodeAset = (
+  desaId: string,
+  klasifikasi: KlasAset,
+  count: number = 1,
+  existingAsets: Aset[] = [],
+  desasList: Desa[] = [],
+  customStartSeq?: number
+): GeneratedKodeAsetInfo[] => {
+  const prefix = KLASIFIKASI_KODE_PREFIX[klasifikasi] || '01.01.01';
+
+  let desaCodeNumber = '01';
+  const matchedDesa = desasList.find((d) => d && d.id === desaId);
+  if (matchedDesa && matchedDesa.code) {
+    const parts = matchedDesa.code.split('.');
+    const last = parts[parts.length - 1];
+    desaCodeNumber = last.length >= 2 ? last.slice(-2) : last.padStart(2, '0');
+  } else if (desaId && desaId.startsWith('desa-')) {
+    desaCodeNumber = desaId.replace('desa-', '').padStart(2, '0');
+  }
+
+  const basePattern = `${prefix}.${desaCodeNumber}.`;
+
+  let maxSeq = 0;
+  for (const a of existingAsets) {
+    if (a && a.desaId === desaId) {
+      if (a.kodeAset) {
+        const trimmed = a.kodeAset.trim();
+        if (trimmed.startsWith(basePattern)) {
+          const parts = trimmed.split('.');
+          const lastPart = parts[parts.length - 1];
+          const num = parseInt(lastPart, 10);
+          if (!isNaN(num) && num > maxSeq) {
+            maxSeq = num;
+          }
+        } else if (a.klasifikasi === klasifikasi) {
+          // If code ends with .XXXX (4 or more digits)
+          const match = trimmed.match(/\.(\d{3,5})$/);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (!isNaN(num) && num > maxSeq) {
+              maxSeq = num;
+            }
+          }
+        }
+      }
+      if (a.nomorRegister && a.klasifikasi === klasifikasi) {
+        const regNum = parseInt(a.nomorRegister, 10);
+        if (!isNaN(regNum) && regNum > maxSeq) {
+          maxSeq = regNum;
+        }
+      }
+    }
+  }
+
+  const validCount = Math.max(1, Math.min(count, 500));
+  const results: GeneratedKodeAsetInfo[] = [];
+
+  const startSeqNumber =
+    typeof customStartSeq === 'number' && customStartSeq > 0
+      ? customStartSeq
+      : maxSeq + 1;
+
+  for (let i = 0; i < validCount; i++) {
+    const nextSeq = startSeqNumber + i;
+    const registerStr = String(nextSeq).padStart(4, '0');
+    results.push({
+      kodeAset: `${basePattern}${registerStr}`,
+      nomorRegister: registerStr,
+      sequenceNumber: nextSeq,
+    });
+  }
+
+  return results;
+};
+
+export const generateAutoKodeAset = (
+  desaId: string,
+  klasifikasi: KlasAset,
+  existingAsets: Aset[] = [],
+  desasList: Desa[] = [],
+  customStartSeq?: number
+): string => {
+  const list = generateSequentialKodeAset(
+    desaId,
+    klasifikasi,
+    1,
+    existingAsets,
+    desasList,
+    customStartSeq
+  );
+  return list[0]?.kodeAset || `${KLASIFIKASI_KODE_PREFIX[klasifikasi] || '01.01.01'}.01.0001`;
+};
+
 export interface PermendagriPdfOptions {
   desa?: Desa;
   allDesas?: Desa[];
@@ -606,7 +728,8 @@ export const exportToCSV = (desa: Desa, year: number, asets: Aset[]) => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.setAttribute('href', url);
-  link.setAttribute('download', `Rincian_Aset_${desa.name.replace(/\s+/g, '_')}_${year}.csv`);
+  const cleanDesaName = (desa?.name || 'Desa').replace(/\s+/g, '_');
+  link.setAttribute('download', `Rincian_Aset_${cleanDesaName}_${year}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

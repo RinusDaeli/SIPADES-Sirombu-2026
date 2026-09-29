@@ -13,6 +13,7 @@ import { VerifikasiView } from './components/VerifikasiView';
 import { LaporanPermendagriView } from './components/LaporanPermendagriView';
 import { UserManagementView } from './components/UserManagementView';
 import { DesaInfoView } from './components/DesaInfoView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Menu, X } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
@@ -30,7 +31,8 @@ const MainLayout: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-            className="p-2 rounded-lg bg-emerald-900/60 text-white"
+            className="p-2 rounded-lg bg-emerald-900/60 text-white cursor-pointer"
+            aria-label="Toggle Navigation Menu"
           >
             {mobileSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
@@ -57,7 +59,7 @@ const MainLayout: React.FC = () => {
           {activeTab === 'aset' && <AsetManagementView />}
           {activeTab === 'verifikasi' && <VerifikasiView />}
           {activeTab === 'laporan' && <LaporanPermendagriView />}
-          {activeTab === 'users' && <UserManagementView />}
+          {activeTab === 'users' && (currentUser?.role === 'super_admin' || currentUser?.role === 'admin_kecamatan') && <UserManagementView />}
           {activeTab === 'desa_info' && <DesaInfoView />}
         </main>
       </div>
@@ -67,8 +69,10 @@ const MainLayout: React.FC = () => {
 
 export default function App() {
   return (
-    <AppProvider>
-      <MainLayout />
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <MainLayout />
+      </AppProvider>
+    </ErrorBoundary>
   );
 }

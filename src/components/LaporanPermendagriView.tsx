@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { INITIAL_DESA_LIST } from '../data/initialData';
 import {
   exportToPermendagriPDF,
   exportToCSV,
@@ -20,9 +21,7 @@ import {
   Calendar,
   Building,
   MapPin,
-  Clock,
   ShieldCheck,
-  Send,
   HelpCircle,
   Layers,
   Eye,
@@ -37,9 +36,6 @@ export const LaporanPermendagriView: React.FC = () => {
     setSelectedYear,
     selectedDesaFilter,
     setSelectedDesaFilter,
-    pengesahanList,
-    ajukanPengesahan,
-    prosesPengesahan,
   } = useApp();
 
   const isDesaUser = currentUser?.role === 'admin_desa';
@@ -58,7 +54,7 @@ export const LaporanPermendagriView: React.FC = () => {
     ? 'all'
     : selectedDesaFilter;
 
-  const currentDesa = desas.find((d) => d.id === currentDesaId) || desas[20] || desas[0];
+  const currentDesa = desas.find((d) => d.id === currentDesaId) || desas[20] || desas[0] || INITIAL_DESA_LIST[20] || INITIAL_DESA_LIST[0];
 
   // Filter assets for this view up to selected year
   const reportAsets = useMemo(() => {
@@ -86,11 +82,6 @@ export const LaporanPermendagriView: React.FC = () => {
 
   // Aggregate stats
   const totalValuation = reportAsets.reduce((sum, item) => sum + (item.nilaiPerolehan || 0), 0);
-
-  // Status pengesahan laporan tahunan
-  const currentPengesahan = pengesahanList.find(
-    (p) => p.desaId === currentDesaId && p.tahun === selectedYear
-  );
 
   const [isExportingPDF, setIsExportingPDF] = useState(false);
 
@@ -255,53 +246,10 @@ export const LaporanPermendagriView: React.FC = () => {
               title="Atur Tanggal Cetak yang Tertera pada Tanda Tangan"
             />
             <span className="text-[11px] text-amber-400/90 font-medium hidden sm:inline">
-              ({isKecamatanOrSuper ? 'Tetesua' : currentDesa.name.replace(/^DESA\s+/i, '')}, {formatTanggalIndonesia(tanggalCetak)})
+              ({isKecamatanOrSuper ? 'Tetesua' : (currentDesa?.name || '').replace(/^DESA\s+/i, '')}, {formatTanggalIndonesia(tanggalCetak)})
             </span>
           </div>
         </div>
-
-        {/* Approval Status & Actions (Only in single village mode) */}
-        {!isAllDesaMode && (
-          <div className="flex items-center gap-3">
-            <div className="text-right text-xs">
-              <div className="text-slate-400">Status Pengesahan Kecamatan:</div>
-              {currentPengesahan?.status === 'disetujui' ? (
-                <span className="inline-flex items-center gap-1 text-emerald-400 font-bold">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Telah Disahkan Camat Sirombu
-                </span>
-              ) : currentPengesahan?.status === 'diajukan' ? (
-                <span className="inline-flex items-center gap-1 text-amber-400 font-bold">
-                  <Clock className="w-3.5 h-3.5" /> Menunggu Tanda Tangan Camat
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-slate-400 font-semibold">
-                  Draft Laporan Desa
-                </span>
-              )}
-            </div>
-
-            {/* Action buttons based on role */}
-            {isDesaUser && currentPengesahan?.status !== 'disetujui' && (
-              <button
-                onClick={() => ajukanPengesahan(currentDesaId, selectedYear)}
-                className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Ajukan Pengesahan</span>
-              </button>
-            )}
-
-            {isKecamatanOrSuper && currentPengesahan?.status === 'diajukan' && (
-              <button
-                onClick={() => prosesPengesahan(currentDesaId, selectedYear, 'disetujui', 'Telah ditelaah dan disahkan oleh Camat Sirombu.')}
-                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Sahkan Laporan Ini</span>
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Official Permendagri 20/2018 Document Paper Layout */}
@@ -644,10 +592,10 @@ export const LaporanPermendagriView: React.FC = () => {
               // AKUN DESA: KEPALA DESA DI SEBELAH KANAN
               <>
                 <p className="text-slate-400 text-xs">
-                  {currentDesa.name.replace(/^DESA\s+/i, '')}, {formatTanggalIndonesia(tanggalCetak)}
+                  {(currentDesa?.name || '').replace(/^DESA\s+/i, '')}, {formatTanggalIndonesia(tanggalCetak)}
                 </p>
                 <p className="font-bold text-white uppercase text-xs">
-                  Kepala Desa {currentDesa.name.replace(/^DESA\s+/i, '')}
+                  Kepala Desa {(currentDesa?.name || '').replace(/^DESA\s+/i, '')}
                 </p>
 
                 <div className="h-20 flex items-center justify-center">

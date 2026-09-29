@@ -351,7 +351,7 @@ export const ThreeDColumnChart: React.FC<ThreeDColumnChartProps> = ({
                     fill={isHovered ? '#047857' : '#334155'}
                     className="transition-colors"
                   >
-                    {item.label.replace(/^DESA\s+/i, '')}
+                    {(item?.label || '').replace(/^DESA\s+/i, '')}
                   </text>
                 </g>
               </g>

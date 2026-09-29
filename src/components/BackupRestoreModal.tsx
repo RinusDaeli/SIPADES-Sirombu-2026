@@ -9,7 +9,9 @@ import {
   FileText,
   RefreshCw,
   ShieldCheck,
-  Trash2,
+  Calendar,
+  Layers,
+  Users,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -27,17 +29,15 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ isOpen, 
     selectedYear,
     getBackupData,
     restoreBackupData,
-    clearAllAsetsDanMutasi,
   } = useApp();
 
-  const [activeSubTab, setActiveSubTab] = useState<'backup' | 'restore' | 'clear'>('backup');
+  const [activeSubTab, setActiveSubTab] = useState<'backup' | 'restore'>('backup');
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [previewData, setPreviewData] = useState<any | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [confirmClearInput, setConfirmClearInput] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   if (!isOpen) return null;
@@ -104,21 +104,25 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ isOpen, 
     reader.readAsText(file);
   };
 
-  const handleExecuteRestore = async () => {
+  const handleExecuteRestore = () => {
     if (!previewData?.raw) {
       setErrorMessage('Pilih berkas cadangan JSON yang valid terlebih dahulu.');
+      return;
+    }
+
+    if (!window.confirm('PERINGATAN: Pemulihan data akan memperbarui database sistem dengan isi berkas ini. Lanjutkan pemulihan?')) {
       return;
     }
 
     setIsProcessing(true);
     setErrorMessage(null);
 
-    const result = await restoreBackupData(previewData.raw);
+    const result = restoreBackupData(previewData.raw);
     setIsProcessing(false);
 
     if (result.success) {
       setSuccessMessage(
-        `Pemulihan data berhasil! Memulihkan ${result.stats?.asets ?? 0} aset, ${result.stats?.verifikasi ?? 0} mutasi, dan ${result.stats?.desas ?? 0} data desa secara realtime.`
+        `Pemulihan data berhasil! Memulihkan ${result.stats?.asets ?? 0} aset, ${result.stats?.verifikasi ?? 0} mutasi, dan ${result.stats?.desas ?? 0} data desa.`
       );
       setPreviewData(null);
       setRestoreFile(null);
@@ -127,24 +131,6 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ isOpen, 
       }, 2500);
     } else {
       setErrorMessage(result.message || 'Gagal memulihkan cadangan data.');
-    }
-  };
-
-  const handleExecuteClear = async () => {
-    setIsProcessing(true);
-    setErrorMessage(null);
-
-    const result = await clearAllAsetsDanMutasi();
-    setIsProcessing(false);
-
-    if (result.success) {
-      setSuccessMessage(result.message || 'Semua data aset percobaan berhasil dihapus.');
-      setConfirmClearInput('');
-      setTimeout(() => {
-        onClose();
-      }, 2500);
-    } else {
-      setErrorMessage(result.message || 'Gagal mengosongkan data aset.');
     }
   };
 
@@ -165,13 +151,13 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ isOpen, 
           </span>
           <div>
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              Kelola Basis Data SIPADES
+              Backup & Restore Basis Data
               <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800/60">
-                Cloud Sync Aktif
+                Admin / Super Admin
               </span>
             </h3>
             <p className="text-xs text-slate-400">
-              Sinkronisasi real-time antar-laptop, pencadangan inventaris aset, dan pengaturan data
+              Cadangkan seluruh inventaris aset desa, permohonan mutasi, dan akun pengguna ke berkas lokal atau pulihkan data sebelumnya
             </p>
           </div>
         </div>
@@ -191,7 +177,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ isOpen, 
             }`}
           >
             <Download className="w-4 h-4" />
-            Cadangkan (Backup)
+            Cadangkan Data (Backup)
           </button>
           <button
             onClick={() => {
@@ -206,22 +192,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ isOpen, 
             }`}
           >
             <Upload className="w-4 h-4" />
-            Pulihkan (Restore)
-          </button>
-          <button
-            onClick={() => {
-              setActiveSubTab('clear');
-              setErrorMessage(null);
-              setSuccessMessage(null);
-            }}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
-              activeSubTab === 'clear'
-                ? 'bg-red-700 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Trash2 className="w-4 h-4" />
-            Kosongkan Percobaan
+            Pulihkan Data (Restore)
           </button>
         </div>
 
@@ -308,6 +279,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ isOpen, 
         {/* Restore Tab Content */}
         {activeSubTab === 'restore' && (
           <div className="space-y-5">
+            {/* File drop area */}
             <div
               onClick={() => fileInputRef.current?.click()}
               className="border-2 border-dashed border-slate-700 hover:border-blue-500 bg-slate-950/60 hover:bg-slate-900/60 rounded-xl p-6 text-center cursor-pointer transition-all"
@@ -332,6 +304,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ isOpen, 
               </p>
             </div>
 
+            {/* Preview of selected backup file */}
             {previewData && (
               <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2">
@@ -365,7 +338,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ isOpen, 
                 <div className="p-3 rounded-lg bg-amber-950/30 border border-amber-800/40 text-[11px] text-amber-300 flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                   <span>
-                    Perhatian: Melakukan pemulihan akan memperbarui database cloud dan seluruh laptop dengan data berkas ini.
+                    Perhatian: Melakukan pemulihan akan menimpa data inventaris saat ini dengan data di dalam berkas cadangan ini.
                   </span>
                 </div>
               </div>
@@ -387,56 +360,6 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ isOpen, 
               >
                 <RefreshCw className={`w-4 h-4 ${isProcessing ? 'animate-spin' : ''}`} />
                 Mulai Pulihkan Data
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Clear Tab Content */}
-        {activeSubTab === 'clear' && (
-          <div className="space-y-4">
-            <div className="p-4 rounded-xl bg-red-950/40 border border-red-800/50 space-y-3">
-              <div className="flex items-center gap-2 text-red-300 font-bold text-sm">
-                <Trash2 className="w-5 h-5 text-red-400 shrink-0" />
-                Hapus Semua Data Aset & Mutasi Percobaan
-              </div>
-              <p className="text-xs text-red-200/90 leading-relaxed">
-                Tindakan ini akan <strong>mengosongkan seluruh data inventaris aset desa</strong> dan <strong>seluruh data permohonan mutasi/penghapusan</strong> di database cloud secara permanen.
-              </p>
-              <p className="text-xs text-slate-300">
-                Data profil 25 desa dan akun login Super Admin/Kecamatan/Desa akan <strong>tetap aman dipertahankan</strong>.
-              </p>
-            </div>
-
-            <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
-              <label className="block text-xs font-semibold text-slate-300">
-                Ketik <span className="text-red-400 font-mono font-bold">KOSONGKAN DATA</span> di bawah untuk konfirmasi:
-              </label>
-              <input
-                type="text"
-                value={confirmClearInput}
-                onChange={(e) => setConfirmClearInput(e.target.value)}
-                placeholder="KOSONGKAN DATA"
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs font-mono focus:outline-none focus:border-red-500"
-              />
-            </div>
-
-            <div className="pt-2 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-xs font-semibold text-slate-300 transition-colors"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={handleExecuteClear}
-                disabled={confirmClearInput !== 'KOSONGKAN DATA' || isProcessing}
-                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-red-900/40 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <Trash2 className="w-4 h-4" />
-                {isProcessing ? 'Sedang Mengosongkan...' : 'Hapus & Mulai Bersih dari Awal'}
               </button>
             </div>
           </div>

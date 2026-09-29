@@ -39,13 +39,14 @@ export const DashboardView: React.FC = () => {
 
   // 1. Data Total Aset Per Desa (Untuk Admin / Super Admin)
   const totalAsetPerDesaData: ColumnChartItem[] = useMemo(() => {
-    return desas.map((d) => {
+    return (desas || []).map((d) => {
       const desaAsets = asets.filter((a) => a.desaId === d.id && a.status !== 'terhapus');
       const valSum = desaAsets.reduce((sum, a) => sum + (a.nilaiPerolehan || 0), 0);
+      const rawName = d?.name || 'Desa';
       return {
         id: d.id,
-        label: d.name.replace(/^DESA\s+/i, ''),
-        subLabel: d.name,
+        label: rawName.replace(/^DESA\s+/i, ''),
+        subLabel: rawName,
         value: desaAsets.length,
         secondaryValue: valSum,
         badge: `${desaAsets.length} Unit`,
@@ -223,7 +224,7 @@ export const DashboardView: React.FC = () => {
           <div className="text-xl lg:text-2xl font-black text-slate-900 tracking-tight truncate">
             {effectiveDesaId === 'all'
               ? 'Kec. Sirombu'
-              : currentDesa?.name.replace('DESA ', '') || 'Kec. Sirombu'}
+              : (currentDesa?.name || '').replace('DESA ', '') || 'Kec. Sirombu'}
           </div>
         </div>
       </div>
@@ -301,7 +302,7 @@ export const DashboardView: React.FC = () => {
                 <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <span>Aset Per Kategori</span>
                   <span className="text-xs font-normal text-emerald-700 font-bold">
-                    • {currentDesa?.name}
+                    • {currentDesa?.name || 'Desa'}
                   </span>
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">

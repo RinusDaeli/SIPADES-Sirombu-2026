@@ -114,6 +114,11 @@ export const LoginView: React.FC = () => {
               <span>Masuk ke Sistem</span>
               <ArrowRight className="w-4 h-4" />
             </button>
+
+            <div className="pt-1 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span>Sesi login tersimpan otomatis hingga 24 jam</span>
+            </div>
           </form>
         </div>
 

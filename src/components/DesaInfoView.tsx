@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatRupiah, exportToPermendagriPDF } from '../utils/reportGenerator';
-import { INITIAL_KECAMATAN_PROFILE } from '../data/initialData';
+import { INITIAL_KECAMATAN_PROFILE, INITIAL_DESA_LIST } from '../data/initialData';
 import { NiasBaratLogo } from './NiasBaratLogo';
 import {
   Building2,
@@ -24,6 +24,8 @@ import {
   Info,
   Layers,
   Briefcase,
+  GitBranch,
+  RefreshCw,
 } from 'lucide-react';
 import { Desa, KecamatanProfile } from '../types';
 
@@ -38,6 +40,7 @@ export const DesaInfoView: React.FC = () => {
     setSelectedDesaFilter,
     kecamatanProfile,
     updateKecamatanProfile,
+    saveMasterToSourceCode,
   } = useApp();
 
   const isDesaUser = currentUser?.role === 'admin_desa';
@@ -52,18 +55,35 @@ export const DesaInfoView: React.FC = () => {
   // STATE: CAMAT & KANTOR KECAMATAN (ADMIN / SUPER ADMIN)
   // ===========================================================================
   const [camatFormData, setCamatFormData] = useState<KecamatanProfile>(kecamatanProfile);
+  const [isCamatDirty, setIsCamatDirty] = useState(false);
 
   useEffect(() => {
-    setCamatFormData(kecamatanProfile);
-  }, [kecamatanProfile]);
+    if (!isCamatDirty) {
+      setCamatFormData(kecamatanProfile);
+    }
+  }, [kecamatanProfile, isCamatDirty]);
 
   const handleCamatInputChange = (field: keyof KecamatanProfile, value: string) => {
+    setIsCamatDirty(true);
     setCamatFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSaveCamat = (e: React.FormEvent) => {
+  const [isSavingMaster, setIsSavingMaster] = useState(false);
+
+  const handleManualSyncMaster = async () => {
+    setIsSavingMaster(true);
+    const res = await saveMasterToSourceCode();
+    setIsSavingMaster(false);
+    setSaveSuccessMessage(res.message);
+    setTimeout(() => {
+      setSaveSuccessMessage(null);
+    }, 7000);
+  };
+
+  const handleSaveCamat = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateKecamatanProfile({
+    setIsSavingMaster(true);
+    const cleaned = {
       ...camatFormData,
       namaCamat: camatFormData.namaCamat.trim(),
       nipCamat: camatFormData.nipCamat.trim(),
@@ -74,15 +94,21 @@ export const DesaInfoView: React.FC = () => {
       kodePos: camatFormData.kodePos.trim(),
       emailKantor: camatFormData.emailKantor.trim(),
       teleponKantor: camatFormData.teleponKantor.trim(),
-    });
+    };
+    updateKecamatanProfile(cleaned);
+    setIsCamatDirty(false);
+
+    // Save permanently to server database and master source code (src/data/initialData.ts)
+    await saveMasterToSourceCode({ kecamatanProfile: cleaned });
+    setIsSavingMaster(false);
 
     setSaveSuccessMessage(
-      'Data Camat & Kantor Kecamatan Sirombu berhasil disimpan! Format kop surat, alamat, dan tanda tangan di seluruh cetakan PDF telah otomatis diperbarui.'
+      'Data Camat & Kantor Kecamatan Sirombu berhasil disimpan permanen ke Master Source Code (src/data/initialData.ts) dan Basis Data Server. Aman dari reset saat di-share ke GitHub!'
     );
 
     setTimeout(() => {
       setSaveSuccessMessage(null);
-    }, 6000);
+    }, 7000);
   };
 
   // ===========================================================================
@@ -96,6 +122,7 @@ export const DesaInfoView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isDesaDirty, setIsDesaDirty] = useState(false);
 
   const [previewKopType, setPreviewKopType] = useState<'admin' | 'desa'>(
     isDesaUser ? 'desa' : 'admin'
@@ -109,7 +136,7 @@ export const DesaInfoView: React.FC = () => {
     }
   }, [isDesaUser, currentUser?.desaId]);
 
-  const targetDesa = desas.find((d) => d.id === activeDesaId) || desas[20] || desas[0];
+  const targetDesa = desas.find((d) => d.id === activeDesaId) || desas[20] || desas[0] || INITIAL_DESA_LIST[20] || INITIAL_DESA_LIST[0];
 
   const [formData, setFormData] = useState({
     name: targetDesa.name,
@@ -124,27 +151,31 @@ export const DesaInfoView: React.FC = () => {
   });
 
   useEffect(() => {
+    const currentSelectedDesa = desas.find((d) => d.id === activeDesaId) || desas[20] || desas[0] || INITIAL_DESA_LIST[20] || INITIAL_DESA_LIST[0];
     setFormData({
-      name: targetDesa.name,
-      code: targetDesa.code,
-      kepalaDesa: targetDesa.kepalaDesa || '',
-      nipKepalaDesa: targetDesa.nipKepalaDesa || '',
-      alamatDesa: targetDesa.alamatDesa || '',
-      emailDesa: targetDesa.emailDesa || '',
-      nomorHp: targetDesa.nomorHp || targetDesa.kontak || '',
-      kodePos: targetDesa.kodePos || '22863',
-      kaurAset: targetDesa.kaurAset || '',
+      name: currentSelectedDesa.name,
+      code: currentSelectedDesa.code,
+      kepalaDesa: currentSelectedDesa.kepalaDesa || '',
+      nipKepalaDesa: currentSelectedDesa.nipKepalaDesa || '',
+      alamatDesa: currentSelectedDesa.alamatDesa || '',
+      emailDesa: currentSelectedDesa.emailDesa || '',
+      nomorHp: currentSelectedDesa.nomorHp || currentSelectedDesa.kontak || '',
+      kodePos: currentSelectedDesa.kodePos || '22863',
+      kaurAset: currentSelectedDesa.kaurAset || '',
     });
+    setIsDesaDirty(false);
     setSaveSuccessMessage(null);
-  }, [activeDesaId, targetDesa]);
+  }, [activeDesaId]);
 
   const handleInputChange = (field: string, value: string) => {
+    setIsDesaDirty(true);
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSaveDesa = (e: React.FormEvent) => {
+  const handleSaveDesa = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateDesa(targetDesa.id, {
+    setIsSavingMaster(true);
+    const cleanedDesa = {
       kepalaDesa: formData.kepalaDesa.trim(),
       nipKepalaDesa: formData.nipKepalaDesa.trim(),
       alamatDesa: formData.alamatDesa.trim(),
@@ -153,15 +184,22 @@ export const DesaInfoView: React.FC = () => {
       kontak: formData.nomorHp.trim(),
       kodePos: formData.kodePos.trim(),
       kaurAset: formData.kaurAset.trim(),
-    });
+    };
+    updateDesa(targetDesa.id, cleanedDesa);
+    setIsDesaDirty(false);
+
+    // Save permanently to server database and master source code (src/data/initialData.ts)
+    const updatedDesasList = desas.map((d) => (d.id === targetDesa.id ? { ...d, ...cleanedDesa } : d));
+    await saveMasterToSourceCode({ desas: updatedDesasList });
+    setIsSavingMaster(false);
 
     setSaveSuccessMessage(
-      `Profil ${targetDesa.name} berhasil disimpan! Data terbaru otomatis terpasang pada kop surat dan tanda tangan cetakan PDF.`
+      `Profil ${targetDesa.name} berhasil disimpan permanen ke Master Source Code (src/data/initialData.ts) dan Basis Data Server. Aman dari reset saat di-share ke GitHub!`
     );
 
     setTimeout(() => {
       setSaveSuccessMessage(null);
-    }, 5000);
+    }, 7000);
   };
 
   const desaAsets = asets.filter((a) => a.desaId === targetDesa.id && a.status !== 'terhapus');
@@ -240,7 +278,18 @@ export const DesaInfoView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleManualSyncMaster}
+            disabled={isSavingMaster}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-amber-300 border border-amber-500/40 font-semibold text-xs transition-all shadow cursor-pointer disabled:opacity-50"
+            title="Simpan seluruh data saat ini ke src/data/initialData.ts agar tidak ter-reset ke setelan awal saat di-share ke GitHub"
+          >
+            <GitBranch className={`w-3.5 h-3.5 ${isSavingMaster ? 'animate-spin text-amber-300' : 'text-amber-400'}`} />
+            <span>{isSavingMaster ? 'Menyimpan...' : 'Simpan Permanen Master (GitHub)'}</span>
+          </button>
+
           {activeSubTab === 'camat' ? (
             <button
               onClick={handleDownloadRekapPDF}
@@ -260,6 +309,16 @@ export const DesaInfoView: React.FC = () => {
               <span>{isGeneratingPDF ? 'Membuat PDF...' : 'Cetak PDF Sekarang'}</span>
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Info Banner GitHub Persistence */}
+      <div className="bg-sky-500/10 border border-sky-500/30 rounded-xl px-4 py-2.5 flex items-center justify-between gap-3 text-sky-200 text-xs">
+        <div className="flex items-center gap-2.5">
+          <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0" />
+          <span>
+            <strong>Proteksi GitHub Aktif:</strong> Perubahan data Camat, Desa, dan Aset otomatis ditulis permanen ke Master Source Code (<code className="font-mono text-sky-300 bg-sky-950/60 px-1 py-0.5 rounded">src/data/initialData.ts</code>) dan server. Data tidak akan kembali ke setelan awal saat di-share ke GitHub!
+          </span>
         </div>
       </div>
 
@@ -562,13 +621,13 @@ export const DesaInfoView: React.FC = () => {
                     </div>
 
                     <p className="text-[11px] font-bold text-white underline tracking-wide uppercase">
-                      {camatFormData.namaCamat || 'MESRAWAN HAREFA, S.Pd., M.M.'}
+                      {camatFormData.namaCamat || '(Nama Camat Belum Diisi)'}
                     </p>
                     <p className="text-[10px] text-slate-300 mt-0.5">
-                      {camatFormData.pangkatCamat || 'Pembina, IV/a'}
+                      {camatFormData.pangkatCamat || '(Pangkat / Golongan)'}
                     </p>
                     <p className="text-[10px] text-slate-400 font-mono">
-                      NIP. {camatFormData.nipCamat || '19780512 200501 1 008'}
+                      NIP. {camatFormData.nipCamat || '(NIP Camat)'}
                     </p>
                   </div>
                 </div>
@@ -928,10 +987,10 @@ export const DesaInfoView: React.FC = () => {
                       ) : (
                         <div className="text-center min-w-[210px] bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
                           <p className="text-slate-300 text-[10px]">
-                            {targetDesa.name.replace(/^DESA\s+/i, '')}, 31 Des {selectedYear}
+                            {(targetDesa?.name || '').replace(/^DESA\s+/i, '')}, 31 Des {selectedYear}
                           </p>
                           <p className="font-bold text-white uppercase text-[10px] mt-0.5">
-                            Kepala Desa {targetDesa.name.replace(/^DESA\s+/i, '')}
+                            Kepala Desa {(targetDesa?.name || '').replace(/^DESA\s+/i, '')}
                           </p>
                           <div className="h-10 flex items-center justify-center text-[9px] text-slate-500 italic">
                             (Tanda Tangan & Cap Desa)

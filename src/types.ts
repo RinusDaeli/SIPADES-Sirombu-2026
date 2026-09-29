@@ -60,6 +60,7 @@ export interface Aset {
   klasifikasi: KlasAset;
   namaAset: string;
   kodeAset: string;
+  nomorRegister?: string; // 4-digit sequence register according to Permendagri No. 20/2018 (e.g. 0001)
   bukti: BuktiKepemilikan;
   tahunPerolehan: number;
   nilaiPerolehan: number;

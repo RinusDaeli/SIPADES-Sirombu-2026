@@ -178,7 +178,7 @@ export const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({
 
       const prefix = isAllDesaMode
         ? 'Laporan_Rekapitulasi_Aset_Semua_Desa_Sirombu'
-        : `Laporan_Aset_${desa?.name.replace(/\s+/g, '_') || 'Desa'}`;
+        : `Laporan_Aset_${(desa?.name || 'Desa').replace(/\s+/g, '_')}`;
 
       doc.save(`${prefix}_Permendagri_20_2018_${year}.pdf`);
     } catch (err) {
@@ -314,7 +314,7 @@ export const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({
           </div>
 
           <div className="text-[11px] text-slate-300">
-            Tempat & Tanggal Tertera: <strong className="text-amber-400">{isPrintedByAdmin ? 'Tetesua' : desa?.name.replace(/^DESA\s+/i, '')}, {formattedTanggalCetak}</strong>
+            Tempat & Tanggal Tertera: <strong className="text-amber-400">{isPrintedByAdmin ? 'Tetesua' : (desa?.name || '').replace(/^DESA\s+/i, '')}, {formattedTanggalCetak}</strong>
           </div>
         </div>
 
@@ -593,10 +593,10 @@ export const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({
                     // AKUN DESA: DITANDATANGANI KEPALA DESA
                     <>
                       <p className="text-[11px] text-black">
-                        {desa?.name.replace(/^DESA\s+/i, '')}, {formattedTanggalCetak}
+                        {(desa?.name || '').replace(/^DESA\s+/i, '')}, {formattedTanggalCetak}
                       </p>
                       <p className="text-[11px] font-bold text-black uppercase mt-0.5">
-                        Kepala Desa {desa?.name.replace(/^DESA\s+/i, '')}
+                        Kepala Desa {(desa?.name || '').replace(/^DESA\s+/i, '')}
                       </p>
 
                       <div className="h-16 flex items-center justify-center">
