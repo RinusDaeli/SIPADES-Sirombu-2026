@@ -1,12 +1,12 @@
 /**
- * Utility to compress and resize image files to data URLs
- * to ensure smooth performance and safe localStorage persistence.
+ * Utility to compress and resize image files to lightweight JPEG data URLs
+ * to ensure fast multi-device synchronization and safe local storage.
  */
 export async function fileToCompressedDataUrl(
   file: File,
-  maxWidth = 900,
-  maxHeight = 900,
-  quality = 0.8
+  maxWidth = 640,
+  maxHeight = 640,
+  quality = 0.68
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -19,14 +19,9 @@ export async function fileToCompressedDataUrl(
         let height = img.height;
 
         if (width > maxWidth || height > maxHeight) {
-          if (width / height > maxWidth / maxHeight) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          } else {
-            width = Math.round((width * maxHeight) / height);
-            maxHeight = maxHeight;
-            height = Math.round((height * maxWidth) / width);
-          }
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
         }
 
         const canvas = document.createElement('canvas');

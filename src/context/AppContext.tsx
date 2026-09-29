@@ -19,6 +19,11 @@ import {
 } from '../data/initialData';
 import { formatTanggalIndonesia } from '../utils/reportGenerator';
 import {
+  safeLocalStorageSetItem,
+  saveAsetsToIndexedDB,
+  loadAsetsFromIndexedDB,
+} from '../utils/safeStorage';
+import {
   subscribeAsets,
   subscribeVerifikasi,
   subscribePengesahan,
@@ -325,6 +330,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearInterval(interval);
   }, []);
 
+  // Central Storage Helpers
+  const persistAsetsSafely = useCallback((list: Aset[]) => {
+    safeLocalStorageSetItem(STORAGE_KEYS.ASETS, JSON.stringify(list));
+    saveAsetsToIndexedDB(list).catch(() => {});
+  }, []);
+
   // Central Server Synchronization
   const refreshServerData = useCallback(async () => {
     try {
@@ -343,42 +354,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (Array.isArray(serverData.asets)) {
             setAsets((prev) => {
               if (JSON.stringify(prev) === JSON.stringify(serverData.asets)) return prev;
-              localStorage.setItem(STORAGE_KEYS.ASETS, JSON.stringify(serverData.asets));
+              persistAsetsSafely(serverData.asets);
               return serverData.asets;
             });
           }
           if (Array.isArray(serverData.verifikasiList)) {
             setVerifikasiList((prev) => {
               if (JSON.stringify(prev) === JSON.stringify(serverData.verifikasiList)) return prev;
-              localStorage.setItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(serverData.verifikasiList));
+              safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(serverData.verifikasiList));
               return serverData.verifikasiList;
             });
           }
           if (Array.isArray(serverData.users) && serverData.users.length > 0) {
             setUsers((prev) => {
               if (JSON.stringify(prev) === JSON.stringify(serverData.users)) return prev;
-              localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(serverData.users));
+              safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(serverData.users));
               return serverData.users;
             });
           }
           if (Array.isArray(serverData.desas) && serverData.desas.length > 0) {
             setDesas((prev) => {
               if (JSON.stringify(prev) === JSON.stringify(serverData.desas)) return prev;
-              localStorage.setItem(STORAGE_KEYS.DESAS, JSON.stringify(serverData.desas));
+              safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(serverData.desas));
               return serverData.desas;
             });
           }
           if (serverData.kecamatanProfile && typeof serverData.kecamatanProfile === 'object') {
             setKecamatanProfile((prev) => {
               if (JSON.stringify(prev) === JSON.stringify(serverData.kecamatanProfile)) return prev;
-              localStorage.setItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(serverData.kecamatanProfile));
+              safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(serverData.kecamatanProfile));
               return serverData.kecamatanProfile;
             });
           }
           if (typeof serverData.selectedYear === 'number') {
             setSelectedYear((prev) => {
               if (prev === serverData.selectedYear) return prev;
-              localStorage.setItem(STORAGE_KEYS.YEAR, serverData.selectedYear.toString());
+              safeLocalStorageSetItem(STORAGE_KEYS.YEAR, serverData.selectedYear.toString());
               return serverData.selectedYear;
             });
           }
@@ -390,7 +401,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Offline fallback
       setIsServerConnected(false);
     }
-  }, []);
+  }, [persistAsetsSafely]);
 
   // Cloud Firestore Real-Time Multi-Device Synchronization
   useEffect(() => {
@@ -400,7 +411,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (cloudAsets) {
         setAsets((prev) => {
           if (JSON.stringify(prev) === JSON.stringify(cloudAsets)) return prev;
-          localStorage.setItem(STORAGE_KEYS.ASETS, JSON.stringify(cloudAsets));
+          persistAsetsSafely(cloudAsets);
           return cloudAsets;
         });
         setIsServerConnected(true);
@@ -412,7 +423,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (cloudVerif) {
         setVerifikasiList((prev) => {
           if (JSON.stringify(prev) === JSON.stringify(cloudVerif)) return prev;
-          localStorage.setItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(cloudVerif));
+          safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(cloudVerif));
           return cloudVerif;
         });
       }
@@ -422,7 +433,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (cloudPengesahan) {
         setPengesahanList((prev) => {
           if (JSON.stringify(prev) === JSON.stringify(cloudPengesahan)) return prev;
-          localStorage.setItem(STORAGE_KEYS.PENGESAHAN, JSON.stringify(cloudPengesahan));
+          safeLocalStorageSetItem(STORAGE_KEYS.PENGESAHAN, JSON.stringify(cloudPengesahan));
           return cloudPengesahan;
         });
       }
@@ -432,7 +443,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (cloudDesas && cloudDesas.length > 0) {
         setDesas((prev) => {
           if (JSON.stringify(prev) === JSON.stringify(cloudDesas)) return prev;
-          localStorage.setItem(STORAGE_KEYS.DESAS, JSON.stringify(cloudDesas));
+          safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(cloudDesas));
           return cloudDesas;
         });
       }
@@ -442,7 +453,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (cloudProfile && cloudProfile.namaKecamatan) {
         setKecamatanProfile((prev) => {
           if (JSON.stringify(prev) === JSON.stringify(cloudProfile)) return prev;
-          localStorage.setItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(cloudProfile));
+          safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(cloudProfile));
           return cloudProfile;
         });
       }
@@ -452,7 +463,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (cloudUsers && cloudUsers.length > 0) {
         setUsers((prev) => {
           if (JSON.stringify(prev) === JSON.stringify(cloudUsers)) return prev;
-          localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(cloudUsers));
+          safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(cloudUsers));
           return cloudUsers;
         });
       }
@@ -483,23 +494,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const serverData = payload.data;
               if (Array.isArray(serverData.asets)) {
                 setAsets(serverData.asets);
-                localStorage.setItem(STORAGE_KEYS.ASETS, JSON.stringify(serverData.asets));
+                persistAsetsSafely(serverData.asets);
               }
               if (Array.isArray(serverData.verifikasiList)) {
                 setVerifikasiList(serverData.verifikasiList);
-                localStorage.setItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(serverData.verifikasiList));
+                safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(serverData.verifikasiList));
               }
               if (Array.isArray(serverData.users) && serverData.users.length > 0) {
                 setUsers(serverData.users);
-                localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(serverData.users));
+                safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(serverData.users));
               }
               if (Array.isArray(serverData.desas) && serverData.desas.length > 0) {
                 setDesas(serverData.desas);
-                localStorage.setItem(STORAGE_KEYS.DESAS, JSON.stringify(serverData.desas));
+                safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(serverData.desas));
               }
               if (serverData.kecamatanProfile) {
                 setKecamatanProfile(serverData.kecamatanProfile);
-                localStorage.setItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(serverData.kecamatanProfile));
+                safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(serverData.kecamatanProfile));
               }
               setIsServerConnected(true);
               setLastSyncTime(new Date());
@@ -529,6 +540,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       clearTimeout(reconnectTimeout);
       if (eventSource) eventSource.close();
     };
+  }, [persistAsetsSafely]);
+
+  // Hydrate full photo assets from IndexedDB if offline or on fresh page load
+  useEffect(() => {
+    loadAsetsFromIndexedDB().then((idbAsets) => {
+      if (Array.isArray(idbAsets) && idbAsets.length > 0) {
+        setAsets((current) => {
+          if (current.length === 0) return idbAsets;
+          return current.map((c) => {
+            const matched = idbAsets.find((item) => item && item.id === c.id);
+            if (matched && (!c.fotoAset || c.fotoAset.length === 0) && matched.fotoAset && matched.fotoAset.length > 0) {
+              return { ...c, fotoAset: matched.fotoAset, fotoBast: matched.fotoBast || c.fotoBast };
+            }
+            return c;
+          });
+        });
+      }
+    }).catch(() => {});
   }, []);
 
   // Initial load and fast periodic polling (every 4 seconds) to guarantee sync across all devices
@@ -543,33 +572,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [refreshServerData]);
 
-  // Local storage persistence fallbacks
+  // Local storage persistence fallbacks with safe storage protection against QuotaExceededError
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+    safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(users));
   }, [users]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.ASETS, JSON.stringify(asets));
-  }, [asets]);
+    persistAsetsSafely(asets);
+  }, [asets, persistAsetsSafely]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.DESAS, JSON.stringify(desas));
+    safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(desas));
   }, [desas]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(verifikasiList));
+    safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(verifikasiList));
   }, [verifikasiList]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.PENGESAHAN, JSON.stringify(pengesahanList));
+    safeLocalStorageSetItem(STORAGE_KEYS.PENGESAHAN, JSON.stringify(pengesahanList));
   }, [pengesahanList]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(kecamatanProfile));
+    safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(kecamatanProfile));
   }, [kecamatanProfile]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.YEAR, selectedYear.toString());
+    safeLocalStorageSetItem(STORAGE_KEYS.YEAR, selectedYear.toString());
   }, [selectedYear]);
 
   // Auth Handlers
@@ -585,7 +614,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loginTime: now,
         expiresAt: now + SESSION_DURATION_MS, // 24 hours
       };
-      localStorage.setItem(STORAGE_KEYS.AUTH_SESSION, JSON.stringify(session));
+      safeLocalStorageSetItem(STORAGE_KEYS.AUTH_SESSION, JSON.stringify(session));
       setCurrentUser(user);
       setActiveTab('dashboard');
       return { success: true };
@@ -606,7 +635,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       loginTime: now,
       expiresAt: now + SESSION_DURATION_MS,
     };
-    localStorage.setItem(STORAGE_KEYS.AUTH_SESSION, JSON.stringify(session));
+    safeLocalStorageSetItem(STORAGE_KEYS.AUTH_SESSION, JSON.stringify(session));
     setCurrentUser(user);
   };
 
@@ -658,7 +687,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         try {
           const sess: AuthSession = JSON.parse(saved);
           sess.user = updatedSelf;
-          localStorage.setItem(STORAGE_KEYS.AUTH_SESSION, JSON.stringify(sess));
+          safeLocalStorageSetItem(STORAGE_KEYS.AUTH_SESSION, JSON.stringify(sess));
         } catch {
           // ignore
         }
@@ -1023,7 +1052,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let finalDesas: Desa[] = [];
     setDesas((prev) => {
       finalDesas = prev.map((d) => (d.id === id ? { ...d, ...data } : d));
-      localStorage.setItem(STORAGE_KEYS.DESAS, JSON.stringify(finalDesas));
+      safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(finalDesas));
       return finalDesas;
     });
 
@@ -1147,27 +1176,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (Array.isArray(payload.desas) && payload.desas.length > 0) {
         setDesas(payload.desas);
-        localStorage.setItem(STORAGE_KEYS.DESAS, JSON.stringify(payload.desas));
+        safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(payload.desas));
       }
       if (Array.isArray(payload.users) && payload.users.length > 0) {
         setUsers(payload.users);
-        localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(payload.users));
+        safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(payload.users));
       }
       if (Array.isArray(payload.asets)) {
         setAsets(payload.asets);
-        localStorage.setItem(STORAGE_KEYS.ASETS, JSON.stringify(payload.asets));
+        persistAsetsSafely(payload.asets);
       }
       if (Array.isArray(payload.verifikasiList)) {
         setVerifikasiList(payload.verifikasiList);
-        localStorage.setItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(payload.verifikasiList));
+        safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(payload.verifikasiList));
       }
       if (Array.isArray(payload.pengesahanList)) {
         setPengesahanList(payload.pengesahanList);
-        localStorage.setItem(STORAGE_KEYS.PENGESAHAN, JSON.stringify(payload.pengesahanList));
+        safeLocalStorageSetItem(STORAGE_KEYS.PENGESAHAN, JSON.stringify(payload.pengesahanList));
       }
       if (payload.kecamatanProfile) {
         setKecamatanProfile(payload.kecamatanProfile);
-        localStorage.setItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(payload.kecamatanProfile));
+        safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(payload.kecamatanProfile));
       }
       if (payload.selectedYear) {
         setSelectedYear(payload.selectedYear);
@@ -1206,7 +1235,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let updated: KecamatanProfile = kecamatanProfile;
     setKecamatanProfile((prev) => {
       updated = { ...prev, ...data };
-      localStorage.setItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(updated));
+      safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(updated));
       return updated;
     });
     saveKecamatanProfileToCloud(updated).catch((e) => console.warn('[Cloud] Kecamatan save failed:', e));

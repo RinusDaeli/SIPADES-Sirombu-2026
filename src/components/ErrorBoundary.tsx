@@ -25,11 +25,33 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('[SIPADES ErrorBoundary] Caught error:', error, errorInfo);
+    // If storage quota error, immediately relieve localStorage so reload recovers cleanly
+    if (
+      error &&
+      (error.name === 'QuotaExceededError' ||
+        error.message?.includes('QuotaExceededError') ||
+        error.message?.includes('exceeded the quota'))
+    ) {
+      try {
+        localStorage.removeItem('sipad_asets_v2');
+        console.warn('[ErrorBoundary] Relieved localStorage quota by clearing sipad_asets_v2.');
+      } catch {}
+    }
     this.setState({ error, errorInfo });
   }
 
   private handleReload = () => {
+    try {
+      localStorage.removeItem('sipad_asets_v2');
+    } catch {}
     window.location.reload();
+  };
+
+  private handleQuickRecover = () => {
+    try {
+      localStorage.removeItem('sipad_asets_v2');
+    } catch {}
+    this.setState({ hasError: false, error: null, errorInfo: null });
   };
 
   private handleResetCache = () => {
@@ -92,6 +114,15 @@ export class ErrorBoundary extends Component<Props, State> {
               )}
 
               <div className="space-y-2 pt-2">
+                <button
+                  type="button"
+                  onClick={this.handleQuickRecover}
+                  className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-colors cursor-pointer"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Lanjutkan Entri Data (Bersihkan Cache Memori)</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={this.handleReload}
