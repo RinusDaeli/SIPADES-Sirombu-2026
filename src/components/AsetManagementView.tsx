@@ -5,6 +5,7 @@ import {
   KLASIFIKASI_LIST,
   formatRupiah,
   formatNumber,
+  formatTanggalIndonesia,
   generateAutoKodeAset,
   generateSequentialKodeAset,
 } from '../utils/reportGenerator';
@@ -12,6 +13,7 @@ import { BarcodeModal } from './BarcodeModal';
 import { AsetDetailModal } from './AsetDetailModal';
 import { SyncDevicesModal } from './SyncDevicesModal';
 import { BackupRestoreModal } from './BackupRestoreModal';
+import { IndonesianDatePicker } from './IndonesianDatePicker';
 import { syncManager } from '../utils/cloudSyncService';
 import { fileToCompressedDataUrl } from '../utils/imageCompressor';
 import {
@@ -106,8 +108,8 @@ export const AsetManagementView: React.FC = () => {
     kodeAset: '',
     buktiJenis: 'Kwitansi / BAST',
     buktiNomor: '',
-    buktiTanggal: '',
-    tahunPerolehan: selectedYear > 0 ? selectedYear : new Date().getFullYear(),
+    buktiTanggal: formatTanggalIndonesia(new Date()),
+    tahunPerolehan: new Date().getFullYear(),
     nilaiPerolehan: 0,
     kondisi: 'Baik' as KondisiAset,
     sumberDana: 'DDS' as SumberDana,
@@ -362,8 +364,8 @@ export const AsetManagementView: React.FC = () => {
       kodeAset: autoKode,
       buktiJenis: 'Kwitansi / BAST',
       buktiNomor: '',
-      buktiTanggal: new Date().toLocaleDateString('id-ID'),
-      tahunPerolehan: selectedYear,
+      buktiTanggal: formatTanggalIndonesia(new Date()),
+      tahunPerolehan: new Date().getFullYear(),
       nilaiPerolehan: 0,
       kondisi: 'Baik',
       sumberDana: 'DDS',
@@ -631,35 +633,37 @@ export const AsetManagementView: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-between md:justify-end">
-          {/* Panel Status Sinkronisasi Real-Time Multi-Perangkat (Dipindahkan ke bilah atas DATA ASET) */}
-          <button
-            type="button"
-            onClick={() => setShowSyncModal(true)}
-            className="p-2 sm:px-3 sm:py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-emerald-500/40 hover:border-emerald-400 flex items-center justify-between gap-3 shadow-md transition-all cursor-pointer text-left group"
-            title="Klik untuk melihat status sinkronisasi antar perangkat & kode transfer"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${peerCount > 0 || isServerConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-              <div className="flex flex-col min-w-0">
-                <span className="font-bold text-white text-[11px] leading-tight truncate group-hover:text-emerald-300 transition-colors">
-                  {peerCount > 0 ? `Terhubung (${peerCount} Online)` : isServerConnected ? 'Terhubung Antar Laptop' : 'Mode Offline / Terputus'}
-                </span>
-                <span className="text-[10px] text-emerald-400/90 truncate font-mono">
-                  P2P & Cloud Relay Aktif
-                </span>
-              </div>
-            </div>
-            <div
-              onClick={(e) => {
-                e.stopPropagation();
-                refreshServerData();
-              }}
-              className="p-1 rounded-lg bg-emerald-950/80 hover:bg-emerald-800 text-emerald-300 hover:text-white transition-colors cursor-pointer shrink-0"
-              title="Sinkronkan data sekarang"
+          {/* Panel Status Sinkronisasi Real-Time Multi-Perangkat (Hanya untuk Admin / Super Admin) */}
+          {isAdminOrSuper && (
+            <button
+              type="button"
+              onClick={() => setShowSyncModal(true)}
+              className="p-2 sm:px-3 sm:py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-emerald-500/40 hover:border-emerald-400 flex items-center justify-between gap-3 shadow-md transition-all cursor-pointer text-left group"
+              title="Klik untuk melihat status sinkronisasi antar perangkat & kode transfer"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </div>
-          </button>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${peerCount > 0 || isServerConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                <div className="flex flex-col min-w-0">
+                  <span className="font-bold text-white text-[11px] leading-tight truncate group-hover:text-emerald-300 transition-colors">
+                    {peerCount > 0 ? `Terhubung (${peerCount} Online)` : isServerConnected ? 'Terhubung Antar Laptop' : 'Mode Offline / Terputus'}
+                  </span>
+                  <span className="text-[10px] text-emerald-400/90 truncate font-mono">
+                    P2P & Cloud Relay Aktif
+                  </span>
+                </div>
+              </div>
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  refreshServerData();
+                }}
+                className="p-1 rounded-lg bg-emerald-950/80 hover:bg-emerald-800 text-emerald-300 hover:text-white transition-colors cursor-pointer shrink-0"
+                title="Sinkronkan data sekarang"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </div>
+            </button>
+          )}
 
           {/* Panel Backup & Restore Data (Dipindahkan ke bilah atas DATA ASET) */}
           {isAdminOrSuper && (
@@ -1674,13 +1678,14 @@ export const AsetManagementView: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-400 mb-1">Tanggal Bukti</label>
-                    <input
-                      type="text"
-                      placeholder="Contoh: 12 Juli 2021"
+                    <label className="block text-slate-400 mb-1 flex items-center justify-between">
+                      <span>Tanggal Bukti</span>
+                      <span className="text-[10px] text-amber-400/90 font-medium">MIN • SEN • SEL • RAB • KAM • JUM • SAB</span>
+                    </label>
+                    <IndonesianDatePicker
                       value={formData.buktiTanggal}
-                      onChange={(e) => setFormData({ ...formData, buktiTanggal: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
+                      onChange={(val) => setFormData({ ...formData, buktiTanggal: val })}
+                      placeholder="Pilih tanggal bukti..."
                     />
                   </div>
                 </div>
@@ -1763,18 +1768,36 @@ export const AsetManagementView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-slate-300 mb-1">
-                    Tahun Perolehan *
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-semibold text-slate-300 text-xs">
+                      Tahun Perolehan *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, tahunPerolehan: new Date().getFullYear() })}
+                      className="text-[10px] text-amber-400 hover:text-amber-300 font-semibold hover:underline cursor-pointer flex items-center gap-1"
+                      title="Set ke tahun sekarang"
+                    >
+                      <RefreshCw className="w-2.5 h-2.5" />
+                      <span>Tahun Ini ({new Date().getFullYear()})</span>
+                    </button>
+                  </div>
                   <input
                     type="number"
                     required
                     min="1970"
-                    max="2030"
+                    max="2035"
                     value={formData.tahunPerolehan}
-                    onChange={(e) => setFormData({ ...formData, tahunPerolehan: parseInt(e.target.value, 10) })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold"
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setFormData({ ...formData, tahunPerolehan: isNaN(val) ? ('' as any) : val });
+                    }}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold focus:outline-none focus:border-amber-400"
+                    placeholder={`Contoh: ${new Date().getFullYear()}`}
                   />
+                  <span className="text-[9px] text-slate-400 block mt-1">
+                    Default tahun sekarang (dapat diedit)
+                  </span>
                 </div>
 
                 <div>
@@ -2149,12 +2172,14 @@ export const AsetManagementView: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-400 mb-1">Tanggal Bukti</label>
-                    <input
-                      type="text"
+                    <label className="block text-slate-400 mb-1 flex items-center justify-between">
+                      <span>Tanggal Bukti</span>
+                      <span className="text-[10px] text-amber-400/90 font-medium">MIN • SEN • SEL • RAB • KAM • JUM • SAB</span>
+                    </label>
+                    <IndonesianDatePicker
                       value={formData.buktiTanggal}
-                      onChange={(e) => setFormData({ ...formData, buktiTanggal: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
+                      onChange={(val) => setFormData({ ...formData, buktiTanggal: val })}
+                      placeholder="Pilih tanggal bukti..."
                     />
                   </div>
                 </div>
@@ -2188,14 +2213,29 @@ export const AsetManagementView: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-300 mb-1">
-                    Tahun Perolehan
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-semibold text-slate-300 text-xs">
+                      Tahun Perolehan
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, tahunPerolehan: new Date().getFullYear() })}
+                      className="text-[10px] text-amber-400 hover:text-amber-300 font-semibold hover:underline cursor-pointer"
+                      title="Set ke tahun sekarang"
+                    >
+                      Tahun Ini ({new Date().getFullYear()})
+                    </button>
+                  </div>
                   <input
                     type="number"
+                    min="1970"
+                    max="2035"
                     value={formData.tahunPerolehan}
-                    onChange={(e) => setFormData({ ...formData, tahunPerolehan: parseInt(e.target.value, 10) })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold"
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setFormData({ ...formData, tahunPerolehan: isNaN(val) ? ('' as any) : val });
+                    }}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold focus:outline-none focus:border-amber-400"
                   />
                 </div>
                 <div>

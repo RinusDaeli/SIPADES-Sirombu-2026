@@ -136,8 +136,8 @@ interface AppContextType {
   deleteVerifikasi: (verifikasiId: string) => { success: boolean; message?: string };
 
   // Backup & Restore
-  getBackupData: () => any;
-  restoreBackupData: (backupJson: any) => {
+  getBackupData: (desaId?: string) => any;
+  restoreBackupData: (backupJson: any, targetDesaId?: string) => {
     success: boolean;
     message?: string;
     stats?: { asets: number; verifikasi: number; desas: number; users: number };
@@ -1489,25 +1489,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true, message: 'Data permohonan mutasi berhasil dihapus!' };
   };
 
-  const getBackupData = () => {
+  const getBackupData = (desaId?: string) => {
+    const isPerDesa = Boolean(desaId && desaId !== 'all');
+    const targetDesa = isPerDesa ? desas.find((d) => d.id === desaId) : null;
+
+    const filteredAsets = isPerDesa ? asets.filter((a) => a.desaId === desaId) : asets;
+    const filteredVerifikasi = isPerDesa ? verifikasiList.filter((v) => v.desaId === desaId) : verifikasiList;
+    const filteredPengesahan = isPerDesa ? pengesahanList.filter((p) => p.desaId === desaId) : pengesahanList;
+    const filteredUsers = isPerDesa ? users.filter((u) => u.desaId === desaId) : users;
+    const filteredDesas = isPerDesa && targetDesa ? [targetDesa] : desas;
+
     return {
       appName: 'SIPADES SIROMBU - Nias Barat',
       version: '2.0.0',
       exportDate: new Date().toISOString(),
       timestamp: Date.now(),
+      scope: isPerDesa ? 'desa' : 'all',
+      desaId: isPerDesa ? desaId : 'all',
+      desaName: isPerDesa ? (targetDesa?.name || 'Desa') : 'Semua Desa se-Kecamatan Sirombu',
       data: {
-        desas,
-        users,
-        asets,
-        verifikasiList,
-        pengesahanList,
+        desas: filteredDesas,
+        users: filteredUsers,
+        asets: filteredAsets,
+        verifikasiList: filteredVerifikasi,
+        pengesahanList: filteredPengesahan,
         kecamatanProfile,
         selectedYear,
       },
     };
   };
 
-  const restoreBackupData = (backupJson: any) => {
+  const restoreBackupData = (backupJson: any, targetDesaId?: string) => {
     try {
       if (!backupJson || typeof backupJson !== 'object') {
         return { success: false, message: 'Format berkas JSON cadangan tidak valid!' };
@@ -1519,6 +1531,118 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return { success: false, message: 'Berkas tidak memuat struktur basis data SIPADES yang sesuai!' };
       }
 
+      // Check if this is a per-desa restore
+      // Target desa is explicitly chosen OR if the backup itself is marked with scope === 'desa'
+      const effectiveDesaId = targetDesaId && targetDesaId !== 'all' 
+        ? targetDesaId 
+        : backupJson.scope === 'desa' && backupJson.desaId && backupJson.desaId !== 'all'
+        ? backupJson.desaId
+        : undefined;
+
+      if (effectiveDesaId) {
+        // PER-DESA RESTORE: Restore only for this village, keep other villages intact!
+        const targetDesa = desas.find((d) => d.id === effectiveDesaId) || payload.desas?.[0];
+        const targetDesaName = targetDesa?.name || 'Desa Terpilih';
+
+        // 1. Assets: Replace/update only this village's assets, preserve other villages
+        const incomingDesaAsets = (Array.isArray(payload.asets) ? payload.asets : [])
+          .filter((a: Aset) => {
+            if (backupJson.scope === 'desa') return true;
+            if (Array.isArray(payload.desas) && payload.desas.length === 1) return true;
+            if (a.desaId === effectiveDesaId) return true;
+            if (
+              a.desaName &&
+              targetDesaName &&
+              a.desaName.toLowerCase().replace(/^desa\s+/i, '').trim() ===
+                targetDesaName.toLowerCase().replace(/^desa\s+/i, '').trim()
+            ) {
+              return true;
+            }
+            return false;
+          })
+          .map((a: Aset) => ({ ...a, desaId: effectiveDesaId, desaName: targetDesaName }));
+
+        const otherAsets = asets.filter((a) => a.desaId !== effectiveDesaId);
+        const updatedAsets = [...otherAsets, ...incomingDesaAsets];
+        setAsets(updatedAsets);
+        persistAsetsSafely(updatedAsets);
+        saveAsetsToIndexedDB(updatedAsets);
+        incomingDesaAsets.forEach((a: Aset) => saveAsetToCloud(a).catch(() => {}));
+
+        // 2. Verifikasi: Replace only this village's verifikasi
+        const incomingVerifikasi = (Array.isArray(payload.verifikasiList) ? payload.verifikasiList : [])
+          .filter((v: any) => {
+            if (backupJson.scope === 'desa') return true;
+            if (Array.isArray(payload.desas) && payload.desas.length === 1) return true;
+            if (v.desaId === effectiveDesaId) return true;
+            return false;
+          })
+          .map((v: any) => ({ ...v, desaId: effectiveDesaId, namaDesa: targetDesaName }));
+        const otherVerifikasi = verifikasiList.filter((v) => v.desaId !== effectiveDesaId);
+        const updatedVerifikasi = [...otherVerifikasi, ...incomingVerifikasi];
+        setVerifikasiList(updatedVerifikasi);
+        safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(updatedVerifikasi));
+
+        // 3. Pengesahan:
+        const incomingPengesahan = (Array.isArray(payload.pengesahanList) ? payload.pengesahanList : [])
+          .filter((p: any) => !targetDesaId || targetDesaId === 'all' || p.desaId === targetDesaId || backupJson.scope === 'desa')
+          .map((p: any) => ({ ...p, desaId: effectiveDesaId, namaDesa: targetDesaName }));
+        const otherPengesahan = pengesahanList.filter((p) => p.desaId !== effectiveDesaId);
+        const updatedPengesahan = [...otherPengesahan, ...incomingPengesahan];
+        setPengesahanList(updatedPengesahan);
+        safeLocalStorageSetItem(STORAGE_KEYS.PENGESAHAN, JSON.stringify(updatedPengesahan));
+
+        // 4. Desa profile if provided in backup:
+        let updatedDesas = desas;
+        if (Array.isArray(payload.desas) && payload.desas.length > 0) {
+          const incomingDesaProfile = payload.desas.find((d: Desa) => d.id === effectiveDesaId) || payload.desas[0];
+          if (incomingDesaProfile) {
+            updatedDesas = desas.map((d) => (d.id === effectiveDesaId ? { ...d, ...incomingDesaProfile, id: effectiveDesaId } : d));
+            setDesas(updatedDesas);
+            safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(updatedDesas));
+            saveDesaToCloud(incomingDesaProfile).catch(() => {});
+          }
+        }
+
+        // 5. Users if provided:
+        let updatedUsers = users;
+        if (Array.isArray(payload.users) && payload.users.length > 0) {
+          const incomingUsers = payload.users.filter((u: User) => !targetDesaId || targetDesaId === 'all' || u.desaId === targetDesaId || backupJson.scope === 'desa').map((u: User) => ({ ...u, desaId: effectiveDesaId }));
+          if (incomingUsers.length > 0) {
+            const otherUsers = users.filter((u) => u.desaId !== effectiveDesaId);
+            updatedUsers = [...otherUsers, ...incomingUsers];
+            setUsers(updatedUsers);
+            safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(updatedUsers));
+          }
+        }
+
+        // Sync to central server
+        fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            desas: updatedDesas,
+            users: updatedUsers,
+            asets: updatedAsets,
+            verifikasiList: updatedVerifikasi,
+            kecamatanProfile,
+            selectedYear,
+          }),
+        }).catch((e) => console.warn('[Sync] Restore sync failed:', e));
+
+        return {
+          success: true,
+          message: `Data untuk ${targetDesaName} berhasil dipulihkan! (${incomingDesaAsets.length} aset). Data 24 desa lainnya tetap aman dan tidak terhapus.`,
+          stats: {
+            asets: incomingDesaAsets.length,
+            verifikasi: incomingVerifikasi.length,
+            desas: 1,
+            users: (Array.isArray(payload.users) ? payload.users : []).length,
+          },
+        };
+      }
+
+      // FULL RESTORE (Seluruh Desa)
       if (Array.isArray(payload.desas) && payload.desas.length > 0) {
         setDesas(payload.desas);
         safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(payload.desas));
@@ -1530,6 +1654,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (Array.isArray(payload.asets)) {
         setAsets(payload.asets);
         persistAsetsSafely(payload.asets);
+        saveAsetsToIndexedDB(payload.asets);
+        payload.asets.forEach((a: Aset) => saveAsetToCloud(a).catch(() => {}));
       }
       if (Array.isArray(payload.verifikasiList)) {
         setVerifikasiList(payload.verifikasiList);
@@ -1563,7 +1689,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       return {
         success: true,
-        message: 'Data SIPADES berhasil dipulihkan dan disinkronkan ke server!',
+        message: 'Data SIPADES seluruh desa berhasil dipulihkan dan disinkronkan ke server!',
         stats: {
           asets: Array.isArray(payload.asets) ? payload.asets.length : 0,
           verifikasi: Array.isArray(payload.verifikasiList) ? payload.verifikasiList.length : 0,
