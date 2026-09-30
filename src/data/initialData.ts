@@ -258,14 +258,14 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "name": "DESA FADORO",
     "code": "12.25.01.2019",
     "kepalaDesa": "TAROMALIMO ZIDUHU MARUNDURI, ST",
-    "nipKepalaDesa": "-",
+    "nipKepalaDesa": "19860117 201503 1 001",
     "alamatDesa": "Desa Fadoro Kecamatan Sirombu Kabupaten Nias Barat",
     "emailDesa": "",
-    "nomorHp": "",
+    "nomorHp": "085353505086",
     "kodePos": "22863",
     "kaurAset": "",
     "sekdes": "",
-    "kontak": ""
+    "kontak": "085353505086"
   },
   {
     "id": "desa-20",

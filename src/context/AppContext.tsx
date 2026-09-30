@@ -253,8 +253,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return defaultDeleted;
   });
 
+  const CURRENT_DATA_REVISION = '2026_10_01_fadoro_v2';
   const [desas, setDesas] = useState<Desa[]>(() => {
     try {
+      const storedRev = localStorage.getItem('SIPADES_DATA_REVISION');
+      if (storedRev !== CURRENT_DATA_REVISION) {
+        localStorage.setItem('SIPADES_DATA_REVISION', CURRENT_DATA_REVISION);
+        localStorage.setItem(STORAGE_KEYS.DESAS, JSON.stringify(INITIAL_DESA_LIST));
+        return INITIAL_DESA_LIST;
+      }
       const saved = localStorage.getItem(STORAGE_KEYS.DESAS);
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -265,6 +272,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             return {
               ...init,
               ...found,
+              nomorHp: found.nomorHp || init.nomorHp || '',
+              kontak: found.kontak || found.nomorHp || init.kontak || init.nomorHp || '',
+              nipKepalaDesa:
+                found.nipKepalaDesa && found.nipKepalaDesa !== '-' && found.nipKepalaDesa !== '198601172015031001'
+                  ? found.nipKepalaDesa
+                  : init.nipKepalaDesa,
             };
           });
         }
@@ -736,8 +749,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
-    // 2. Process incoming assets (strictly filter against deleted IDs & deduplicate)
-    if (Array.isArray(payload.asets) && payload.asets.length > 0) {
+    // 2. Process single updated asset or full asset payload
+    if (payload.updatedAset) {
+      const incoming = payload.updatedAset;
+      setAsets((prev) => {
+        const next = prev.map((a) => (a.id === incoming.id ? { ...a, ...incoming } : a));
+        if (!prev.some((a) => a.id === incoming.id)) {
+          next.unshift(incoming);
+        }
+        persistAsetsSafely(next);
+        return next;
+      });
+    } else if (Array.isArray(payload.asets) && payload.asets.length > 0) {
       setAsets((prev) => {
         const currentDeleted = new Set(deletedAssetIds);
         if (payload.deletedId) currentDeleted.add(payload.deletedId);
@@ -765,9 +788,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return merged;
       });
     }
-    if (Array.isArray(payload.desas) && payload.desas.length > 0) {
-      setDesas(payload.desas);
-      safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(payload.desas));
+    if (payload.updatedDesa) {
+      const incomingDesa = payload.updatedDesa;
+      setDesas((prev) => {
+        const next = prev.map((d) => (d.id === incomingDesa.id ? { ...d, ...incomingDesa } : d));
+        safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(next));
+        return next;
+      });
+    } else if (Array.isArray(payload.desas) && payload.desas.length > 0) {
+      setDesas((prev) => {
+        const map = new Map(prev.map((d) => [d.id, d]));
+        payload.desas?.forEach((d) => {
+          if (d && d.id) {
+            const existing = map.get(d.id);
+            map.set(d.id, existing ? { ...existing, ...d } : d);
+          }
+        });
+        const merged = Array.from(map.values());
+        safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(merged));
+        return merged;
+      });
     }
     if (Array.isArray(payload.users) && payload.users.length > 0) {
       setUsers(payload.users);
@@ -1114,6 +1154,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const target = updated.find((a) => a.id === id);
       if (target) {
         saveAsetToCloud(target).catch((err) => console.warn('[Cloud] Aset update failed:', err));
+        syncManager.broadcastAsetUpdate(target);
         fetch(`/api/asets/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -1436,11 +1477,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         body: JSON.stringify(updatedDesa),
       }).catch((e) => console.warn('[Sync] Desa update failed:', e));
 
-      // 3. Instantly broadcast to all other open devices & tabs
+      // 3. Instantly broadcast to all other open devices & tabs (granular & full)
+      syncManager.broadcastDesaUpdate(updatedDesa);
       syncManager.broadcastChange({
         version: 2,
         timestamp: new Date().toISOString(),
         senderId: 'client',
+        updatedDesa,
         asets,
         verifikasiList,
         pengesahanList,

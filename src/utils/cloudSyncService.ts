@@ -14,6 +14,8 @@ export interface FullSyncPayload {
   kecamatanProfile?: KecamatanProfile;
   deletedId?: string;
   deletedAssetIds?: string[];
+  updatedDesa?: Desa;
+  updatedAset?: Aset;
 }
 
 export type SyncCallback = (payload: FullSyncPayload) => void;
@@ -167,7 +169,14 @@ class CloudSyncManager {
             if (msg.type === 'ANNOUNCE') {
               // Connect to the newly announced peer
               this.connectToPeer(msg.peerId);
-            } else if ((msg.type === 'BROADCAST_STATE' || msg.type === 'DELETE_ASET') && msg.payload) {
+            } else if (
+              (msg.type === 'BROADCAST_STATE' ||
+                msg.type === 'DESA_UPDATE' ||
+                msg.type === 'ASET_UPDATE' ||
+                msg.type === 'DELETE_ASET' ||
+                msg.type === 'KECAMATAN_UPDATE') &&
+              msg.payload
+            ) {
               this.notifySync(msg.payload);
             }
           }
@@ -189,7 +198,10 @@ class CloudSyncManager {
       await fetch(SIGNAL_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          topic: SIGNAL_TOPIC,
+          message: JSON.stringify(data),
+        }),
       });
     } catch {
       // ignore offline
@@ -199,6 +211,77 @@ class CloudSyncManager {
   private notifySync(payload: FullSyncPayload) {
     if (payload.senderId === this.peerId) return;
     this.syncCallbacks.forEach((cb) => cb(payload));
+  }
+
+  public broadcastDesaUpdate(desa: Desa) {
+    const payload: FullSyncPayload = {
+      version: 2,
+      timestamp: new Date().toISOString(),
+      senderId: this.peerId,
+      updatedDesa: desa,
+      desas: [desa],
+    };
+
+    // 1. BroadcastChannel (local 0ms)
+    if (this.broadcastChannel) {
+      try {
+        this.broadcastChannel.postMessage({
+          type: 'DESA_UPDATE',
+          senderId: this.peerId,
+          payload,
+        });
+      } catch {}
+    }
+
+    // 2. WebRTC P2P
+    this.connections.forEach((conn) => {
+      if (conn.open) {
+        try {
+          conn.send({ type: 'DESA_UPDATE', payload });
+        } catch {}
+      }
+    });
+
+    // 3. Cloud SSE Relay (ntfy.sh) - very fast < 300 bytes
+    this.broadcastSignal({
+      type: 'DESA_UPDATE',
+      peerId: this.peerId,
+      payload,
+    });
+  }
+
+  public broadcastAsetUpdate(aset: Aset) {
+    const payload: FullSyncPayload = {
+      version: 2,
+      timestamp: new Date().toISOString(),
+      senderId: this.peerId,
+      updatedAset: aset,
+      asets: [{ ...aset, fotoAset: [], fotoBast: undefined }],
+    };
+
+    if (this.broadcastChannel) {
+      try {
+        this.broadcastChannel.postMessage({
+          type: 'ASET_UPDATE',
+          senderId: this.peerId,
+          payload,
+        });
+      } catch {}
+    }
+
+    this.connections.forEach((conn) => {
+      if (conn.open) {
+        try {
+          conn.send({ type: 'ASET_UPDATE', payload });
+        } catch {}
+      }
+    });
+
+    this.broadcastSignal({
+      type: 'ASET_UPDATE',
+      peerId: this.peerId,
+      payload,
+    });
   }
 
   public broadcastChange(payload: FullSyncPayload) {
