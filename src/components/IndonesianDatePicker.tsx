@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw, Check } from 'lucide-react';
-import { formatTanggalIndonesia } from '../utils/reportGenerator';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 
 const DAY_NAMES = ['MIN', 'SEN', 'SEL', 'RAB', 'KAM', 'JUM', 'SAB'];
 
@@ -24,6 +23,7 @@ interface IndonesianDatePickerProps {
   onChange: (formattedDate: string) => void;
   placeholder?: string;
   className?: string;
+  align?: 'left' | 'right';
 }
 
 export const IndonesianDatePicker: React.FC<IndonesianDatePickerProps> = ({
@@ -31,6 +31,7 @@ export const IndonesianDatePicker: React.FC<IndonesianDatePickerProps> = ({
   onChange,
   placeholder = 'Pilih tanggal...',
   className = '',
+  align = 'right',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -186,19 +187,23 @@ export const IndonesianDatePicker: React.FC<IndonesianDatePickerProps> = ({
 
       {/* Popover Indonesian Calendar */}
       {isOpen && (
-        <div className="absolute z-50 mt-1 left-0 w-72 bg-[#0E1526] border border-slate-700/90 rounded-2xl shadow-2xl p-3.5 text-slate-200 animate-in fade-in zoom-in-95 duration-150">
+        <div
+          className={`absolute z-50 mt-1.5 ${
+            align === 'left' ? 'left-0' : 'right-0'
+          } w-[288px] max-w-[calc(100vw-2rem)] bg-[#0E1526] border border-slate-700/90 rounded-2xl shadow-2xl p-3.5 text-slate-200 animate-in fade-in zoom-in-95 duration-150`}
+        >
           {/* Header Controls: Month/Year Nav */}
-          <div className="flex items-center justify-between gap-1.5 mb-2.5">
+          <div className="flex items-center justify-between gap-1 mb-2.5">
             <button
               type="button"
               onClick={handlePrevMonth}
-              className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer shrink-0"
               title="Bulan sebelumnya"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               {/* Month Select */}
               <select
                 value={viewMonth}
@@ -206,7 +211,7 @@ export const IndonesianDatePicker: React.FC<IndonesianDatePickerProps> = ({
                 className="bg-slate-800 text-white font-bold text-xs rounded-lg px-2 py-1 border border-slate-700 focus:outline-none focus:border-amber-400 cursor-pointer"
               >
                 {MONTH_NAMES.map((name, idx) => (
-                  <option key={name} value={idx}>
+                  <option key={name} value={idx} className="bg-slate-900 text-white">
                     {name}
                   </option>
                 ))}
@@ -216,10 +221,10 @@ export const IndonesianDatePicker: React.FC<IndonesianDatePickerProps> = ({
               <select
                 value={viewYear}
                 onChange={(e) => setViewYear(parseInt(e.target.value, 10))}
-                className="bg-slate-800 text-white font-bold text-xs rounded-lg px-2 py-1 border border-slate-700 focus:outline-none focus:border-amber-400 cursor-pointer"
+                className="bg-slate-800 text-white font-bold text-xs rounded-lg px-1.5 py-1 border border-slate-700 focus:outline-none focus:border-amber-400 cursor-pointer"
               >
                 {yearOptions.map((y) => (
-                  <option key={y} value={y}>
+                  <option key={y} value={y} className="bg-slate-900 text-white">
                     {y}
                   </option>
                 ))}
@@ -229,7 +234,7 @@ export const IndonesianDatePicker: React.FC<IndonesianDatePickerProps> = ({
             <button
               type="button"
               onClick={handleNextMonth}
-              className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer shrink-0"
               title="Bulan berikutnya"
             >
               <ChevronRight className="w-4 h-4" />
@@ -259,7 +264,7 @@ export const IndonesianDatePicker: React.FC<IndonesianDatePickerProps> = ({
           <div className="grid grid-cols-7 gap-1 text-center text-xs">
             {/* Blank offset cells for days before the 1st of month */}
             {Array.from({ length: firstDayOfMonth }).map((_, idx) => (
-              <div key={`empty-${idx}`} className="w-8 h-7" />
+              <div key={`empty-${idx}`} className="w-8 h-8" />
             ))}
 
             {/* Days of current month */}
@@ -284,7 +289,7 @@ export const IndonesianDatePicker: React.FC<IndonesianDatePickerProps> = ({
                   key={`day-${dayNum}`}
                   type="button"
                   onClick={() => handleSelectDay(dayNum)}
-                  className={`w-8 h-7 rounded-lg text-xs font-bold flex items-center justify-center transition-all cursor-pointer relative ${
+                  className={`w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center transition-all cursor-pointer relative ${
                     isSelected
                       ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30'
                       : isTodayCell

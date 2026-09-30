@@ -1686,6 +1686,7 @@ export const AsetManagementView: React.FC = () => {
                       value={formData.buktiTanggal}
                       onChange={(val) => setFormData({ ...formData, buktiTanggal: val })}
                       placeholder="Pilih tanggal bukti..."
+                      align="right"
                     />
                   </div>
                 </div>
@@ -2180,6 +2181,7 @@ export const AsetManagementView: React.FC = () => {
                       value={formData.buktiTanggal}
                       onChange={(val) => setFormData({ ...formData, buktiTanggal: val })}
                       placeholder="Pilih tanggal bukti..."
+                      align="right"
                     />
                   </div>
                 </div>
