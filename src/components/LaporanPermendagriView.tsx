@@ -27,6 +27,9 @@ import {
   HelpCircle,
   Layers,
   Eye,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
 } from 'lucide-react';
 
 export const LaporanPermendagriView: React.FC = () => {
@@ -89,6 +92,28 @@ export const LaporanPermendagriView: React.FC = () => {
 
   // Aggregate stats
   const totalValuation = reportAsets.reduce((sum, item) => sum + (item.nilaiPerolehan || 0), 0);
+
+  // Accordion state: by default, all villages are collapsed
+  const [expandedDesas, setExpandedDesas] = useState<Record<string, boolean>>({});
+
+  const toggleDesa = (desaId: string) => {
+    setExpandedDesas((prev) => ({
+      ...prev,
+      [desaId]: !prev[desaId],
+    }));
+  };
+
+  const expandAllDesas = () => {
+    const allExp: Record<string, boolean> = {};
+    desas.forEach((d) => {
+      allExp[d.id] = true;
+    });
+    setExpandedDesas(allExp);
+  };
+
+  const collapseAllDesas = () => {
+    setExpandedDesas({});
+  };
 
   const [isExportingPDF, setIsExportingPDF] = useState(false);
 
@@ -335,6 +360,38 @@ export const LaporanPermendagriView: React.FC = () => {
           </div>
         </div>
 
+        {/* Accordion Control Toolbar untuk Mode Semua Desa */}
+        {isAllDesaMode && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-xs">
+            <div className="flex items-center gap-2 text-slate-300">
+              <span className="p-1 rounded-lg bg-blue-500/20 text-blue-400">
+                <Layers className="w-4 h-4" />
+              </span>
+              <span>
+                Daftar rincian aset 25 desa disembunyikan secara default. Klik nama desa untuk membuka rincian asetnya.
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={expandAllDesas}
+                className="px-3 py-1.5 rounded-lg bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 hover:text-white font-semibold text-xs border border-blue-500/40 flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+                Buka Semua Desa
+              </button>
+              <button
+                type="button"
+                onClick={collapseAllDesas}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+                Sembunyikan Semua
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 10-Column Permendagri 20/2018 Table */}
         <div className="overflow-x-auto rounded-xl border border-slate-800">
           <table className="w-full text-left text-xs text-slate-300 border-collapse">
@@ -361,106 +418,149 @@ export const LaporanPermendagriView: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-800/70 font-normal">
               {isAllDesaMode ? (
-                // TAMPILAN SEMUA DESA (DIKELOMPOKKAN PER DESA)
+                // TAMPILAN SEMUA DESA (DIKELOMPOKKAN PER DESA DENGAN ACCORDION)
                 desas.map((d, dIdx) => {
                   const desaItems = asets.filter(
                     (a) => a.desaId === d.id && (selectedYear > 0 ? a.tahunPerolehan === selectedYear : true) && a.status !== 'terhapus'
                   );
                   const desaSubtotal = desaItems.reduce((s, a) => s + (a.nilaiPerolehan || 0), 0);
+                  const isExpanded = Boolean(expandedDesas[d.id]);
 
                   return (
                     <React.Fragment key={d.id}>
-                      {/* Subheader Banner Desa */}
-                      <tr className="bg-blue-950/40 border-t border-b border-blue-800/60 font-bold">
+                      {/* Subheader Banner Desa - Klik untuk Buka / Tutup */}
+                      <tr
+                        onClick={() => toggleDesa(d.id)}
+                        className="bg-blue-950/50 hover:bg-blue-900/50 border-t-2 border-b border-blue-800/80 font-bold cursor-pointer transition-colors select-none group"
+                        title="Klik untuk membuka atau menyembunyikan rincian aset desa ini"
+                      >
                         <td colSpan={7} className="py-2.5 px-3 text-blue-300">
-                          {dIdx + 1}. DESA {d.name.toUpperCase().replace(/^DESA\s+/i, '')} (Kode: {d.code}) • Kepala Desa: {d.kepalaDesa || '-'}
+                          <div className="flex items-center flex-wrap gap-2">
+                            <span className={`p-1 rounded bg-blue-900/80 group-hover:bg-blue-800 text-blue-300 transition-all ${isExpanded ? 'rotate-90 text-amber-400 bg-amber-500/20' : ''}`}>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </span>
+                            <span className="text-white text-xs font-black">
+                              {dIdx + 1}. DESA {d.name.toUpperCase().replace(/^DESA\s+/i, '')}
+                            </span>
+                            <span className="text-[11px] text-blue-300 font-mono">
+                              (Kode: {d.code})
+                            </span>
+                            <span className="text-slate-500">•</span>
+                            <span className="text-[11px] text-slate-300 font-normal">
+                              Kepala Desa: {d.kepalaDesa || '-'}
+                            </span>
+                            <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-semibold border ${
+                              isExpanded
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                : 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                            }`}>
+                              {desaItems.length} Unit Aset {isExpanded ? '• Terbuka' : '• Klik untuk Menampilkan'}
+                            </span>
+                          </div>
                         </td>
                         <td className="py-2.5 px-3 text-right font-mono text-emerald-400 font-bold">
                           {formatRupiah(desaSubtotal)}
                         </td>
-                        <td colSpan={2} className="py-2.5 px-3"></td>
+                        <td colSpan={2} className="py-2.5 px-3 text-right">
+                          <span className="text-[10px] font-semibold text-amber-400/90 group-hover:text-amber-300 flex items-center justify-end gap-1">
+                            {isExpanded ? (
+                              <>
+                                <span>Tutup</span>
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              </>
+                            ) : (
+                              <>
+                                <span>Buka</span>
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </>
+                            )}
+                          </span>
+                        </td>
                       </tr>
 
-                      {desaItems.length === 0 ? (
-                        <tr>
-                          <td className="py-2 px-2 text-center text-slate-600 font-mono text-[11px] border-r border-slate-800">-</td>
-                          <td colSpan={6} className="py-2 px-3 italic text-slate-500 border-r border-slate-800">
-                            Belum ada aset tetap tercatat pada {selectedYear > 0 ? `tahun anggaran ${selectedYear}` : 'seluruh tahun anggaran'}
-                          </td>
-                          <td className="py-2 px-3 text-right text-slate-500 font-mono border-r border-slate-800">0</td>
-                          <td className="py-2 px-2 text-center text-slate-500 border-r border-slate-800">-</td>
-                          <td className="py-2 px-3 text-slate-500">-</td>
-                        </tr>
-                      ) : (
-                        ROMAN_KLASIFIKASI.map((cat) => {
-                          const catItems = desaItems.filter(
-                            (a) => (a.klasifikasi || '').replace(/^[I|V|X]+\.\s*/, '') === cat.key
-                          );
-                          if (catItems.length === 0) return null;
-                          const catSubtotal = catItems.reduce((s, a) => s + (a.nilaiPerolehan || 0), 0);
+                      {/* Rincian Aset Desa (Hanya Dirender Saat Desa Dibuka / isExpanded) */}
+                      {isExpanded && (
+                        desaItems.length === 0 ? (
+                          <tr>
+                            <td className="py-3 px-2 text-center text-slate-600 font-mono text-[11px] border-r border-slate-800">-</td>
+                            <td colSpan={6} className="py-3 px-3 italic text-slate-500 border-r border-slate-800">
+                              Belum ada aset tetap tercatat pada {selectedYear > 0 ? `tahun anggaran ${selectedYear}` : 'seluruh tahun anggaran'}
+                            </td>
+                            <td className="py-3 px-3 text-right text-slate-500 font-mono border-r border-slate-800">0</td>
+                            <td className="py-3 px-2 text-center text-slate-500 border-r border-slate-800">-</td>
+                            <td className="py-3 px-3 text-slate-500">-</td>
+                          </tr>
+                        ) : (
+                          ROMAN_KLASIFIKASI.map((cat) => {
+                            const catItems = desaItems.filter(
+                              (a) => (a.klasifikasi || '').replace(/^[I|V|X]+\.\s*/, '') === cat.key
+                            );
+                            if (catItems.length === 0) return null;
+                            const catSubtotal = catItems.reduce((s, a) => s + (a.nilaiPerolehan || 0), 0);
 
-                          return (
-                            <React.Fragment key={cat.roman}>
-                              <tr className="bg-slate-900/50 font-bold">
-                                <td className="py-1.5 px-2 text-center text-amber-400 font-mono text-[11px] border-r border-slate-800">
-                                  {cat.roman}
-                                </td>
-                                <td colSpan={6} className="py-1.5 px-3 text-amber-300 font-semibold border-r border-slate-800">
-                                  {cat.title}
-                                </td>
-                                <td className="py-1.5 px-3 text-right font-mono text-emerald-400 border-r border-slate-800">
-                                  {formatNumber(catSubtotal)}
-                                </td>
-                                <td colSpan={2} className="py-1.5 px-3"></td>
-                              </tr>
-                              {catItems.map((item, idx) => (
-                                <tr key={item.id} className="hover:bg-slate-800/40">
-                                  <td className="py-2 px-2 text-center text-slate-400 font-mono text-[11px] border-r border-slate-800"></td>
-                                  <td className="py-2 px-3 border-r border-slate-800">
-                                    <div className="font-bold text-white leading-tight">
-                                      {idx + 1}. {item.namaAset}
-                                    </div>
-                                    {item.volume && <div className="text-[10px] text-slate-400">Vol: {item.volume}</div>}
+                            return (
+                              <React.Fragment key={cat.roman}>
+                                <tr className="bg-slate-900/50 font-bold">
+                                  <td className="py-1.5 px-2 text-center text-amber-400 font-mono text-[11px] border-r border-slate-800">
+                                    {cat.roman}
                                   </td>
-                                  <td className="py-2 px-2 border-r border-slate-800 text-center text-[11px] text-slate-300">
-                                    {item.bukti?.jenis || '-'}
+                                  <td colSpan={6} className="py-1.5 px-3 text-amber-300 font-semibold border-r border-slate-800">
+                                    {cat.title}
                                   </td>
-                                  <td className="py-2 px-2 border-r border-slate-800 text-center text-[10px] font-mono text-slate-400">
-                                    {item.bukti?.nomor || '-'}
+                                  <td className="py-1.5 px-3 text-right font-mono text-emerald-400 border-r border-slate-800">
+                                    {formatNumber(catSubtotal)}
                                   </td>
-                                  <td className="py-2 px-2 border-r border-slate-800 text-center text-[10px] text-slate-500">
-                                    {item.bukti?.tanggal || '-'}
-                                  </td>
-                                  <td className="py-2 px-2.5 border-r border-slate-800 font-mono text-[11px] text-slate-300">
-                                    {item.kodeAset}
-                                  </td>
-                                  <td className="py-2 px-2 border-r border-slate-800 text-center font-medium">
-                                    {item.tahunPerolehan}
-                                  </td>
-                                  <td className="py-2 px-3 border-r border-slate-800 text-right font-mono font-bold text-emerald-400">
-                                    {formatNumber(item.nilaiPerolehan)}
-                                  </td>
-                                  <td className="py-2 px-2 border-r border-slate-800 text-center">
-                                    <span
-                                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                        item.kondisi === 'Baik'
-                                          ? 'text-emerald-300 bg-emerald-950/60'
-                                          : item.kondisi === 'Rusak Ringan'
-                                          ? 'text-amber-300 bg-amber-950/60'
-                                          : 'text-red-300 bg-red-950/60'
-                                      }`}
-                                    >
-                                      {item.kondisi}
-                                    </span>
-                                  </td>
-                                  <td className="py-2 px-3 text-slate-400 text-[11px]">
-                                    {item.keterangan || (item.lokasi ? `Lokasi: ${item.lokasi}` : '-')}
-                                  </td>
+                                  <td colSpan={2} className="py-1.5 px-3"></td>
                                 </tr>
-                              ))}
-                            </React.Fragment>
-                          );
-                        })
+                                {catItems.map((item, idx) => (
+                                  <tr key={item.id} className="hover:bg-slate-800/40">
+                                    <td className="py-2 px-2 text-center text-slate-400 font-mono text-[11px] border-r border-slate-800"></td>
+                                    <td className="py-2 px-3 border-r border-slate-800">
+                                      <div className="font-bold text-white leading-tight">
+                                        {idx + 1}. {item.namaAset}
+                                      </div>
+                                      {item.volume && <div className="text-[10px] text-slate-400">Vol: {item.volume}</div>}
+                                    </td>
+                                    <td className="py-2 px-2 border-r border-slate-800 text-center text-[11px] text-slate-300">
+                                      {item.bukti?.jenis || '-'}
+                                    </td>
+                                    <td className="py-2 px-2 border-r border-slate-800 text-center text-[10px] font-mono text-slate-400">
+                                      {item.bukti?.nomor || '-'}
+                                    </td>
+                                    <td className="py-2 px-2 border-r border-slate-800 text-center text-[10px] text-slate-500">
+                                      {item.bukti?.tanggal || '-'}
+                                    </td>
+                                    <td className="py-2 px-2.5 border-r border-slate-800 font-mono text-[11px] text-slate-300">
+                                      {item.kodeAset}
+                                    </td>
+                                    <td className="py-2 px-2 border-r border-slate-800 text-center font-medium">
+                                      {item.tahunPerolehan}
+                                    </td>
+                                    <td className="py-2 px-3 border-r border-slate-800 text-right font-mono font-bold text-emerald-400">
+                                      {formatNumber(item.nilaiPerolehan)}
+                                    </td>
+                                    <td className="py-2 px-2 border-r border-slate-800 text-center">
+                                      <span
+                                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                          item.kondisi === 'Baik'
+                                            ? 'text-emerald-300 bg-emerald-950/60'
+                                            : item.kondisi === 'Rusak Ringan'
+                                            ? 'text-amber-300 bg-amber-950/60'
+                                            : 'text-red-300 bg-red-950/60'
+                                        }`}
+                                      >
+                                        {item.kondisi}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-3 text-slate-400 text-[11px]">
+                                      {item.keterangan || (item.lokasi ? `Lokasi: ${item.lokasi}` : '-')}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </React.Fragment>
+                            );
+                          })
+                        )
                       )}
                     </React.Fragment>
                   );

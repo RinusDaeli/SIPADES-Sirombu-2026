@@ -129,6 +129,33 @@ export const AsetManagementView: React.FC = () => {
   const [showCustomSeq, setShowCustomSeq] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Accordion state for admin grouped villages (collapsed by default)
+  const [expandedAdminDesas, setExpandedAdminDesas] = useState<Record<string, boolean>>({});
+
+  const toggleAdminDesa = (desaId: string) => {
+    setExpandedAdminDesas((prev) => ({
+      ...prev,
+      [desaId]: !prev[desaId],
+    }));
+  };
+
+  const expandAllAdminDesas = () => {
+    const allExp: Record<string, boolean> = {};
+    desas.forEach((d) => {
+      allExp[d.id] = true;
+    });
+    setExpandedAdminDesas(allExp);
+  };
+
+  const collapseAllAdminDesas = () => {
+    setExpandedAdminDesas({});
+  };
+
+  const openedDesasCount = useMemo(
+    () => Object.values(expandedAdminDesas).filter(Boolean).length,
+    [expandedAdminDesas]
+  );
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 6000);
@@ -820,6 +847,43 @@ export const AsetManagementView: React.FC = () => {
         </div>
       </div>
 
+      {/* Accordion Toolbar untuk Tampilan Banyak Desa */}
+      {!isDesaUser && filterDesa === 'all' && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-xs">
+          <div className="flex items-center gap-2 text-slate-300">
+            <span className="p-1 rounded-lg bg-blue-500/20 text-blue-400">
+              <Layers className="w-4 h-4" />
+            </span>
+            <span className="leading-relaxed">
+              Daftar aset 25 desa disembunyikan secara default. Klik nama desa untuk memunculkan semua data asetnya.
+              <span className="ml-2 px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 font-mono text-[10px] font-bold border border-slate-700">
+                {openedDesasCount} dari {desas.length} desa terbuka
+              </span>
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={expandAllAdminDesas}
+              className="px-3 py-1.5 rounded-lg bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 hover:text-white font-semibold text-xs border border-blue-500/40 flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Bentangkan dan munculkan semua data aset dari seluruh 25 desa"
+            >
+              <ChevronDown className="w-3.5 h-3.5" />
+              Bentangkan Semua Desa
+            </button>
+            <button
+              type="button"
+              onClick={collapseAllAdminDesas}
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Sembunyikan dan ciutkan semua desa (kembali ke default)"
+            >
+              <ChevronUp className="w-3.5 h-3.5" />
+              Ciutkan Semua (Default)
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Assets Table */}
       <div className="bg-[#0E1526] border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
         <div className="overflow-x-auto">
@@ -1093,274 +1157,324 @@ export const AsetManagementView: React.FC = () => {
                 ))
               ) : (
                 // MODE AKUN ADMIN / SUPER ADMIN: Kelompokkan data aset per desa, sesuai tahun kemudian sesuai nomor registrasi aset
-                groupedAdminAsets.map((desaGroup, dIdx) => (
-                  <React.Fragment key={`admin-desa-${desaGroup.desaId}`}>
-                    {/* Level 1: Header Grup Desa */}
-                    <tr className="bg-gradient-to-r from-blue-950 via-slate-900 to-slate-950 border-t-2 border-b border-blue-600/80">
-                      <td colSpan={11} className="py-3 px-4">
-                        <div className="flex items-center justify-between flex-wrap gap-2">
-                          <div className="flex items-center gap-2.5">
-                            <span className="w-6 h-6 rounded-lg bg-blue-500/20 border border-blue-400/40 text-blue-300 flex items-center justify-center font-bold text-xs">
-                              {dIdx + 1}
-                            </span>
-                            <Building className="w-4 h-4 text-blue-400" />
-                            <span className="text-xs font-black text-white uppercase tracking-wide">
-                              DESA {desaGroup.desaName.toUpperCase().replace(/^DESA\s+/i, '')}
-                            </span>
-                            <span className="text-[11px] text-blue-300 font-mono">
-                              (Kode: {desaGroup.desaCode || '-'})
-                            </span>
-                            <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold">
-                              {desaGroup.totalItems} Unit Aset
-                            </span>
-                          </div>
-                          <div className="font-mono text-xs font-bold text-emerald-400">
-                            Total Nilai Aset Desa: {formatRupiah(desaGroup.totalNilai)}
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
+                groupedAdminAsets.map((desaGroup, dIdx) => {
+                  const isExpanded =
+                    filterDesa !== 'all'
+                      ? expandedAdminDesas[desaGroup.desaId] !== false
+                      : Boolean(expandedAdminDesas[desaGroup.desaId]);
 
-                    {/* Level 2: Header Grup Tahun dalam Desa ini */}
-                    {desaGroup.yearGroups.map((yearGroup) => (
-                      <React.Fragment key={`admin-desa-${desaGroup.desaId}-year-${yearGroup.year}`}>
-                        <tr className="bg-slate-900/90 border-b border-slate-800">
-                          <td colSpan={11} className="py-2 px-6 font-bold text-amber-300">
-                            <div className="flex items-center justify-between flex-wrap gap-2 text-[11px]">
-                              <div className="flex items-center gap-2">
-                                <span className="text-slate-500 font-mono">↳</span>
-                                <Calendar className="w-3.5 h-3.5 text-amber-400" />
-                                <span>Tahun Anggaran {yearGroup.year}</span>
-                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400">
-                                  {yearGroup.items.length} Unit
-                                </span>
-                              </div>
-                              <div className="font-mono text-[11px] text-emerald-400">
-                                Subtotal TA {yearGroup.year}: {formatRupiah(yearGroup.totalNilai)}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-
-                        {/* Baris-baris aset dalam tahun ini terurut sesuai nomor registrasi */}
-                        {yearGroup.items.map((item, idx) => {
-                          const isMutasiDiajukan = item.status === 'mutasi_diajukan';
-                          const isHapusDiajukan = item.status === 'terhapus_diajukan';
-                          const isTerhapus = item.status === 'terhapus';
-
-                          return (
-                            <tr
-                              key={item.id}
-                              className={`hover:bg-slate-800/40 transition-colors ${
-                                isTerhapus ? 'opacity-50 line-through bg-slate-950/40' : ''
-                              }`}
-                            >
-                              <td className="py-3 px-3 text-slate-400 font-mono text-[11px]">
-                                {idx + 1}
-                              </td>
-                              <td className="py-3 px-3 min-w-[260px]">
-                                <div className="flex items-start gap-2.5">
-                                  {/* Photo Thumbnail / Badge */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenDetail(item)}
-                                    className="shrink-0 w-11 h-11 rounded-lg overflow-hidden border border-slate-700 bg-slate-900 flex items-center justify-center relative group hover:border-amber-400 transition-all cursor-pointer shadow-sm"
-                                    title="Klik untuk Lihat Foto & Detail Aset"
-                                  >
-                                    {item.fotoAset && item.fotoAset.length > 0 && item.fotoAset[0] ? (
-                                      <>
-                                        <img
-                                          src={item.fotoAset[0]}
-                                          alt=""
-                                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                                        />
-                                        {item.fotoAset.length > 1 && (
-                                          <span className="absolute bottom-0 right-0 bg-black/85 text-[8px] font-bold text-amber-300 px-1 rounded-tl">
-                                            +{item.fotoAset.length - 1}
-                                          </span>
-                                        )}
-                                      </>
-                                    ) : (
-                                      <Camera className="w-4 h-4 text-slate-500 group-hover:text-amber-400" />
-                                    )}
-                                  </button>
-
-                                  <div className="min-w-0 flex-1">
-                                    <span className="text-[10px] font-semibold text-amber-400 block truncate">
-                                      {item.klasifikasi}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenDetail(item)}
-                                      className="font-bold text-white leading-tight text-left hover:text-amber-300 transition-colors block cursor-pointer"
-                                    >
-                                      {item.namaAset}
-                                    </button>
-                                    {item.volume && (
-                                      <div className="text-[10px] text-slate-400 mt-0.5">
-                                        Volume: {item.volume}
-                                      </div>
-                                    )}
-                                    {item.lokasi && (
-                                      <div className="text-[10px] text-slate-400 truncate">
-                                        Lokasi: {item.lokasi}
-                                      </div>
-                                    )}
-                                    {item.keterangan && (
-                                      <div
-                                        className="mt-1 text-[10px] text-amber-200/90 bg-amber-950/40 border border-amber-500/30 rounded px-1.5 py-0.5 max-w-[280px] break-words"
-                                        title={item.keterangan}
-                                      >
-                                        <span className="font-bold text-amber-400">Ket:</span> {item.keterangan}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="py-3 px-3">
-                                <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300 font-semibold text-[10px] block truncate max-w-[120px]">
-                                  {(item.desaName || 'Desa').replace('DESA ', '')}
-                                </span>
-                              </td>
-                              <td className="py-3 px-3 max-w-[180px]">
-                                <div className="font-semibold text-slate-200 text-[11px]">
-                                  {item.bukti?.jenis || '-'}
-                                </div>
-                                <div className="text-[10px] text-slate-400 font-mono truncate">
-                                  No: {item.bukti?.nomor || '-'}
-                                </div>
-                                <div className="text-[10px] text-slate-400">
-                                  Tgl: {item.bukti?.tanggal || '-'}
-                                </div>
-                              </td>
-                              <td className="py-3 px-3 font-mono text-[11px]">
-                                <div className="font-bold text-emerald-400 tracking-wide">
-                                  {item.kodeAset}
-                                </div>
-                                {item.nomorRegister && (
-                                  <div className="text-[10px] text-amber-300 font-mono flex items-center gap-1 mt-0.5">
-                                    <span className="text-slate-500 font-sans">No. Reg:</span>
-                                    <span className="px-1 py-0.2 rounded bg-amber-500/10 border border-amber-500/30 font-bold">
-                                      {item.nomorRegister}
-                                    </span>
-                                  </div>
-                                )}
-                              </td>
-                              <td className="py-3 px-3 text-center font-bold text-slate-200">
-                                {item.tahunPerolehan}
-                              </td>
-                              <td className="py-3 px-3 text-right font-mono font-bold text-emerald-400">
-                                {formatRupiah(item.nilaiPerolehan)}
-                              </td>
-                              <td className="py-3 px-3 text-center">
-                                <span
-                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                    item.kondisi === 'Baik'
-                                      ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300'
-                                      : item.kondisi === 'Rusak Ringan'
-                                      ? 'bg-amber-950/80 border-amber-500/40 text-amber-300'
-                                      : 'bg-red-950/80 border-red-500/40 text-red-300'
-                                  }`}
-                                >
-                                  {item.kondisi}
-                                </span>
-                              </td>
-                              <td className="py-3 px-3 text-center">
-                                <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-amber-300 font-mono text-[10px] font-bold">
-                                  {item.sumberDana}
-                                </span>
-                              </td>
-                              <td className="py-3 px-3 text-center">
-                                {isMutasiDiajukan ? (
-                                  <span className="px-2 py-0.5 rounded-full bg-blue-950/80 border border-blue-500/40 text-blue-300 text-[10px] font-bold flex items-center gap-1 justify-center">
-                                    <Clock className="w-3 h-3" /> Mutasi
-                                  </span>
-                                ) : isHapusDiajukan ? (
-                                  <span className="px-2 py-0.5 rounded-full bg-red-950/80 border border-red-500/40 text-red-300 text-[10px] font-bold flex items-center gap-1 justify-center">
-                                    <Clock className="w-3 h-3" /> Hapus
-                                  </span>
-                                ) : isTerhapus ? (
-                                  <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold">
-                                    Terhapus
-                                  </span>
+                  return (
+                    <React.Fragment key={`admin-desa-${desaGroup.desaId}`}>
+                      {/* Level 1: Header Grup Desa */}
+                      <tr
+                        onClick={() => toggleAdminDesa(desaGroup.desaId)}
+                        className="bg-gradient-to-r from-blue-950 via-slate-900 to-slate-950 border-t-2 border-b border-blue-600/80 cursor-pointer hover:from-blue-900/90 hover:via-slate-800 hover:to-slate-900 transition-all select-none group"
+                        title={`Klik untuk ${isExpanded ? 'menyembunyikan' : 'memunculkan semua'} data aset Desa ${desaGroup.desaName}`}
+                      >
+                        <td colSpan={11} className="py-3 px-4">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2.5">
+                              <span className="w-6 h-6 rounded-lg bg-blue-500/20 border border-blue-400/40 text-blue-300 flex items-center justify-center font-bold text-xs">
+                                {dIdx + 1}
+                              </span>
+                              <span className="p-1 rounded-md bg-blue-500/20 text-blue-300 group-hover:bg-blue-500/40 group-hover:text-white transition-colors">
+                                {isExpanded ? (
+                                  <ChevronUp className="w-4 h-4" />
                                 ) : (
-                                  <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold">
-                                    Aktif
-                                  </span>
+                                  <ChevronDown className="w-4 h-4" />
                                 )}
-                              </td>
-                              <td className="py-3 px-3 text-center">
-                                <div className="flex items-center justify-center gap-1.5">
-                                  {/* Cetak Barcode button */}
-                                  <button
-                                    onClick={() => handleOpenBarcode(item)}
-                                    className="p-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-400 border border-amber-500/40 text-amber-300 hover:text-slate-950 transition-colors cursor-pointer"
-                                    title="Cetak Barcode & Label Inventaris Aset"
+                              </span>
+                              <Building className="w-4 h-4 text-blue-400" />
+                              <span className="text-xs font-black text-white uppercase tracking-wide group-hover:text-amber-300 transition-colors">
+                                DESA {desaGroup.desaName.toUpperCase().replace(/^DESA\s+/i, '')}
+                              </span>
+                              <span className="text-[11px] text-blue-300 font-mono">
+                                (Kode: {desaGroup.desaCode || '-'})
+                              </span>
+                              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold">
+                                {desaGroup.totalItems} Unit Aset
+                              </span>
+                              <span
+                                className={`text-[10px] px-2.5 py-0.5 rounded-md font-bold flex items-center gap-1 transition-colors ${
+                                  isExpanded
+                                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                    : 'bg-blue-600/30 text-blue-200 border border-blue-400/40 group-hover:bg-blue-600/60'
+                                }`}
+                              >
+                                {isExpanded ? (
+                                  <>
+                                    <ChevronUp className="w-3 h-3" /> Sembunyikan Aset
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronDown className="w-3 h-3" /> Klik untuk Buka ({desaGroup.totalItems} Aset)
+                                  </>
+                                )}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="font-mono text-xs font-bold text-emerald-400">
+                                Total Nilai Aset Desa: {formatRupiah(desaGroup.totalNilai)}
+                              </div>
+                              <span className="text-[11px] text-slate-400 group-hover:text-amber-300 font-medium hidden sm:inline">
+                                {isExpanded ? 'Tutup ▴' : 'Buka Rincian ▾'}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Level 2: Header Grup Tahun dalam Desa ini & Baris Aset (Hanya dirender jika isExpanded) */}
+                      {isExpanded && (
+                        desaGroup.totalItems === 0 ? (
+                          <tr>
+                            <td colSpan={11} className="py-5 px-6 text-center text-slate-500 italic bg-slate-900/30">
+                              Belum ada data aset tercatat untuk {desaGroup.desaName}.
+                            </td>
+                          </tr>
+                        ) : (
+                          desaGroup.yearGroups.map((yearGroup) => (
+                            <React.Fragment key={`admin-desa-${desaGroup.desaId}-year-${yearGroup.year}`}>
+                              <tr className="bg-slate-900/90 border-b border-slate-800">
+                                <td colSpan={11} className="py-2 px-6 font-bold text-amber-300">
+                                  <div className="flex items-center justify-between flex-wrap gap-2 text-[11px]">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-slate-500 font-mono">↳</span>
+                                      <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                                      <span>Tahun Anggaran {yearGroup.year}</span>
+                                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400">
+                                        {yearGroup.items.length} Unit
+                                      </span>
+                                    </div>
+                                    <div className="font-mono text-[11px] text-emerald-400">
+                                      Subtotal TA {yearGroup.year}: {formatRupiah(yearGroup.totalNilai)}
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+
+                              {/* Baris-baris aset dalam tahun ini terurut sesuai nomor registrasi */}
+                              {yearGroup.items.map((item, idx) => {
+                                const isMutasiDiajukan = item.status === 'mutasi_diajukan';
+                                const isHapusDiajukan = item.status === 'terhapus_diajukan';
+                                const isTerhapus = item.status === 'terhapus';
+
+                                return (
+                                  <tr
+                                    key={item.id}
+                                    className={`hover:bg-slate-800/40 transition-colors ${
+                                      isTerhapus ? 'opacity-50 line-through bg-slate-950/40' : ''
+                                    }`}
                                   >
-                                    <QrCode className="w-3.5 h-3.5" />
-                                  </button>
+                                    <td className="py-3 px-3 text-slate-400 font-mono text-[11px]">
+                                      {idx + 1}
+                                    </td>
+                                    <td className="py-3 px-3 min-w-[260px]">
+                                      <div className="flex items-start gap-2.5">
+                                        {/* Photo Thumbnail / Badge */}
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenDetail(item)}
+                                          className="shrink-0 w-11 h-11 rounded-lg overflow-hidden border border-slate-700 bg-slate-900 flex items-center justify-center relative group hover:border-amber-400 transition-all cursor-pointer shadow-sm"
+                                          title="Klik untuk Lihat Foto & Detail Aset"
+                                        >
+                                          {item.fotoAset && item.fotoAset.length > 0 && item.fotoAset[0] ? (
+                                            <>
+                                              <img
+                                                src={item.fotoAset[0]}
+                                                alt=""
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                              />
+                                              {item.fotoAset.length > 1 && (
+                                                <span className="absolute bottom-0 right-0 bg-black/85 text-[8px] font-bold text-amber-300 px-1 rounded-tl">
+                                                  +{item.fotoAset.length - 1}
+                                                </span>
+                                              )}
+                                            </>
+                                          ) : (
+                                            <Camera className="w-4 h-4 text-slate-500 group-hover:text-amber-400" />
+                                          )}
+                                        </button>
 
-                                  {/* Lihat Foto & Detail button */}
-                                  <button
-                                    onClick={() => handleOpenDetail(item)}
-                                    className="p-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-600 border border-emerald-500/30 text-emerald-300 hover:text-white transition-colors cursor-pointer"
-                                    title="Lihat Foto Fisik & BAST Aset"
-                                  >
-                                    <Eye className="w-3.5 h-3.5" />
-                                  </button>
-
-                                  {!isTerhapus && (
-                                    <>
-                                      {/* Edit button */}
-                                      <button
-                                        onClick={() => handleOpenEdit(item)}
-                                        disabled={isMutasiDiajukan || isHapusDiajukan}
-                                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                        title="Edit Data Aset"
+                                        <div className="min-w-0 flex-1">
+                                          <span className="text-[10px] font-semibold text-amber-400 block truncate">
+                                            {item.klasifikasi}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleOpenDetail(item)}
+                                            className="font-bold text-white leading-tight text-left hover:text-amber-300 transition-colors block cursor-pointer"
+                                          >
+                                            {item.namaAset}
+                                          </button>
+                                          {item.volume && (
+                                            <div className="text-[10px] text-slate-400 mt-0.5">
+                                              Volume: {item.volume}
+                                            </div>
+                                          )}
+                                          {item.lokasi && (
+                                            <div className="text-[10px] text-slate-400 truncate">
+                                              Lokasi: {item.lokasi}
+                                            </div>
+                                          )}
+                                          {item.keterangan && (
+                                            <div
+                                              className="mt-1 text-[10px] text-amber-200/90 bg-amber-950/40 border border-amber-500/30 rounded px-1.5 py-0.5 max-w-[280px] break-words"
+                                              title={item.keterangan}
+                                            >
+                                              <span className="font-bold text-amber-400">Ket:</span> {item.keterangan}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="py-3 px-3">
+                                      <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300 font-semibold text-[10px] block truncate max-w-[120px]">
+                                        {(item.desaName || 'Desa').replace('DESA ', '')}
+                                      </span>
+                                    </td>
+                                    <td className="py-3 px-3 max-w-[180px]">
+                                      <div className="font-semibold text-slate-200 text-[11px]">
+                                        {item.bukti?.jenis || '-'}
+                                      </div>
+                                      <div className="text-[10px] text-slate-400 font-mono truncate">
+                                        No: {item.bukti?.nomor || '-'}
+                                      </div>
+                                      <div className="text-[10px] text-slate-400">
+                                        Tgl: {item.bukti?.tanggal || '-'}
+                                      </div>
+                                    </td>
+                                    <td className="py-3 px-3 font-mono text-[11px]">
+                                      <div className="font-bold text-emerald-400 tracking-wide">
+                                        {item.kodeAset}
+                                      </div>
+                                      {item.nomorRegister && (
+                                        <div className="text-[10px] text-amber-300 font-mono flex items-center gap-1 mt-0.5">
+                                          <span className="text-slate-500 font-sans">No. Reg:</span>
+                                          <span className="px-1 py-0.2 rounded bg-amber-500/10 border border-amber-500/30 font-bold">
+                                            {item.nomorRegister}
+                                          </span>
+                                        </div>
+                                      )}
+                                    </td>
+                                    <td className="py-3 px-3 text-center font-bold text-slate-200">
+                                      {item.tahunPerolehan}
+                                    </td>
+                                    <td className="py-3 px-3 text-right font-mono font-bold text-emerald-400">
+                                      {formatRupiah(item.nilaiPerolehan)}
+                                    </td>
+                                    <td className="py-3 px-3 text-center">
+                                      <span
+                                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                          item.kondisi === 'Baik'
+                                            ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300'
+                                            : item.kondisi === 'Rusak Ringan'
+                                            ? 'bg-amber-950/80 border-amber-500/40 text-amber-300'
+                                            : 'bg-red-950/80 border-red-500/40 text-red-300'
+                                        }`}
                                       >
-                                        <Edit2 className="w-3.5 h-3.5" />
-                                      </button>
+                                        {item.kondisi}
+                                      </span>
+                                    </td>
+                                    <td className="py-3 px-3 text-center">
+                                      <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-amber-300 font-mono text-[10px] font-bold">
+                                        {item.sumberDana}
+                                      </span>
+                                    </td>
+                                    <td className="py-3 px-3 text-center">
+                                      {isMutasiDiajukan ? (
+                                        <span className="px-2 py-0.5 rounded-full bg-blue-950/80 border border-blue-500/40 text-blue-300 text-[10px] font-bold flex items-center gap-1 justify-center">
+                                          <Clock className="w-3 h-3" /> Mutasi
+                                        </span>
+                                      ) : isHapusDiajukan ? (
+                                        <span className="px-2 py-0.5 rounded-full bg-red-950/80 border border-red-500/40 text-red-300 text-[10px] font-bold flex items-center gap-1 justify-center">
+                                          <Clock className="w-3 h-3" /> Hapus
+                                        </span>
+                                      ) : isTerhapus ? (
+                                        <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold">
+                                          Terhapus
+                                        </span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold">
+                                          Aktif
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="py-3 px-3 text-center">
+                                      <div className="flex items-center justify-center gap-1.5">
+                                        {/* Cetak Barcode button */}
+                                        <button
+                                          onClick={() => handleOpenBarcode(item)}
+                                          className="p-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-400 border border-amber-500/40 text-amber-300 hover:text-slate-950 transition-colors cursor-pointer"
+                                          title="Cetak Barcode & Label Inventaris Aset"
+                                        >
+                                          <QrCode className="w-3.5 h-3.5" />
+                                        </button>
 
-                                      {/* Mutasi button */}
-                                      <button
-                                        onClick={() => handleOpenMutasi(item)}
-                                        disabled={isMutasiDiajukan || isHapusDiajukan}
-                                        className="p-1.5 rounded-lg bg-blue-950/60 hover:bg-blue-900 border border-blue-500/30 text-blue-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                        title="Ajukan Mutasi Aset ke Kecamatan"
-                                      >
-                                        <ArrowRightLeft className="w-3.5 h-3.5" />
-                                      </button>
+                                        {/* Lihat Foto & Detail button */}
+                                        <button
+                                          onClick={() => handleOpenDetail(item)}
+                                          className="p-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-600 border border-emerald-500/30 text-emerald-300 hover:text-white transition-colors cursor-pointer"
+                                          title="Lihat Foto Fisik & BAST Aset"
+                                        >
+                                          <Eye className="w-3.5 h-3.5" />
+                                        </button>
 
-                                      {/* Penghapusan button */}
-                                      <button
-                                        onClick={() => handleOpenHapus(item)}
-                                        disabled={isMutasiDiajukan || isHapusDiajukan}
-                                        className="p-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900 border border-amber-500/30 text-amber-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                        title="Ajukan Penghapusan Aset ke Kecamatan"
-                                      >
-                                        <FileMinus className="w-3.5 h-3.5" />
-                                      </button>
+                                        {!isTerhapus && (
+                                          <>
+                                            {/* Edit button */}
+                                            <button
+                                              onClick={() => handleOpenEdit(item)}
+                                              disabled={isMutasiDiajukan || isHapusDiajukan}
+                                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                              title="Edit Data Aset"
+                                            >
+                                              <Edit2 className="w-3.5 h-3.5" />
+                                            </button>
 
-                                      {/* Direct delete (if active & draft) */}
-                                      <button
-                                        onClick={() => handleDeleteDirect(item.id, item.namaAset)}
-                                        disabled={isMutasiDiajukan || isHapusDiajukan}
-                                        className="p-1.5 rounded-lg bg-red-950/60 hover:bg-red-900 border border-red-500/30 text-red-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                        title="Hapus Data Aset Langsung"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </React.Fragment>
-                    ))}
-                  </React.Fragment>
-                ))
+                                            {/* Mutasi button */}
+                                            <button
+                                              onClick={() => handleOpenMutasi(item)}
+                                              disabled={isMutasiDiajukan || isHapusDiajukan}
+                                              className="p-1.5 rounded-lg bg-blue-950/60 hover:bg-blue-900 border border-blue-500/30 text-blue-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                              title="Ajukan Mutasi Aset ke Kecamatan"
+                                            >
+                                              <ArrowRightLeft className="w-3.5 h-3.5" />
+                                            </button>
+
+                                            {/* Penghapusan button */}
+                                            <button
+                                              onClick={() => handleOpenHapus(item)}
+                                              disabled={isMutasiDiajukan || isHapusDiajukan}
+                                              className="p-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900 border border-amber-500/30 text-amber-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                              title="Ajukan Penghapusan Aset ke Kecamatan"
+                                            >
+                                              <FileMinus className="w-3.5 h-3.5" />
+                                            </button>
+
+                                            {/* Direct delete (if active & draft) */}
+                                            <button
+                                              onClick={() => handleDeleteDirect(item.id, item.namaAset)}
+                                              disabled={isMutasiDiajukan || isHapusDiajukan}
+                                              className="p-1.5 rounded-lg bg-red-950/60 hover:bg-red-900 border border-red-500/30 text-red-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                              title="Hapus Data Aset Langsung"
+                                            >
+                                              <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </React.Fragment>
+                          ))
+                        )
+                      )}
+                    </React.Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>
