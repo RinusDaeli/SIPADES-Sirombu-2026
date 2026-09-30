@@ -165,15 +165,17 @@ export const AsetManagementView: React.FC = () => {
   const sequentialCodes = useMemo(() => {
     const count = Math.max(1, jumlahUnit);
     const startSeq = typeof customStartSeq === 'number' && customStartSeq > 0 ? customStartSeq : undefined;
+    const year = Number(formData.tahunPerolehan) || new Date().getFullYear();
     return generateSequentialKodeAset(
       formData.desaId,
       formData.klasifikasi,
       count,
       asets,
       desas,
-      startSeq
+      startSeq,
+      year
     );
-  }, [formData.desaId, formData.klasifikasi, jumlahUnit, asets, desas, customStartSeq]);
+  }, [formData.desaId, formData.klasifikasi, formData.tahunPerolehan, jumlahUnit, asets, desas, customStartSeq]);
 
   const autoKodeAwal = sequentialCodes[0]?.kodeAset || '';
   const autoKodeAkhir = sequentialCodes[sequentialCodes.length - 1]?.kodeAset || '';
@@ -381,7 +383,8 @@ export const AsetManagementView: React.FC = () => {
 
     const targetDesaId = isDesaUser ? currentUser.desaId || 'desa-21' : desas[0]?.id || 'desa-01';
     const targetKlas: KlasAset = 'Peralatan, Mesin, dan Alat Berat';
-    const initialCodes = generateSequentialKodeAset(targetDesaId, targetKlas, 1, asets, desas);
+    const currentYear = new Date().getFullYear();
+    const initialCodes = generateSequentialKodeAset(targetDesaId, targetKlas, 1, asets, desas, undefined, currentYear);
     const autoKode = initialCodes[0]?.kodeAset || '';
 
     setFormData({
@@ -392,7 +395,7 @@ export const AsetManagementView: React.FC = () => {
       buktiJenis: 'Kwitansi / BAST',
       buktiNomor: '',
       buktiTanggal: formatTanggalIndonesia(new Date()),
-      tahunPerolehan: new Date().getFullYear(),
+      tahunPerolehan: currentYear,
       nilaiPerolehan: 0,
       kondisi: 'Baik',
       sumberDana: 'DDS',
@@ -457,6 +460,7 @@ export const AsetManagementView: React.FC = () => {
     }
 
     const startSeq = typeof customStartSeq === 'number' && customStartSeq > 0 ? customStartSeq : undefined;
+    const targetYear = Number(formData.tahunPerolehan) || new Date().getFullYear();
 
     // Compute fresh sequential codes for all units
     const freshCodes = generateSequentialKodeAset(
@@ -465,7 +469,8 @@ export const AsetManagementView: React.FC = () => {
       count,
       asets,
       desas,
-      startSeq
+      startSeq,
+      targetYear
     );
 
     if (count === 1) {
@@ -1518,7 +1523,8 @@ export const AsetManagementView: React.FC = () => {
                     value={formData.desaId}
                     onChange={(e) => {
                       const newDesaId = e.target.value;
-                      const autoKode = generateAutoKodeAset(newDesaId, formData.klasifikasi, asets, desas);
+                      const targetYear = Number(formData.tahunPerolehan) || new Date().getFullYear();
+                      const autoKode = generateAutoKodeAset(newDesaId, formData.klasifikasi, asets, desas, undefined, targetYear);
                       setFormData({ ...formData, desaId: newDesaId, kodeAset: autoKode });
                     }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-400"
@@ -1540,7 +1546,8 @@ export const AsetManagementView: React.FC = () => {
                     value={formData.klasifikasi}
                     onChange={(e) => {
                       const newKlas = e.target.value as KlasAset;
-                      const autoKode = generateAutoKodeAset(formData.desaId, newKlas, asets, desas);
+                      const targetYear = Number(formData.tahunPerolehan) || new Date().getFullYear();
+                      const autoKode = generateAutoKodeAset(formData.desaId, newKlas, asets, desas, undefined, targetYear);
                       setFormData({ ...formData, klasifikasi: newKlas, kodeAset: autoKode });
                     }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-400"
@@ -1889,7 +1896,11 @@ export const AsetManagementView: React.FC = () => {
                     </label>
                     <button
                       type="button"
-                      onClick={() => setFormData({ ...formData, tahunPerolehan: new Date().getFullYear() })}
+                      onClick={() => {
+                        const curYear = new Date().getFullYear();
+                        const autoKode = generateAutoKodeAset(formData.desaId, formData.klasifikasi, asets, desas, undefined, curYear);
+                        setFormData({ ...formData, tahunPerolehan: curYear, kodeAset: autoKode });
+                      }}
                       className="text-[10px] text-amber-400 hover:text-amber-300 font-semibold hover:underline cursor-pointer flex items-center gap-1"
                       title="Set ke tahun sekarang"
                     >
@@ -1905,7 +1916,11 @@ export const AsetManagementView: React.FC = () => {
                     value={formData.tahunPerolehan}
                     onChange={(e) => {
                       const val = parseInt(e.target.value, 10);
-                      setFormData({ ...formData, tahunPerolehan: isNaN(val) ? ('' as any) : val });
+                      const targetYear = isNaN(val) ? ('' as any) : val;
+                      const autoKode = !isNaN(val) && val >= 1970
+                        ? generateAutoKodeAset(formData.desaId, formData.klasifikasi, asets, desas, undefined, val)
+                        : formData.kodeAset;
+                      setFormData({ ...formData, tahunPerolehan: targetYear, kodeAset: autoKode });
                     }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold focus:outline-none focus:border-amber-400"
                     placeholder={`Contoh: ${new Date().getFullYear()}`}
@@ -2311,7 +2326,8 @@ export const AsetManagementView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        const freshKode = generateAutoKodeAset(formData.desaId, formData.klasifikasi, asets, desas);
+                        const yr = Number(formData.tahunPerolehan) || new Date().getFullYear();
+                        const freshKode = generateAutoKodeAset(formData.desaId, formData.klasifikasi, asets, desas, undefined, yr);
                         setFormData((prev) => ({ ...prev, kodeAset: freshKode }));
                       }}
                       className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 hover:underline cursor-pointer"
@@ -2335,7 +2351,11 @@ export const AsetManagementView: React.FC = () => {
                     </label>
                     <button
                       type="button"
-                      onClick={() => setFormData({ ...formData, tahunPerolehan: new Date().getFullYear() })}
+                      onClick={() => {
+                        const curYear = new Date().getFullYear();
+                        const freshKode = generateAutoKodeAset(formData.desaId, formData.klasifikasi, asets, desas, undefined, curYear);
+                        setFormData({ ...formData, tahunPerolehan: curYear, kodeAset: freshKode });
+                      }}
                       className="text-[10px] text-amber-400 hover:text-amber-300 font-semibold hover:underline cursor-pointer"
                       title="Set ke tahun sekarang"
                     >
@@ -2349,7 +2369,11 @@ export const AsetManagementView: React.FC = () => {
                     value={formData.tahunPerolehan}
                     onChange={(e) => {
                       const val = parseInt(e.target.value, 10);
-                      setFormData({ ...formData, tahunPerolehan: isNaN(val) ? ('' as any) : val });
+                      const targetYear = isNaN(val) ? ('' as any) : val;
+                      const autoKode = !isNaN(val) && val >= 1970
+                        ? generateAutoKodeAset(formData.desaId, formData.klasifikasi, asets, desas, undefined, val)
+                        : formData.kodeAset;
+                      setFormData({ ...formData, tahunPerolehan: targetYear, kodeAset: autoKode });
                     }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold focus:outline-none focus:border-amber-400"
                   />

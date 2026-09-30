@@ -24,7 +24,7 @@ import {
   Info,
   Layers,
   Briefcase,
-  GitBranch,
+  Cloud,
   RefreshCw,
 } from 'lucide-react';
 import { Desa, KecamatanProfile } from '../types';
@@ -40,6 +40,7 @@ export const DesaInfoView: React.FC = () => {
     setSelectedDesaFilter,
     kecamatanProfile,
     updateKecamatanProfile,
+    saveAllToCloudFirebase,
     saveMasterToSourceCode,
   } = useApp();
 
@@ -72,7 +73,7 @@ export const DesaInfoView: React.FC = () => {
 
   const handleManualSyncMaster = async () => {
     setIsSavingMaster(true);
-    const res = await saveMasterToSourceCode();
+    const res = await saveAllToCloudFirebase();
     setIsSavingMaster(false);
     setSaveSuccessMessage(res.message);
     setTimeout(() => {
@@ -98,12 +99,12 @@ export const DesaInfoView: React.FC = () => {
     updateKecamatanProfile(cleaned);
     setIsCamatDirty(false);
 
-    // Save permanently to server database and master source code (src/data/initialData.ts)
-    await saveMasterToSourceCode({ kecamatanProfile: cleaned });
+    // Save directly to Google Cloud Firebase
+    await saveAllToCloudFirebase({ kecamatanProfile: cleaned });
     setIsSavingMaster(false);
 
     setSaveSuccessMessage(
-      'Data Camat & Kantor Kecamatan Sirombu berhasil disimpan permanen ke Master Source Code (src/data/initialData.ts) dan Basis Data Server. Aman dari reset saat di-share ke GitHub!'
+      'Data Camat & Kantor Kecamatan Sirombu berhasil disimpan permanen ke Google Cloud Firebase!'
     );
 
     setTimeout(() => {
@@ -151,21 +152,22 @@ export const DesaInfoView: React.FC = () => {
   });
 
   useEffect(() => {
-    const currentSelectedDesa = desas.find((d) => d.id === activeDesaId) || desas[20] || desas[0] || INITIAL_DESA_LIST[20] || INITIAL_DESA_LIST[0];
-    setFormData({
-      name: currentSelectedDesa.name,
-      code: currentSelectedDesa.code,
-      kepalaDesa: currentSelectedDesa.kepalaDesa || '',
-      nipKepalaDesa: currentSelectedDesa.nipKepalaDesa || '',
-      alamatDesa: currentSelectedDesa.alamatDesa || '',
-      emailDesa: currentSelectedDesa.emailDesa || '',
-      nomorHp: currentSelectedDesa.nomorHp || currentSelectedDesa.kontak || '',
-      kodePos: currentSelectedDesa.kodePos || '22863',
-      kaurAset: currentSelectedDesa.kaurAset || '',
-    });
-    setIsDesaDirty(false);
-    setSaveSuccessMessage(null);
-  }, [activeDesaId]);
+    if (!isDesaDirty) {
+      const currentSelectedDesa = desas.find((d) => d.id === activeDesaId) || desas[20] || desas[0] || INITIAL_DESA_LIST[20] || INITIAL_DESA_LIST[0];
+      setFormData({
+        name: currentSelectedDesa.name,
+        code: currentSelectedDesa.code,
+        kepalaDesa: currentSelectedDesa.kepalaDesa || '',
+        nipKepalaDesa: currentSelectedDesa.nipKepalaDesa || '',
+        alamatDesa: currentSelectedDesa.alamatDesa || '',
+        emailDesa: currentSelectedDesa.emailDesa || '',
+        nomorHp: currentSelectedDesa.nomorHp || currentSelectedDesa.kontak || '',
+        kodePos: currentSelectedDesa.kodePos || '22863',
+        kaurAset: currentSelectedDesa.kaurAset || '',
+      });
+      setSaveSuccessMessage(null);
+    }
+  }, [activeDesaId, desas, isDesaDirty]);
 
   const handleInputChange = (field: string, value: string) => {
     setIsDesaDirty(true);
@@ -185,16 +187,16 @@ export const DesaInfoView: React.FC = () => {
       kodePos: formData.kodePos.trim(),
       kaurAset: formData.kaurAset.trim(),
     };
-    updateDesa(targetDesa.id, cleanedDesa);
+    await updateDesa(targetDesa.id, cleanedDesa);
     setIsDesaDirty(false);
 
-    // Save permanently to server database and master source code (src/data/initialData.ts)
+    // Save directly to Google Cloud Firebase
     const updatedDesasList = desas.map((d) => (d.id === targetDesa.id ? { ...d, ...cleanedDesa } : d));
-    await saveMasterToSourceCode({ desas: updatedDesasList });
+    await saveAllToCloudFirebase({ desas: updatedDesasList });
     setIsSavingMaster(false);
 
     setSaveSuccessMessage(
-      `Profil ${targetDesa.name} berhasil disimpan permanen ke Master Source Code (src/data/initialData.ts) dan Basis Data Server. Aman dari reset saat di-share ke GitHub!`
+      `Profil ${targetDesa.name} berhasil disimpan permanen ke Google Cloud Firebase!`
     );
 
     setTimeout(() => {
@@ -284,10 +286,10 @@ export const DesaInfoView: React.FC = () => {
             onClick={handleManualSyncMaster}
             disabled={isSavingMaster}
             className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-amber-300 border border-amber-500/40 font-semibold text-xs transition-all shadow cursor-pointer disabled:opacity-50"
-            title="Simpan seluruh data saat ini ke src/data/initialData.ts agar tidak ter-reset ke setelan awal saat di-share ke GitHub"
+            title="Simpan seluruh data saat ini ke Google Cloud Firebase agar permanen dan tersinkronisasi lintas perangkat"
           >
-            <GitBranch className={`w-3.5 h-3.5 ${isSavingMaster ? 'animate-spin text-amber-300' : 'text-amber-400'}`} />
-            <span>{isSavingMaster ? 'Menyimpan...' : 'Simpan Permanen Master (GitHub)'}</span>
+            <Cloud className={`w-3.5 h-3.5 ${isSavingMaster ? 'animate-spin text-amber-300' : 'text-amber-400'}`} />
+            <span>{isSavingMaster ? 'Menyimpan...' : 'Simpan Semua ke Firebase'}</span>
           </button>
 
           {activeSubTab === 'camat' ? (
@@ -312,12 +314,12 @@ export const DesaInfoView: React.FC = () => {
         </div>
       </div>
 
-      {/* Info Banner GitHub Persistence */}
-      <div className="bg-sky-500/10 border border-sky-500/30 rounded-xl px-4 py-2.5 flex items-center justify-between gap-3 text-sky-200 text-xs">
+      {/* Info Banner Firebase Cloud Persistence */}
+      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-2.5 flex items-center justify-between gap-3 text-emerald-200 text-xs">
         <div className="flex items-center gap-2.5">
-          <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0" />
+          <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>
-            <strong>Proteksi GitHub Aktif:</strong> Perubahan data Camat, Desa, dan Aset otomatis ditulis permanen ke Master Source Code (<code className="font-mono text-sky-300 bg-sky-950/60 px-1 py-0.5 rounded">src/data/initialData.ts</code>) dan server. Data tidak akan kembali ke setelan awal saat di-share ke GitHub!
+            <strong>Basis Data Firebase Aktif:</strong> Perubahan data Kepala Desa, NIP, Petugas Aset, Camat, dan Inventaris disimpan langsung dan permanen ke Google Cloud Firestore. Data aman tersinkronisasi di semua perangkat tanpa tergantung berkas GitHub.
           </span>
         </div>
       </div>

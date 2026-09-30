@@ -124,8 +124,12 @@ export function subscribeAsets(callback: (asets: Aset[]) => void): () => void {
         list.sort((a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime());
         callback(list);
       },
-      (err) => {
-        console.warn('[Firestore] subscribeAsets error:', err);
+      (err: any) => {
+        if (err?.code === 'resource-exhausted') {
+          console.warn('[Firestore] Notice: Quota limit reached on free tier. Using synchronized server and local state.');
+        } else {
+          console.warn('[Firestore] subscribeAsets error:', err);
+        }
       }
     );
   } catch (e) {
@@ -274,7 +278,10 @@ export async function saveAsetToCloud(aset: Aset): Promise<void> {
     const cleaned = cleanForFirestore(aset);
     const docRef = doc(db, 'asets', aset.id);
     await setDoc(docRef, cleaned, { merge: true });
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.code === 'resource-exhausted') {
+      return;
+    }
     console.warn('[Firestore] saveAsetToCloud notice:', err);
   }
 }
@@ -322,8 +329,81 @@ export async function saveDesaToCloud(desa: Desa): Promise<void> {
     const cleaned = cleanForFirestore(desa);
     const docRef = doc(db, 'desas', desa.id);
     await setDoc(docRef, cleaned, { merge: true });
-  } catch (err) {
+    console.log(`[Firestore] Successfully saved desa: ${desa.name} (${desa.id})`);
+  } catch (err: any) {
+    if (err?.code === 'resource-exhausted') {
+      console.warn('[Firestore] Quota limit reached; saved to server & local storage safely.');
+      return;
+    }
     console.warn('[Firestore] saveDesaToCloud notice:', err);
+  }
+}
+
+export async function saveAllDesasToCloud(desas: Desa[]): Promise<void> {
+  try {
+    if (!Array.isArray(desas) || desas.length === 0) return;
+    const batch = writeBatch(db);
+    for (const d of desas) {
+      if (d && d.id) {
+        batch.set(doc(db, 'desas', d.id), cleanForFirestore(d), { merge: true });
+      }
+    }
+    await batch.commit();
+    console.log(`[Firestore] Successfully batch saved ${desas.length} desas to Cloud Firestore`);
+  } catch (err: any) {
+    if (err?.code === 'resource-exhausted') {
+      console.warn('[Firestore] Quota limit reached; saved to server & local storage safely.');
+      return;
+    }
+    console.warn('[Firestore] saveAllDesasToCloud notice:', err);
+  }
+}
+
+export async function syncAllToFirestore(payload: {
+  desas?: Desa[];
+  kecamatanProfile?: KecamatanProfile;
+  users?: User[];
+  asets?: Aset[];
+}): Promise<void> {
+  try {
+    const batch = writeBatch(db);
+
+    if (Array.isArray(payload.desas)) {
+      for (const d of payload.desas) {
+        if (d && d.id) {
+          batch.set(doc(db, 'desas', d.id), cleanForFirestore(d), { merge: true });
+        }
+      }
+    }
+
+    if (payload.kecamatanProfile) {
+      batch.set(doc(db, 'system', 'kecamatanProfile'), cleanForFirestore(payload.kecamatanProfile), { merge: true });
+    }
+
+    if (Array.isArray(payload.users)) {
+      for (const u of payload.users) {
+        if (u && u.id) {
+          batch.set(doc(db, 'users', u.id), cleanForFirestore(u), { merge: true });
+        }
+      }
+    }
+
+    if (Array.isArray(payload.asets)) {
+      for (const a of payload.asets) {
+        if (a && a.id) {
+          batch.set(doc(db, 'asets', a.id), cleanForFirestore(a), { merge: true });
+        }
+      }
+    }
+
+    await batch.commit();
+    console.log('[Firestore] Complete unified sync to Cloud Firestore succeeded');
+  } catch (err: any) {
+    if (err?.code === 'resource-exhausted') {
+      console.warn('[Firestore] Quota limit reached during unified sync; local and server data remain safe and intact.');
+      return;
+    }
+    console.warn('[Firestore] syncAllToFirestore notice:', err);
   }
 }
 

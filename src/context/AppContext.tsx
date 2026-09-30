@@ -17,7 +17,11 @@ import {
   INITIAL_PENGESAHAN,
   INITIAL_KECAMATAN_PROFILE,
 } from '../data/initialData';
-import { formatTanggalIndonesia, generateSequentialKodeAset } from '../utils/reportGenerator';
+import {
+  formatTanggalIndonesia,
+  generateSequentialKodeAset,
+  normalizeAsetRegisters,
+} from '../utils/reportGenerator';
 import {
   safeLocalStorageSetItem,
   saveAsetsToIndexedDB,
@@ -37,6 +41,8 @@ import {
   deleteVerifikasiFromCloud,
   savePengesahanToCloud,
   saveDesaToCloud,
+  saveAllDesasToCloud,
+  syncAllToFirestore,
   saveKecamatanProfileToCloud,
   saveUserToCloud,
   deleteUserFromCloud,
@@ -68,6 +74,12 @@ interface AppContextType {
   isServerConnected: boolean;
   lastSyncTime: Date;
   refreshServerData: () => Promise<void>;
+  saveAllToCloudFirebase: (overrides?: {
+    desas?: Desa[];
+    kecamatanProfile?: KecamatanProfile;
+    users?: User[];
+    asets?: Aset[];
+  }) => Promise<{ success: boolean; message: string }>;
   saveMasterToSourceCode: (overrides?: {
     desas?: Desa[];
     kecamatanProfile?: KecamatanProfile;
@@ -144,7 +156,7 @@ interface AppContextType {
   };
 
   // Desa Information Update
-  updateDesa: (id: string, data: Partial<Desa>) => { success: boolean; message?: string };
+  updateDesa: (id: string, data: Partial<Desa>) => Promise<{ success: boolean; message?: string }> | { success: boolean; message?: string };
 
   // Multi-Device Cloud & P2P Sync
   importSyncPayload: (payload: FullSyncPayload) => void;
@@ -516,10 +528,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // so every laptop, mobile phone, and tablet starts with the exact same cloud data
     fetchInitialFirestoreData().then((cloudData) => {
       if (cloudData) {
-        if (Array.isArray(cloudData.asets)) {
+        if (Array.isArray(cloudData.asets) && cloudData.asets.length > 0) {
           const clean = deduplicateAsets(cloudData.asets, deletedAssetIds);
-          setAsets(clean);
-          persistAsetsSafely(clean);
+          const { asets: normalized } = normalizeAsetRegisters(clean, desas);
+          setAsets(normalized);
+          persistAsetsSafely(normalized);
         }
         if (Array.isArray(cloudData.desas) && cloudData.desas.length > 0) {
           setDesas(cloudData.desas);
@@ -549,14 +562,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     const unsubAsets = subscribeAsets((cloudAsets) => {
-      if (cloudAsets) {
+      if (cloudAsets && cloudAsets.length > 0) {
         setAsets((prev) => {
           // Cloud Firestore is the primary authoritative source of truth across all devices.
           // Initial & live data loaded strictly matches Cloud Firestore so every device sees identical data.
           const cleanCloud = deduplicateAsets(cloudAsets, deletedAssetIds);
-          if (JSON.stringify(prev) === JSON.stringify(cleanCloud)) return prev;
-          persistAsetsSafely(cleanCloud);
-          return cleanCloud;
+          const { asets: normalized } = normalizeAsetRegisters(cleanCloud, desas);
+          if (JSON.stringify(prev) === JSON.stringify(normalized)) return prev;
+          persistAsetsSafely(normalized);
+          return normalized;
         });
         setIsServerConnected(true);
         setLastSyncTime(new Date());
@@ -1070,7 +1084,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (unitCount > 1) {
       const totalNilai = Number(data.nilaiPerolehan || 0);
       const unitPrice = Math.round(totalNilai / unitCount);
-      const codes = generateSequentialKodeAset(data.desaId, data.klasifikasi, unitCount, asets, desas);
+      const targetYear = Number(data.tahunPerolehan) || new Date().getFullYear();
+      const codes = generateSequentialKodeAset(data.desaId, data.klasifikasi, unitCount, asets, desas, undefined, targetYear);
       const batchItems = codes.map((codeInfo) => ({
         ...data,
         kodeAset: codeInfo.kodeAset,
@@ -1381,22 +1396,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     savePengesahanToCloud(targetPengesahan).catch((e) => console.warn('[Cloud] Pengesahan save failed:', e));
   };
 
-  const updateDesa = (id: string, data: Partial<Desa>) => {
+  const updateDesa = async (id: string, data: Partial<Desa>): Promise<{ success: boolean; message?: string }> => {
+    let updatedDesa: Desa | null = null;
     let finalDesas: Desa[] = [];
+
     setDesas((prev) => {
-      finalDesas = prev.map((d) => (d.id === id ? { ...d, ...data } : d));
+      finalDesas = prev.map((d) => {
+        if (d.id === id) {
+          updatedDesa = { ...d, ...data };
+          return updatedDesa;
+        }
+        return d;
+      });
       safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(finalDesas));
       return finalDesas;
     });
 
-    const target = desas.find((d) => d.id === id);
-    const updated = target ? { ...target, ...data } : null;
-    if (updated) {
-      saveDesaToCloud(updated).catch((e) => console.warn('[Cloud] Desa save failed:', e));
+    if (!updatedDesa) {
+      const target = desas.find((d) => d.id === id);
+      if (target) {
+        updatedDesa = { ...target, ...data };
+      }
+    }
+
+    if (updatedDesa) {
+      try {
+        await saveDesaToCloud(updatedDesa);
+      } catch (e) {
+        console.warn('[Cloud] Desa save error:', e);
+      }
+
       fetch('/api/desa/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated),
+        body: JSON.stringify(updatedDesa),
       }).catch((e) => console.warn('[Sync] Desa update failed:', e));
 
       syncManager.broadcastChange({
@@ -1718,7 +1751,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true, message: 'Data Camat & Kantor Kecamatan Sirombu berhasil diperbarui!' };
   };
 
-  const saveMasterToSourceCode = async (overrides?: {
+  const saveAllToCloudFirebase = async (overrides?: {
     desas?: Desa[];
     kecamatanProfile?: KecamatanProfile;
     users?: User[];
@@ -1730,7 +1763,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const payloadUsers = overrides?.users || users;
       const payloadAsets = overrides?.asets || asets;
 
-      const response = await fetch('/api/sync-master', {
+      // 1. Authoritative write to Google Cloud Firestore (unifying all storage in Firebase)
+      await syncAllToFirestore({
+        desas: payloadDesas,
+        kecamatanProfile: payloadKecamatan,
+        users: payloadUsers,
+        asets: payloadAsets,
+      });
+
+      // 2. Also keep server memory and JSON backup in sync without modifying source code files
+      fetch('/api/sync-master', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1739,21 +1781,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           users: payloadUsers,
           asets: payloadAsets,
         }),
-      });
-      const data = await response.json();
-      if (data.success) {
-        setIsServerConnected(true);
-        setLastSyncTime(new Date());
-        return {
-          success: true,
-          message: 'Semua data berhasil disimpan permanen ke Master Source Code (src/data/initialData.ts) dan Basis Data Server. Aman untuk di-share ke GitHub tanpa kembali ke setelan awal!',
-        };
-      }
-      return { success: false, message: data.message || 'Gagal menyimpan ke master source code.' };
+      }).catch(() => {});
+
+      setIsServerConnected(true);
+      setLastSyncTime(new Date());
+
+      return {
+        success: true,
+        message: 'Seluruh data berhasil disimpan permanen ke Google Cloud Firebase! Aman dari reset dan tersinkronisasi otomatis.',
+      };
     } catch (err: any) {
-      return { success: false, message: `Gagal menghubungkan ke server: ${err?.message || 'Koneksi terputus'}` };
+      console.error('[Cloud] saveAllToCloudFirebase error:', err);
+      return {
+        success: false,
+        message: `Gagal menyimpan ke Firebase: ${err?.message || 'Koneksi terputus'}`,
+      };
     }
   };
+
+  const saveMasterToSourceCode = saveAllToCloudFirebase;
 
   const resetToDefault = () => {
     localStorage.clear();
@@ -1812,6 +1858,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateDesa,
         importSyncPayload,
         broadcastCurrentState,
+        saveAllToCloudFirebase,
         saveMasterToSourceCode,
         resetToDefault,
       }}

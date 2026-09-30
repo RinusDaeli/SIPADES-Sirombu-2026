@@ -100,8 +100,8 @@ export const KLASIFIKASI_KODE_PREFIX: Record<KlasAset, string> = {
 
 /**
  * Generate standard Permendagri No. 1/2016 Asset Code / Register Number automatically
- * Format: [Golongan.Bidang.Kelompok].[KodeDesa].[NomorRegister]
- * Example: 01.01.01.21.0001 (Tanah pertama di Desa Sirombu)
+ * Format: [Golongan.Bidang.Kelompok].[KodeDesa].[TahunPerolehan].[NomorRegister]
+ * Example: 01.01.01.21.2025.0001 (Tanah pertama di Desa Sirombu tahun pengadaan 2025)
  */
 export interface GeneratedKodeAsetInfo {
   kodeAset: string;
@@ -110,9 +110,15 @@ export interface GeneratedKodeAsetInfo {
 }
 
 /**
- * Generate sequential Permendagri No. 20/2018 Asset Codes / Register Numbers for 1 or more units
- * Format: [Golongan.Bidang.Kelompok].[KodeDesa].[NomorRegister]
- * Example: 02.01.01.21.0001 s/d 02.01.01.21.0005 (jika membeli 5 unit laptop di Desa Sirombu)
+ * Generate sequential Permendagri No. 20/2018 & Permendagri No. 1/2016 Asset Codes / Register Numbers for 1 or more units
+ * Format: [Golongan.Bidang.Kelompok].[KodeDesa].[TahunPerolehan].[NomorRegister]
+ * Example: 02.01.01.22.2026.0001 s/d 02.01.01.22.2026.0005 (jika membeli 5 unit di Desa Togideu tahun 2026)
+ *
+ * Penomoran nomor register terisolasi per tahun pengadaan (perolehan):
+ * - Tahun 2025 tersusun dari 0001 sampai selesai
+ * - Tahun 2026 tersusun dari 0001 sampai selesai
+ * Sehingga jika desa menginput tahun 2026 terlebih dahulu lalu menginput tahun 2025,
+ * nomor register tahun 2025 tetap mulai dari 0001 dan tidak terusan dari tahun lain.
  */
 export const generateSequentialKodeAset = (
   desaId: string,
@@ -120,7 +126,8 @@ export const generateSequentialKodeAset = (
   count: number = 1,
   existingAsets: Aset[] = [],
   desasList: Desa[] = [],
-  customStartSeq?: number
+  customStartSeq?: number,
+  tahunPerolehan?: number
 ): GeneratedKodeAsetInfo[] => {
   const prefix = KLASIFIKASI_KODE_PREFIX[klasifikasi] || '01.01.01';
 
@@ -134,35 +141,44 @@ export const generateSequentialKodeAset = (
     desaCodeNumber = desaId.replace('desa-', '').padStart(2, '0');
   }
 
-  const basePattern = `${prefix}.${desaCodeNumber}.`;
+  const effectiveYear =
+    tahunPerolehan && Number(tahunPerolehan) >= 1970
+      ? Number(tahunPerolehan)
+      : new Date().getFullYear();
+
+  const basePattern = `${prefix}.${desaCodeNumber}.${effectiveYear}.`;
 
   let maxSeq = 0;
   for (const a of existingAsets) {
-    if (a && a.desaId === desaId) {
-      if (a.kodeAset) {
-        const trimmed = a.kodeAset.trim();
-        if (trimmed.startsWith(basePattern)) {
-          const parts = trimmed.split('.');
-          const lastPart = parts[parts.length - 1];
-          const num = parseInt(lastPart, 10);
-          if (!isNaN(num) && num > maxSeq) {
-            maxSeq = num;
+    if (a && a.desaId === desaId && a.status !== 'terhapus') {
+      const aYear = a.tahunPerolehan ? Number(a.tahunPerolehan) : null;
+      // Scoping nomor register strictly per tahun pengadaan / perolehan
+      if (aYear === effectiveYear) {
+        if (a.nomorRegister) {
+          const regNum = parseInt(a.nomorRegister, 10);
+          if (!isNaN(regNum) && regNum > maxSeq) {
+            maxSeq = regNum;
           }
-        } else if (a.klasifikasi === klasifikasi) {
-          // If code ends with .XXXX (4 or more digits)
-          const match = trimmed.match(/\.(\d{3,5})$/);
-          if (match) {
-            const num = parseInt(match[1], 10);
+        }
+        if (a.kodeAset) {
+          const trimmed = a.kodeAset.trim();
+          if (trimmed.startsWith(basePattern)) {
+            const parts = trimmed.split('.');
+            const lastPart = parts[parts.length - 1];
+            const num = parseInt(lastPart, 10);
             if (!isNaN(num) && num > maxSeq) {
               maxSeq = num;
             }
+          } else {
+            // If code ends with .XXXX (4 or more digits)
+            const match = trimmed.match(/\.(\d{3,5})$/);
+            if (match) {
+              const num = parseInt(match[1], 10);
+              if (!isNaN(num) && num > maxSeq) {
+                maxSeq = num;
+              }
+            }
           }
-        }
-      }
-      if (a.nomorRegister && a.klasifikasi === klasifikasi) {
-        const regNum = parseInt(a.nomorRegister, 10);
-        if (!isNaN(regNum) && regNum > maxSeq) {
-          maxSeq = regNum;
         }
       }
     }
@@ -194,7 +210,8 @@ export const generateAutoKodeAset = (
   klasifikasi: KlasAset,
   existingAsets: Aset[] = [],
   desasList: Desa[] = [],
-  customStartSeq?: number
+  customStartSeq?: number,
+  tahunPerolehan?: number
 ): string => {
   const list = generateSequentialKodeAset(
     desaId,
@@ -202,10 +219,87 @@ export const generateAutoKodeAset = (
     1,
     existingAsets,
     desasList,
-    customStartSeq
+    customStartSeq,
+    tahunPerolehan
   );
-  return list[0]?.kodeAset || `${KLASIFIKASI_KODE_PREFIX[klasifikasi] || '01.01.01'}.01.0001`;
+  const targetYear =
+    tahunPerolehan && Number(tahunPerolehan) >= 1970
+      ? Number(tahunPerolehan)
+      : new Date().getFullYear();
+  return list[0]?.kodeAset || `${KLASIFIKASI_KODE_PREFIX[klasifikasi] || '01.01.01'}.01.${targetYear}.0001`;
 };
+
+/**
+ * Normalizes asset registration numbers and codes so that:
+ * 1. Each (desaId, tahunPerolehan) group has sequential nomorRegister starting strictly from 0001.
+ * 2. Each asset's kodeAset includes the procurement year: [Golongan.Bidang.Kelompok].[KodeDesa].[TahunPerolehan].[NomorRegister]
+ */
+export function normalizeAsetRegisters(
+  list: Aset[],
+  desasList: Desa[] = []
+): { asets: Aset[]; changed: boolean } {
+  if (!Array.isArray(list)) return { asets: [], changed: false };
+  let hasChanged = false;
+
+  // Group by desaId, then by tahunPerolehan
+  const byDesaYear = new Map<string, Aset[]>();
+  list.forEach((item) => {
+    if (!item) return;
+    const dId = item.desaId || 'unknown';
+    const yr = Number(item.tahunPerolehan) || new Date().getFullYear();
+    const key = `${dId}_${yr}`;
+    if (!byDesaYear.has(key)) byDesaYear.set(key, []);
+    byDesaYear.get(key)!.push(item);
+  });
+
+  const updatedMap = new Map<string, Aset>();
+
+  byDesaYear.forEach((groupItems) => {
+    // Sort items in group by existing nomorRegister (or createdAt)
+    const sorted = [...groupItems].sort((a, b) => {
+      const regA = parseInt(a.nomorRegister || '0', 10) || 0;
+      const regB = parseInt(b.nomorRegister || '0', 10) || 0;
+      if (regA !== regB) return regA - regB;
+      return (a.createdAt || '').localeCompare(b.createdAt || '');
+    });
+
+    sorted.forEach((item, idx) => {
+      const targetSeq = idx + 1;
+      const targetRegStr = String(targetSeq).padStart(4, '0');
+      const targetYear = Number(item.tahunPerolehan) || new Date().getFullYear();
+
+      const matchedDesa = desasList.find((d) => d && d.id === item.desaId);
+      let desaCodeNumber = '01';
+      if (matchedDesa && matchedDesa.code) {
+        const parts = matchedDesa.code.split('.');
+        const last = parts[parts.length - 1];
+        desaCodeNumber = last.length >= 2 ? last.slice(-2) : last.padStart(2, '0');
+      } else if (item.desaId && item.desaId.startsWith('desa-')) {
+        desaCodeNumber = item.desaId.replace('desa-', '').padStart(2, '0');
+      }
+
+      const prefix = KLASIFIKASI_KODE_PREFIX[item.klasifikasi] || '01.01.01';
+      const targetKode = `${prefix}.${desaCodeNumber}.${targetYear}.${targetRegStr}`;
+
+      const regMatches = item.nomorRegister === targetRegStr;
+      const kodeMatches = item.kodeAset === targetKode;
+
+      if (!regMatches || !kodeMatches) {
+        hasChanged = true;
+        updatedMap.set(item.id, {
+          ...item,
+          nomorRegister: targetRegStr,
+          kodeAset: targetKode,
+        });
+      } else {
+        updatedMap.set(item.id, item);
+      }
+    });
+  });
+
+  const result = list.map((item) => updatedMap.get(item.id) || item);
+  return { asets: result, changed: hasChanged };
+}
 
 export interface PermendagriPdfOptions {
   desa?: Desa;

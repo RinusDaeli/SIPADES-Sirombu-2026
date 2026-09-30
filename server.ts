@@ -25,7 +25,6 @@ interface DatabaseSchema {
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'database.json');
-const INITIAL_DATA_FILE = path.join(process.cwd(), 'src', 'data', 'initialData.ts');
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
@@ -83,40 +82,10 @@ function loadDatabase(): DatabaseSchema {
   return defaultState;
 }
 
-/**
- * Persists current state directly into src/data/initialData.ts
- * This ensures that when the user exports/pushes to GitHub or redeploys,
- * the data is permanently retained and NEVER reverts to old defaults.
- */
-function persistToSourceCode(state: DatabaseSchema) {
-  try {
-    if (!fs.existsSync(INITIAL_DATA_FILE)) return;
-    const content = `import { Desa, User, Aset, PermohonanVerifikasi, PengesahanLaporan, KecamatanProfile } from '../types';
-
-export const INITIAL_DESA_LIST: Desa[] = ${JSON.stringify(state.desas, null, 2)};
-
-export const INITIAL_USERS: User[] = ${JSON.stringify(state.users, null, 2)};
-
-export const INITIAL_ASETS: Aset[] = ${JSON.stringify(state.asets, null, 2)};
-
-export const INITIAL_VERIFIKASI: PermohonanVerifikasi[] = ${JSON.stringify(state.verifikasiList, null, 2)};
-
-export const INITIAL_PENGESAHAN: PengesahanLaporan[] = ${JSON.stringify(state.pengesahanList, null, 2)};
-
-export const INITIAL_KECAMATAN_PROFILE: KecamatanProfile = ${JSON.stringify(state.kecamatanProfile, null, 2)};
-`;
-    fs.writeFileSync(INITIAL_DATA_FILE, content, 'utf-8');
-    console.log('[Source Sync] Successfully synced master data into src/data/initialData.ts (GitHub ready)');
-  } catch (error) {
-    console.error('[Source Sync] Failed to update src/data/initialData.ts:', error);
-  }
-}
-
 function saveDatabase(state: DatabaseSchema) {
   try {
     state.updatedAt = new Date().toISOString();
     fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), 'utf-8');
-    persistToSourceCode(state);
     broadcastEvent('DATA_CHANGED', state);
   } catch (error) {
     console.error('[Database] Failed to save database file:', error);
@@ -433,10 +402,9 @@ async function startServer() {
       dbState.asets = asets;
     }
     saveDatabase(dbState);
-    persistToSourceCode(dbState);
     res.json({
       success: true,
-      message: 'Semua data berhasil disimpan permanen ke Basis Data Server dan Master Source Code (src/data/initialData.ts) untuk GitHub.',
+      message: 'Semua data berhasil disimpan permanen ke Basis Data Server dan disinkronkan ke Firebase.',
       updatedAt: dbState.updatedAt,
     });
   });
