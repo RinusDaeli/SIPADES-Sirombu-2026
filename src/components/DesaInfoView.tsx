@@ -96,15 +96,12 @@ export const DesaInfoView: React.FC = () => {
       emailKantor: camatFormData.emailKantor.trim(),
       teleponKantor: camatFormData.teleponKantor.trim(),
     };
-    updateKecamatanProfile(cleaned);
+    const res = await updateKecamatanProfile(cleaned);
     setIsCamatDirty(false);
-
-    // Save directly to Google Cloud Firebase
-    await saveAllToCloudFirebase({ kecamatanProfile: cleaned });
     setIsSavingMaster(false);
 
     setSaveSuccessMessage(
-      'Data Camat & Kantor Kecamatan Sirombu berhasil disimpan permanen ke Google Cloud Firebase!'
+      res.message || 'Data Camat & Kantor Kecamatan Sirombu berhasil disimpan permanen ke Google Cloud Firebase!'
     );
 
     setTimeout(() => {
@@ -187,16 +184,12 @@ export const DesaInfoView: React.FC = () => {
       kodePos: formData.kodePos.trim(),
       kaurAset: formData.kaurAset.trim(),
     };
-    await updateDesa(targetDesa.id, cleanedDesa);
+    const res = await updateDesa(targetDesa.id, cleanedDesa);
     setIsDesaDirty(false);
-
-    // Save directly to Google Cloud Firebase
-    const updatedDesasList = desas.map((d) => (d.id === targetDesa.id ? { ...d, ...cleanedDesa } : d));
-    await saveAllToCloudFirebase({ desas: updatedDesasList });
     setIsSavingMaster(false);
 
     setSaveSuccessMessage(
-      `Profil ${targetDesa.name} berhasil disimpan permanen ke Google Cloud Firebase!`
+      res.message || `Data Perangkat Desa ${targetDesa.name} berhasil disimpan permanen ke Google Cloud Firebase dan tersinkronisasi ke seluruh perangkat!`
     );
 
     setTimeout(() => {

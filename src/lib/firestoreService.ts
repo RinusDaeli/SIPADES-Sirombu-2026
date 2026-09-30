@@ -47,7 +47,7 @@ export interface InitialCloudData {
  */
 export async function fetchInitialFirestoreData(): Promise<InitialCloudData | null> {
   try {
-    const [asetsSnap, desasSnap, verifSnap, pengesahanSnap, usersSnap, kecSnap] = await Promise.all([
+    const fetchPromise = Promise.all([
       getDocs(collection(db, 'asets')),
       getDocs(collection(db, 'desas')),
       getDocs(collection(db, 'verifikasiList')),
@@ -55,39 +55,47 @@ export async function fetchInitialFirestoreData(): Promise<InitialCloudData | nu
       getDocs(collection(db, 'users')),
       getDoc(doc(db, 'system', 'kecamatanProfile')),
     ]);
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Firestore initial fetch timeout')), 5000)
+    );
+
+    const [asetsSnap, desasSnap, verifSnap, pengesahanSnap, usersSnap, kecSnap] = (await Promise.race([
+      fetchPromise,
+      timeoutPromise,
+    ])) as any;
 
     const asets: Aset[] = [];
-    asetsSnap.forEach((d) => {
+    asetsSnap.forEach((d: any) => {
       const data = d.data() as Aset;
       if (data && data.id) asets.push(data);
     });
 
     const desas: Desa[] = [];
-    desasSnap.forEach((d) => {
+    desasSnap.forEach((d: any) => {
       const data = d.data() as Desa;
       if (data && data.id) desas.push(data);
     });
 
     const verifikasiList: PermohonanVerifikasi[] = [];
-    verifSnap.forEach((d) => {
+    verifSnap.forEach((d: any) => {
       const data = d.data() as PermohonanVerifikasi;
       if (data && data.id) verifikasiList.push(data);
     });
 
     const pengesahanList: PengesahanLaporan[] = [];
-    pengesahanSnap.forEach((d) => {
+    pengesahanSnap.forEach((d: any) => {
       const data = d.data() as PengesahanLaporan;
       if (data && data.id) pengesahanList.push(data);
     });
 
     const users: User[] = [];
-    usersSnap.forEach((d) => {
+    usersSnap.forEach((d: any) => {
       const data = d.data() as User;
       if (data && data.id) users.push(data);
     });
 
     let kecamatanProfile: KecamatanProfile | undefined = undefined;
-    if (kecSnap.exists()) {
+    if (kecSnap && typeof kecSnap.exists === 'function' && kecSnap.exists()) {
       kecamatanProfile = kecSnap.data() as KecamatanProfile;
     }
 
@@ -107,10 +115,98 @@ export async function fetchInitialFirestoreData(): Promise<InitialCloudData | nu
 
 // ==================== SUBSCRIPTIONS (REAL-TIME MULTI-DEVICE SYNC) ====================
 
+const desaSubscribers = new Set<(desas: Desa[]) => void>();
+const asetSubscribers = new Set<(asets: Aset[]) => void>();
+const verifikasiSubscribers = new Set<(verifs: PermohonanVerifikasi[]) => void>();
+const pengesahanSubscribers = new Set<(list: PengesahanLaporan[]) => void>();
+const kecamatanSubscribers = new Set<(profile: KecamatanProfile) => void>();
+const usersSubscribers = new Set<(users: User[]) => void>();
+
+/**
+ * Re-triggers all active Firestore listeners immediately after a successful write
+ * ensuring all connected devices see the change in real-time without delay.
+ */
+export async function triggerDesasListenerRefresh(updatedDesa?: Desa): Promise<void> {
+  // 1. Optimistic notification to active local subscribers
+  if (updatedDesa) {
+    desaSubscribers.forEach((cb) => {
+      try {
+        // Trigger with updated desa
+        cb([updatedDesa]);
+      } catch {}
+    });
+  }
+
+  // 2. Fetch authoritative live list from Firestore and re-broadcast to all subscribers
+  try {
+    const snap = await getDocs(collection(db, 'desas'));
+    if (!snap.empty) {
+      const list: Desa[] = [];
+      snap.forEach((d) => {
+        const data = d.data() as Desa;
+        if (data && data.id) list.push(data);
+      });
+      list.sort((a, b) => (a?.name || '').localeCompare(b?.name || ''));
+      desaSubscribers.forEach((cb) => {
+        try {
+          cb(list);
+        } catch {}
+      });
+    }
+  } catch (e) {
+    console.warn('[Firestore] triggerDesasListenerRefresh notice:', e);
+  }
+}
+
+export async function triggerAsetsListenerRefresh(updatedAset?: Aset, deletedId?: string): Promise<void> {
+  try {
+    const snap = await getDocs(collection(db, 'asets'));
+    if (!snap.empty) {
+      const list: Aset[] = [];
+      snap.forEach((d) => {
+        const data = d.data() as Aset;
+        if (data && data.id && data.id !== deletedId) list.push(data);
+      });
+      list.sort((a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime());
+      asetSubscribers.forEach((cb) => {
+        try {
+          cb(list);
+        } catch {}
+      });
+    }
+  } catch (e) {
+    console.warn('[Firestore] triggerAsetsListenerRefresh notice:', e);
+  }
+}
+
+export async function triggerKecamatanListenerRefresh(profile?: KecamatanProfile): Promise<void> {
+  if (profile) {
+    kecamatanSubscribers.forEach((cb) => {
+      try {
+        cb(profile);
+      } catch {}
+    });
+  }
+  try {
+    const snap = await getDoc(doc(db, 'system', 'kecamatanProfile'));
+    if (snap.exists()) {
+      const data = snap.data() as KecamatanProfile;
+      kecamatanSubscribers.forEach((cb) => {
+        try {
+          cb(data);
+        } catch {}
+      });
+    }
+  } catch (e) {
+    console.warn('[Firestore] triggerKecamatanListenerRefresh notice:', e);
+  }
+}
+
 export function subscribeAsets(callback: (asets: Aset[]) => void): () => void {
+  asetSubscribers.add(callback);
   try {
     const colRef = collection(db, 'asets');
-    return onSnapshot(
+    const unsub = onSnapshot(
       colRef,
       (snapshot) => {
         const list: Aset[] = [];
@@ -132,16 +228,23 @@ export function subscribeAsets(callback: (asets: Aset[]) => void): () => void {
         }
       }
     );
+    return () => {
+      asetSubscribers.delete(callback);
+      unsub();
+    };
   } catch (e) {
     console.warn('[Firestore] Failed to subscribe asets:', e);
-    return () => {};
+    return () => {
+      asetSubscribers.delete(callback);
+    };
   }
 }
 
 export function subscribeVerifikasi(callback: (list: PermohonanVerifikasi[]) => void): () => void {
+  verifikasiSubscribers.add(callback);
   try {
     const colRef = collection(db, 'verifikasiList');
-    return onSnapshot(
+    const unsub = onSnapshot(
       colRef,
       (snapshot) => {
         const list: PermohonanVerifikasi[] = [];
@@ -158,16 +261,23 @@ export function subscribeVerifikasi(callback: (list: PermohonanVerifikasi[]) => 
         console.warn('[Firestore] subscribeVerifikasi error:', err);
       }
     );
+    return () => {
+      verifikasiSubscribers.delete(callback);
+      unsub();
+    };
   } catch (e) {
     console.warn('[Firestore] Failed to subscribe verifikasi:', e);
-    return () => {};
+    return () => {
+      verifikasiSubscribers.delete(callback);
+    };
   }
 }
 
 export function subscribePengesahan(callback: (list: PengesahanLaporan[]) => void): () => void {
+  pengesahanSubscribers.add(callback);
   try {
     const colRef = collection(db, 'pengesahanList');
-    return onSnapshot(
+    const unsub = onSnapshot(
       colRef,
       (snapshot) => {
         const list: PengesahanLaporan[] = [];
@@ -183,16 +293,23 @@ export function subscribePengesahan(callback: (list: PengesahanLaporan[]) => voi
         console.warn('[Firestore] subscribePengesahan error:', err);
       }
     );
+    return () => {
+      pengesahanSubscribers.delete(callback);
+      unsub();
+    };
   } catch (e) {
     console.warn('[Firestore] Failed to subscribe pengesahan:', e);
-    return () => {};
+    return () => {
+      pengesahanSubscribers.delete(callback);
+    };
   }
 }
 
 export function subscribeDesas(callback: (desas: Desa[]) => void): () => void {
+  desaSubscribers.add(callback);
   try {
     const colRef = collection(db, 'desas');
-    return onSnapshot(
+    const unsub = onSnapshot(
       colRef,
       (snapshot) => {
         if (!snapshot.empty) {
@@ -213,16 +330,23 @@ export function subscribeDesas(callback: (desas: Desa[]) => void): () => void {
         console.warn('[Firestore] subscribeDesas error:', err);
       }
     );
+    return () => {
+      desaSubscribers.delete(callback);
+      unsub();
+    };
   } catch (e) {
     console.warn('[Firestore] Failed to subscribe desas:', e);
-    return () => {};
+    return () => {
+      desaSubscribers.delete(callback);
+    };
   }
 }
 
 export function subscribeKecamatanProfile(callback: (profile: KecamatanProfile) => void): () => void {
+  kecamatanSubscribers.add(callback);
   try {
     const docRef = doc(db, 'system', 'kecamatanProfile');
-    return onSnapshot(
+    const unsub = onSnapshot(
       docRef,
       (snapshot) => {
         if (snapshot.exists()) {
@@ -236,16 +360,23 @@ export function subscribeKecamatanProfile(callback: (profile: KecamatanProfile) 
         console.warn('[Firestore] subscribeKecamatanProfile error:', err);
       }
     );
+    return () => {
+      kecamatanSubscribers.delete(callback);
+      unsub();
+    };
   } catch (e) {
     console.warn('[Firestore] Failed to subscribe kecamatan profile:', e);
-    return () => {};
+    return () => {
+      kecamatanSubscribers.delete(callback);
+    };
   }
 }
 
 export function subscribeUsers(callback: (users: User[]) => void): () => void {
+  usersSubscribers.add(callback);
   try {
     const colRef = collection(db, 'users');
-    return onSnapshot(
+    const unsub = onSnapshot(
       colRef,
       (snapshot) => {
         if (!snapshot.empty) {
@@ -265,9 +396,15 @@ export function subscribeUsers(callback: (users: User[]) => void): () => void {
         console.warn('[Firestore] subscribeUsers error:', err);
       }
     );
+    return () => {
+      usersSubscribers.delete(callback);
+      unsub();
+    };
   } catch (e) {
     console.warn('[Firestore] Failed to subscribe users:', e);
-    return () => {};
+    return () => {
+      usersSubscribers.delete(callback);
+    };
   }
 }
 
@@ -277,7 +414,10 @@ export async function saveAsetToCloud(aset: Aset): Promise<void> {
   try {
     const cleaned = cleanForFirestore(aset);
     const docRef = doc(db, 'asets', aset.id);
-    await setDoc(docRef, cleaned, { merge: true });
+    const writePromise = setDoc(docRef, cleaned, { merge: true });
+    const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 3500));
+    await Promise.race([writePromise, timeoutPromise]);
+    triggerAsetsListenerRefresh(aset).catch(() => {});
   } catch (err: any) {
     if (err?.code === 'resource-exhausted') {
       return;
@@ -290,6 +430,7 @@ export async function deleteAsetFromCloud(asetId: string): Promise<void> {
   try {
     const docRef = doc(db, 'asets', asetId);
     await deleteDoc(docRef);
+    triggerAsetsListenerRefresh(undefined, asetId).catch(() => {});
   } catch (err) {
     console.warn('[Firestore] deleteAsetFromCloud notice:', err);
   }
@@ -324,18 +465,25 @@ export async function savePengesahanToCloud(pengesahan: PengesahanLaporan): Prom
   }
 }
 
-export async function saveDesaToCloud(desa: Desa): Promise<void> {
+export async function saveDesaToCloud(desa: Desa): Promise<boolean> {
   try {
     const cleaned = cleanForFirestore(desa);
     const docRef = doc(db, 'desas', desa.id);
-    await setDoc(docRef, cleaned, { merge: true });
+    const writePromise = setDoc(docRef, cleaned, { merge: true });
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Firebase desa write timeout')), 3500)
+    );
+    await Promise.race([writePromise, timeoutPromise]);
     console.log(`[Firestore] Successfully saved desa: ${desa.name} (${desa.id})`);
+    triggerDesasListenerRefresh(desa).catch(() => {});
+    return true;
   } catch (err: any) {
     if (err?.code === 'resource-exhausted') {
       console.warn('[Firestore] Quota limit reached; saved to server & local storage safely.');
-      return;
+      return false;
     }
     console.warn('[Firestore] saveDesaToCloud notice:', err);
+    return false;
   }
 }
 
@@ -407,13 +555,23 @@ export async function syncAllToFirestore(payload: {
   }
 }
 
-export async function saveKecamatanProfileToCloud(profile: KecamatanProfile): Promise<void> {
+export async function saveKecamatanProfileToCloud(profile: KecamatanProfile): Promise<boolean> {
   try {
     const cleaned = cleanForFirestore(profile);
     const docRef = doc(db, 'system', 'kecamatanProfile');
-    await setDoc(docRef, cleaned, { merge: true });
-  } catch (err) {
+    const writePromise = setDoc(docRef, cleaned, { merge: true });
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Firebase kecamatan write timeout')), 3500)
+    );
+    await Promise.race([writePromise, timeoutPromise]);
+    return true;
+  } catch (err: any) {
+    if (err?.code === 'resource-exhausted') {
+      console.warn('[Firestore] Quota limit reached; saved to server & local storage safely.');
+      return false;
+    }
     console.warn('[Firestore] saveKecamatanProfileToCloud notice:', err);
+    return false;
   }
 }
 

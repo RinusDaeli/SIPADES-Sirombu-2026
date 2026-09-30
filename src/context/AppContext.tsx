@@ -64,7 +64,7 @@ interface AppContextType {
   verifikasiList: PermohonanVerifikasi[];
   pengesahanList: PengesahanLaporan[];
   kecamatanProfile: KecamatanProfile;
-  updateKecamatanProfile: (data: Partial<KecamatanProfile>) => { success: boolean; message?: string };
+  updateKecamatanProfile: (data: Partial<KecamatanProfile>) => Promise<{ success: boolean; message?: string }> | { success: boolean; message?: string };
   selectedYear: number;
   setSelectedYear: (year: number) => void;
   activeTab: string;
@@ -600,14 +600,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubDesas = subscribeDesas((cloudDesas) => {
       if (cloudDesas && cloudDesas.length > 0) {
         setDesas((prev) => {
-          const merged = prev.map((current) => {
-            const cloud = cloudDesas.find((cd) => cd && cd.id === current.id);
-            if (!cloud) return current;
-            return {
-              ...current,
-              ...cloud,
-            };
+          const map = new Map<string, Desa>(prev.map((d) => [d.id, d]));
+          cloudDesas.forEach((cd) => {
+            if (cd && cd.id) {
+              const exist = map.get(cd.id);
+              map.set(cd.id, exist ? { ...exist, ...cd } : cd);
+            }
           });
+          const merged = Array.from(map.values());
           if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
           safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(merged));
           return merged;
@@ -1396,7 +1396,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     savePengesahanToCloud(targetPengesahan).catch((e) => console.warn('[Cloud] Pengesahan save failed:', e));
   };
 
-  const updateDesa = async (id: string, data: Partial<Desa>): Promise<{ success: boolean; message?: string }> => {
+  const updateDesa = async (id: string, data: Partial<Desa>): Promise<{ success: boolean; message: string }> => {
     let updatedDesa: Desa | null = null;
     let finalDesas: Desa[] = [];
 
@@ -1420,18 +1420,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (updatedDesa) {
+      const targetName = (updatedDesa as Desa).name || 'Desa';
+      // 1. Direct write to Cloud Firestore with non-blocking timeout
+      let cloudSaved = false;
       try {
-        await saveDesaToCloud(updatedDesa);
+        cloudSaved = await saveDesaToCloud(updatedDesa);
       } catch (e) {
         console.warn('[Cloud] Desa save error:', e);
       }
 
+      // 2. Save to server
       fetch('/api/desa/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedDesa),
       }).catch((e) => console.warn('[Sync] Desa update failed:', e));
 
+      // 3. Instantly broadcast to all other open devices & tabs
       syncManager.broadcastChange({
         version: 2,
         timestamp: new Date().toISOString(),
@@ -1443,9 +1448,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         users,
         kecamatanProfile,
       });
+
+      return {
+        success: true,
+        message: cloudSaved
+          ? `Data Perangkat ${targetName} berhasil disimpan permanen ke Cloud Firebase & tersinkronisasi!`
+          : `Data Perangkat ${targetName} berhasil disimpan ke server & tersinkronisasi ke seluruh perangkat!`,
+      };
     }
 
-    return { success: true };
+    return { success: true, message: 'Data Perangkat Desa berhasil disimpan.' };
   };
 
   const revisiMutasi = (
@@ -1735,20 +1747,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const updateKecamatanProfile = (data: Partial<KecamatanProfile>) => {
+  const updateKecamatanProfile = async (data: Partial<KecamatanProfile>): Promise<{ success: boolean; message: string }> => {
     let updated: KecamatanProfile = kecamatanProfile;
     setKecamatanProfile((prev) => {
       updated = { ...prev, ...data };
       safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(updated));
       return updated;
     });
-    saveKecamatanProfileToCloud(updated).catch((e) => console.warn('[Cloud] Kecamatan save failed:', e));
+
+    let cloudSaved = false;
+    try {
+      cloudSaved = await saveKecamatanProfileToCloud(updated);
+    } catch (e) {
+      console.warn('[Cloud] Kecamatan save failed:', e);
+    }
+
     fetch('/api/kecamatan/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
     }).catch((e) => console.warn('[Sync] Kecamatan update failed:', e));
-    return { success: true, message: 'Data Camat & Kantor Kecamatan Sirombu berhasil diperbarui!' };
+
+    syncManager.broadcastChange({
+      version: 2,
+      timestamp: new Date().toISOString(),
+      senderId: 'client',
+      asets,
+      verifikasiList,
+      pengesahanList,
+      desas,
+      users,
+      kecamatanProfile: updated,
+    });
+
+    return {
+      success: true,
+      message: cloudSaved
+        ? 'Data Camat & Kantor Kecamatan Sirombu berhasil disimpan permanen ke Google Cloud Firebase!'
+        : 'Data Camat & Kantor Kecamatan Sirombu berhasil disimpan ke server & tersinkronisasi!',
+    };
   };
 
   const saveAllToCloudFirebase = async (overrides?: {
@@ -1763,13 +1800,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const payloadUsers = overrides?.users || users;
       const payloadAsets = overrides?.asets || asets;
 
-      // 1. Authoritative write to Google Cloud Firestore (unifying all storage in Firebase)
-      await syncAllToFirestore({
+      // 1. Authoritative write to Google Cloud Firestore with timeout protection
+      const syncPromise = syncAllToFirestore({
         desas: payloadDesas,
         kecamatanProfile: payloadKecamatan,
         users: payloadUsers,
         asets: payloadAsets,
       });
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 4500));
+      await Promise.race([syncPromise, timeoutPromise]);
 
       // 2. Also keep server memory and JSON backup in sync without modifying source code files
       fetch('/api/sync-master', {

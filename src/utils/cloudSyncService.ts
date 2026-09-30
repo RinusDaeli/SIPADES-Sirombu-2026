@@ -33,8 +33,22 @@ class CloudSyncManager {
   private connectedPeerCount: number = 0;
   private peerCountListeners: Set<(count: number) => void> = new Set();
 
+  private broadcastChannel: BroadcastChannel | null = null;
+
   constructor() {
     this.peerId = `sipades-${Math.random().toString(36).substring(2, 9)}`;
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        this.broadcastChannel = new BroadcastChannel('sipades_sirombu_optimistic_bus');
+        this.broadcastChannel.onmessage = (event) => {
+          if (event.data && event.data.payload && event.data.senderId !== this.peerId) {
+            this.notifySync(event.data.payload);
+          }
+        };
+      } catch (e) {
+        console.warn('[Sync] BroadcastChannel init warning:', e);
+      }
+    }
   }
 
   public registerStateGetter(fn: () => FullSyncPayload) {
@@ -188,7 +202,18 @@ class CloudSyncManager {
   }
 
   public broadcastChange(payload: FullSyncPayload) {
-    // 1. Send to all directly connected P2P WebRTC peers
+    // 1. Send via local BroadcastChannel for instant cross-tab / iframe sync
+    if (this.broadcastChannel) {
+      try {
+        this.broadcastChannel.postMessage({
+          type: 'SYNC_STATE',
+          senderId: this.peerId,
+          payload: { ...payload, senderId: this.peerId },
+        });
+      } catch {}
+    }
+
+    // 2. Send to all directly connected P2P WebRTC peers
     const message = {
       type: 'SYNC_STATE',
       payload: { ...payload, senderId: this.peerId },
@@ -204,7 +229,7 @@ class CloudSyncManager {
       }
     });
 
-    // 2. Broadcast via cloud signaling channel for immediate discovery
+    // 3. Broadcast via cloud signaling channel for immediate discovery
     // Only send lightweight metadata if payload is very large
     const lightweightPayload: FullSyncPayload = {
       ...payload,
@@ -228,6 +253,17 @@ class CloudSyncManager {
       deletedAssetIds: [assetId],
       asets: remainingAsets,
     };
+
+    // 0. Send via local BroadcastChannel
+    if (this.broadcastChannel) {
+      try {
+        this.broadcastChannel.postMessage({
+          type: 'DELETE_ASET',
+          senderId: this.peerId,
+          payload,
+        });
+      } catch {}
+    }
 
     // 1. Send via active P2P connections
     this.connections.forEach((conn) => {
