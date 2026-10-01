@@ -13,12 +13,14 @@ import { VerifikasiView } from './components/VerifikasiView';
 import { LaporanPermendagriView } from './components/LaporanPermendagriView';
 import { UserManagementView } from './components/UserManagementView';
 import { DesaInfoView } from './components/DesaInfoView';
+import { AnnouncementReaderModal } from './components/AnnouncementReaderModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Menu, X, LogOut } from 'lucide-react';
+import { Menu, X, LogOut, Bell } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
-  const { currentUser, activeTab, logout } = useApp();
+  const { currentUser, activeTab, logout, unreadAnnouncementCount } = useApp();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [showMobileAnnounceModal, setShowMobileAnnounceModal] = useState(false);
 
   if (!currentUser) {
     return <LoginView />;
@@ -47,6 +49,28 @@ const MainLayout: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Mobile Notification Bell */}
+          <button
+            type="button"
+            onClick={() => setShowMobileAnnounceModal(true)}
+            className={`relative p-1.5 rounded-lg border transition-all cursor-pointer ${
+              unreadAnnouncementCount > 0
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 shadow'
+                : 'bg-emerald-950/60 text-emerald-200 border-emerald-700/40'
+            }`}
+            title="Pemberitahuan"
+          >
+            <Bell className={`w-4 h-4 ${unreadAnnouncementCount > 0 ? 'text-amber-300 animate-bounce' : ''}`} />
+            {unreadAnnouncementCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                <span className="relative inline-flex items-center justify-center rounded-full h-3.5 w-3.5 bg-red-600 text-[8px] font-black text-white">
+                  {unreadAnnouncementCount}
+                </span>
+              </span>
+            )}
+          </button>
+
           {mobileSidebarOpen ? (
             <button
               onClick={() => setMobileSidebarOpen(false)}
@@ -80,7 +104,7 @@ const MainLayout: React.FC = () => {
       <div
         className={`fixed md:static inset-y-0 left-0 z-50 md:z-30 h-full transition-transform duration-300 ease-in-out ${
           mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-        } md:block md:shrink-0`}
+        } md:transform-none md:block md:shrink-0`}
       >
         <Sidebar onClose={handleCloseSidebar} />
       </div>
@@ -96,6 +120,12 @@ const MainLayout: React.FC = () => {
           {activeTab === 'desa_info' && <DesaInfoView />}
         </main>
       </div>
+
+      {/* Mobile Announcement Reader Modal */}
+      <AnnouncementReaderModal
+        isOpen={showMobileAnnounceModal}
+        onClose={() => setShowMobileAnnounceModal(false)}
+      />
     </div>
   );
 };

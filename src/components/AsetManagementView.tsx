@@ -14,6 +14,7 @@ import { AsetDetailModal } from './AsetDetailModal';
 import { SyncDevicesModal } from './SyncDevicesModal';
 import { BackupRestoreModal } from './BackupRestoreModal';
 import { FirestoreQuotaModal } from './FirestoreQuotaModal';
+import { AnnouncementReaderModal } from './AnnouncementReaderModal';
 import { IndonesianDatePicker } from './IndonesianDatePicker';
 import { syncManager } from '../utils/cloudSyncService';
 import { fileToCompressedDataUrl } from '../utils/imageCompressor';
@@ -48,6 +49,7 @@ import {
   Tag,
   Calendar,
   Database,
+  Bell,
 } from 'lucide-react';
 
 export const AsetManagementView: React.FC = () => {
@@ -65,11 +67,14 @@ export const AsetManagementView: React.FC = () => {
     isServerConnected,
     refreshServerData,
     firestoreQuotaStatus,
+    announcements,
+    unreadAnnouncementCount,
   } = useApp();
 
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [showQuotaModal, setShowQuotaModal] = useState(false);
+  const [showAnnounceModal, setShowAnnounceModal] = useState(false);
   const [peerCount, setPeerCount] = useState<number>(() => syncManager.getConnectedCount());
 
   useEffect(() => {
@@ -710,6 +715,35 @@ export const AsetManagementView: React.FC = () => {
             >
               <Database className="w-4 h-4 text-emerald-400" />
               <span className="hidden sm:inline">Backup & Restore</span>
+            </button>
+          )}
+
+          {/* Tombol Lonceng Pesan Berkedip (Isi pesan tersembunyi sampai diklik) */}
+          {announcements.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAnnounceModal(true)}
+              className={`p-2 sm:px-3 sm:py-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 shadow-md transition-all cursor-pointer shrink-0 ${
+                unreadAnnouncementCount > 0
+                  ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/60 text-amber-300 shadow-amber-500/20'
+                  : 'bg-slate-900/90 hover:bg-slate-800 border-slate-700 text-slate-300'
+              }`}
+              title="Klik gambar lonceng untuk membuka pesan pengumuman"
+            >
+              <div className="relative">
+                <Bell className={`w-4 h-4 ${unreadAnnouncementCount > 0 ? 'text-amber-400 animate-bounce' : 'text-slate-400'}`} />
+                {unreadAnnouncementCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-4 w-4 bg-red-600 text-[9px] font-black text-white items-center justify-center">
+                      {unreadAnnouncementCount}
+                    </span>
+                  </span>
+                )}
+              </div>
+              <span className="hidden sm:inline">
+                {unreadAnnouncementCount > 0 ? `${unreadAnnouncementCount} Pesan Baru` : 'Pemberitahuan'}
+              </span>
             </button>
           )}
 
@@ -2890,6 +2924,12 @@ export const AsetManagementView: React.FC = () => {
           onClose={() => setShowQuotaModal(false)}
         />
       )}
+
+      {/* Modal Pembaca Pesan (Terbuka dari Lonceng & Menciut Kembali Saat Klik Saya Mengerti) */}
+      <AnnouncementReaderModal
+        isOpen={showAnnounceModal}
+        onClose={() => setShowAnnounceModal(false)}
+      />
     </div>
   );
 };

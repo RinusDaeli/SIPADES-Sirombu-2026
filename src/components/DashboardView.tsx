@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { formatRupiah } from '../utils/reportGenerator';
 import { ThreeDColumnChart, ColumnChartItem } from './ThreeDColumnChart';
 import { ThreeDPieChart, PieChartItem } from './ThreeDPieChart';
+import { AnnouncementReaderModal } from './AnnouncementReaderModal';
 import {
   Boxes,
   Layers,
@@ -10,10 +11,22 @@ import {
   Building,
   Filter,
   ArrowRight,
+  Bell,
 } from 'lucide-react';
 
 export const DashboardView: React.FC = () => {
-  const { asets, desas, selectedDesaFilter, setSelectedDesaFilter, currentUser, setActiveTab } = useApp();
+  const {
+    asets,
+    desas,
+    selectedDesaFilter,
+    setSelectedDesaFilter,
+    currentUser,
+    setActiveTab,
+    announcements,
+    unreadAnnouncementCount,
+  } = useApp();
+
+  const [showAnnounceModal, setShowAnnounceModal] = useState(false);
 
   // Active village filter
   const isDesaUser = currentUser?.role === 'admin_desa';
@@ -143,25 +156,56 @@ export const DashboardView: React.FC = () => {
           </p>
         </div>
 
-        {/* Filter Wilayah (Desa Selector for Kecamatan / Super Admin) */}
-        {!isDesaUser && (
-          <div className="flex items-center gap-2 bg-[#0E1526] border border-slate-800 shadow-lg rounded-xl px-3.5 py-2 text-xs">
-            <Filter className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-slate-400 font-medium">Filter Wilayah:</span>
-            <select
-              value={selectedDesaFilter}
-              onChange={(e) => setSelectedDesaFilter(e.target.value)}
-              className="bg-transparent font-bold text-white focus:outline-none cursor-pointer"
+        <div className="flex items-center gap-3">
+          {/* Tombol Lonceng Pesan Berkedip (Isi pesan tersembunyi sampai diklik) */}
+          {announcements.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAnnounceModal(true)}
+              className={`p-2.5 rounded-xl border flex items-center gap-2 transition-all cursor-pointer shadow-md ${
+                unreadAnnouncementCount > 0
+                  ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/60 text-amber-300 shadow-amber-500/20'
+                  : 'bg-slate-900/90 hover:bg-slate-800 border-slate-700 text-slate-300'
+              }`}
+              title="Klik gambar lonceng untuk membuka pesan pengumuman"
             >
-              <option value="all" className="bg-slate-900 text-white">Semua Desa (25 Desa)</option>
-              {desas.map((d) => (
-                <option key={d.id} value={d.id} className="bg-slate-900 text-white">
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+              <div className="relative">
+                <Bell className={`w-4 h-4 ${unreadAnnouncementCount > 0 ? 'text-amber-400 animate-bounce' : 'text-slate-400'}`} />
+                {unreadAnnouncementCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-4 w-4 bg-red-600 text-[9px] font-black text-white items-center justify-center">
+                      {unreadAnnouncementCount}
+                    </span>
+                  </span>
+                )}
+              </div>
+              <span className="text-xs font-bold hidden sm:inline">
+                {unreadAnnouncementCount > 0 ? `${unreadAnnouncementCount} Pesan Baru` : 'Pengumuman'}
+              </span>
+            </button>
+          )}
+
+          {/* Filter Wilayah (Desa Selector for Kecamatan / Super Admin) */}
+          {!isDesaUser && (
+            <div className="flex items-center gap-2 bg-[#0E1526] border border-slate-800 shadow-lg rounded-xl px-3.5 py-2 text-xs">
+              <Filter className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-slate-400 font-medium">Filter Wilayah:</span>
+              <select
+                value={selectedDesaFilter}
+                onChange={(e) => setSelectedDesaFilter(e.target.value)}
+                className="bg-transparent font-bold text-white focus:outline-none cursor-pointer"
+              >
+                <option value="all" className="bg-slate-900 text-white">Semua Desa (25 Desa)</option>
+                {desas.map((d) => (
+                  <option key={d.id} value={d.id} className="bg-slate-900 text-white">
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 4 Metric Cards Grid */}
@@ -357,6 +401,12 @@ export const DashboardView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal Pembaca Pesan (Terbuka dari Lonceng & Menciut Kembali Saat Klik Saya Mengerti) */}
+      <AnnouncementReaderModal
+        isOpen={showAnnounceModal}
+        onClose={() => setShowAnnounceModal(false)}
+      />
     </div>
   );
 };

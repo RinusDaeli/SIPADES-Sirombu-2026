@@ -124,3 +124,13 @@ export interface KecamatanProfile {
   tempatSurat: string;
 }
 
+export interface SystemAnnouncement {
+  id: string;
+  title: string;
+  message: string;
+  senderName: string;
+  createdAt: string;
+  priority: 'normal' | 'urgent' | 'warning';
+  active: boolean;
+}
+

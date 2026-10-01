@@ -10,7 +10,7 @@ import {
   INITIAL_PENGESAHAN,
   INITIAL_KECAMATAN_PROFILE,
 } from './src/data/initialData';
-import { Aset, PermohonanVerifikasi, PengesahanLaporan, User, Desa, KecamatanProfile } from './src/types';
+import { Aset, PermohonanVerifikasi, PengesahanLaporan, User, Desa, KecamatanProfile, SystemAnnouncement } from './src/types';
 
 interface DatabaseSchema {
   asets: Aset[];
@@ -19,6 +19,7 @@ interface DatabaseSchema {
   users: User[];
   desas: Desa[];
   kecamatanProfile: KecamatanProfile;
+  announcements?: SystemAnnouncement[];
   selectedYear: number;
   updatedAt: string;
 }
@@ -60,6 +61,7 @@ function loadDatabase(): DatabaseSchema {
         users: Array.isArray(parsed.users) && parsed.users.length > 0 ? parsed.users : INITIAL_USERS,
         desas: Array.isArray(parsed.desas) && parsed.desas.length > 0 ? parsed.desas : INITIAL_DESA_LIST,
         kecamatanProfile: parsed.kecamatanProfile || INITIAL_KECAMATAN_PROFILE,
+        announcements: Array.isArray(parsed.announcements) ? parsed.announcements : [],
         selectedYear: typeof parsed.selectedYear === 'number' ? parsed.selectedYear : 0,
         updatedAt: parsed.updatedAt || new Date().toISOString(),
       };
@@ -75,6 +77,7 @@ function loadDatabase(): DatabaseSchema {
     users: INITIAL_USERS,
     desas: INITIAL_DESA_LIST,
     kecamatanProfile: INITIAL_KECAMATAN_PROFILE,
+    announcements: [],
     selectedYear: 0,
     updatedAt: new Date().toISOString(),
   };
@@ -84,7 +87,7 @@ function loadDatabase(): DatabaseSchema {
 
 function syncDesasToInitialData(desas: Desa[]) {
   try {
-    const initFile = path.join(__dirname, 'src/data/initialData.ts');
+    const initFile = path.resolve(process.cwd(), 'src/data/initialData.ts');
     if (fs.existsSync(initFile)) {
       let content = fs.readFileSync(initFile, 'utf-8');
       const desasJson = JSON.stringify(desas, null, 2);
@@ -112,7 +115,7 @@ function saveDatabase(state: DatabaseSchema) {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   // Universal CORS for cross-device access (Vercel, local network, custom domains)
   app.use((req, res, next) => {
@@ -404,6 +407,47 @@ async function startServer() {
     res.json({ success: true, profile: dbState.kecamatanProfile });
   });
 
+  // Announcements (Pengumuman Super Admin)
+  app.get('/api/announcements', (req, res) => {
+    res.json(dbState.announcements || []);
+  });
+
+  app.post('/api/announcements/create', (req, res) => {
+    const { title, message, priority, senderName } = req.body || {};
+    if (!message) {
+      return res.status(400).json({ error: 'Pesan pengumuman wajib diisi' });
+    }
+    const newAnnouncement: SystemAnnouncement = {
+      id: `ann-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      title: title || 'Pemberitahuan dari Super Admin',
+      message,
+      senderName: senderName || 'Super Admin Sirombu',
+      createdAt: new Date().toISOString(),
+      priority: priority || 'warning',
+      active: true,
+    };
+    if (!Array.isArray(dbState.announcements)) {
+      dbState.announcements = [];
+    }
+    dbState.announcements.unshift(newAnnouncement);
+    saveDatabase(dbState);
+    broadcastEvent('ANNOUNCEMENT_CHANGED', dbState.announcements);
+    res.json({ success: true, announcement: newAnnouncement });
+  });
+
+  app.post('/api/announcements/delete', (req, res) => {
+    const { id } = req.body || {};
+    if (!id) {
+      return res.status(400).json({ error: 'ID pengumuman tidak ditemukan' });
+    }
+    if (Array.isArray(dbState.announcements)) {
+      dbState.announcements = dbState.announcements.filter((a) => a.id !== id);
+    }
+    saveDatabase(dbState);
+    broadcastEvent('ANNOUNCEMENT_CHANGED', dbState.announcements || []);
+    res.json({ success: true, message: 'Pengumuman berhasil ditarik / dihapus' });
+  });
+
   // Explicit sync master to write directly to src/data/initialData.ts (GitHub ready)
   app.post('/api/sync-master', (req, res) => {
     const { desas, kecamatanProfile, users, asets } = req.body || {};
@@ -444,7 +488,8 @@ async function startServer() {
   });
 
   // ==================== VITE MIDDLEWARE / SPA SERVING ====================
-  if (process.env.NODE_ENV !== 'production') {
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.K_SERVICE !== undefined;
+  if (!isProduction) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',

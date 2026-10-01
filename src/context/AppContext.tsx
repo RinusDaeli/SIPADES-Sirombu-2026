@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   User,
   Desa,
@@ -51,7 +51,11 @@ import {
   FirestoreQuotaStatus,
   checkFirestoreQuota,
   onQuotaStatusChange,
+  subscribeAnnouncements,
+  saveAnnouncementToCloud,
+  deleteAnnouncementFromCloud,
 } from '../lib/firestoreService';
+import { SystemAnnouncement } from '../types';
 
 export interface AuthSession {
   user: User;
@@ -80,6 +84,11 @@ interface AppContextType {
   firestoreQuotaStatus: FirestoreQuotaStatus;
   firestoreQuotaDetail: string;
   checkFirestoreQuotaStatus: () => Promise<{ status: FirestoreQuotaStatus; detail: string; timestamp: Date }>;
+  announcements: SystemAnnouncement[];
+  sendAnnouncement: (title: string, message: string, priority?: 'normal' | 'urgent' | 'warning') => Promise<void>;
+  deleteAnnouncement: (id: string) => Promise<void>;
+  markAnnouncementAsRead: (id: string) => void;
+  unreadAnnouncementCount: number;
   saveAllToCloudFirebase: (overrides?: {
     desas?: Desa[];
     kecamatanProfile?: KecamatanProfile;
@@ -272,6 +281,89 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const checkFirestoreQuotaStatus = useCallback(async () => {
     return await checkFirestoreQuota();
+  }, []);
+
+  const [announcements, setAnnouncements] = useState<SystemAnnouncement[]>(() => {
+    try {
+      const saved = localStorage.getItem('SIPADES_ANNOUNCEMENTS');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
+
+  const [readAnnouncementIds, setReadAnnouncementIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('SIPADES_READ_ANNOUNCEMENTS');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return new Set(parsed);
+      }
+    } catch {}
+    return new Set();
+  });
+
+  const markAnnouncementAsRead = useCallback((id: string) => {
+    setReadAnnouncementIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      try {
+        localStorage.setItem('SIPADES_READ_ANNOUNCEMENTS', JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const unreadAnnouncementCount = useMemo(() => {
+    return announcements.filter((a) => !readAnnouncementIds.has(a.id)).length;
+  }, [announcements, readAnnouncementIds]);
+
+  const sendAnnouncement = useCallback(async (title: string, message: string, priority: 'normal' | 'urgent' | 'warning' = 'warning') => {
+    const newAnn: SystemAnnouncement = {
+      id: `ann-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      title: title || 'Pemberitahuan dari Super Admin',
+      message,
+      senderName: currentUser?.name || 'Super Admin Sirombu',
+      createdAt: new Date().toISOString(),
+      priority,
+      active: true,
+    };
+
+    setAnnouncements((prev) => {
+      const next = [newAnn, ...prev.filter((a) => a.id !== newAnn.id)];
+      try { localStorage.setItem('SIPADES_ANNOUNCEMENTS', JSON.stringify(next)); } catch {}
+      return next;
+    });
+
+    try {
+      await fetch('/api/announcements/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAnn),
+      });
+    } catch {}
+
+    await saveAnnouncementToCloud(newAnn).catch(() => {});
+  }, [currentUser]);
+
+  const deleteAnnouncement = useCallback(async (id: string) => {
+    setAnnouncements((prev) => {
+      const next = prev.filter((a) => a.id !== id);
+      try { localStorage.setItem('SIPADES_ANNOUNCEMENTS', JSON.stringify(next)); } catch {}
+      return next;
+    });
+
+    try {
+      await fetch('/api/announcements/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+    } catch {}
+
+    await deleteAnnouncementFromCloud(id).catch(() => {});
   }, []);
 
   const CURRENT_DATA_REVISION = '2026_10_01_balowondrate_v3';
@@ -684,6 +776,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
 
+    const unsubAnnouncements = subscribeAnnouncements((cloudAnnouncements) => {
+      if (Array.isArray(cloudAnnouncements)) {
+        setAnnouncements(cloudAnnouncements);
+        try { localStorage.setItem('SIPADES_ANNOUNCEMENTS', JSON.stringify(cloudAnnouncements)); } catch {}
+      }
+    });
+
     return () => {
       unsubAsets();
       unsubVerif();
@@ -691,6 +790,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubDesas();
       unsubKecamatan();
       unsubUsers();
+      unsubAnnouncements();
     };
   }, []);
 
@@ -753,8 +853,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 setKecamatanProfile(serverData.kecamatanProfile);
                 safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(serverData.kecamatanProfile));
               }
+              if (Array.isArray(serverData.announcements)) {
+                setAnnouncements(serverData.announcements);
+                try { localStorage.setItem('SIPADES_ANNOUNCEMENTS', JSON.stringify(serverData.announcements)); } catch {}
+              }
               setIsServerConnected(true);
               setLastSyncTime(new Date());
+            } else if (payload && payload.type === 'ANNOUNCEMENT_CHANGED' && Array.isArray(payload.data)) {
+              setAnnouncements(payload.data);
+              try { localStorage.setItem('SIPADES_ANNOUNCEMENTS', JSON.stringify(payload.data)); } catch {}
             }
           } catch (err) {
             console.warn('[SSE] Event parse notice:', err);
@@ -1982,6 +2089,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         firestoreQuotaStatus,
         firestoreQuotaDetail,
         checkFirestoreQuotaStatus,
+        announcements,
+        sendAnnouncement,
+        deleteAnnouncement,
+        markAnnouncementAsRead,
+        unreadAnnouncementCount,
         login,
         logout,
         switchUser,

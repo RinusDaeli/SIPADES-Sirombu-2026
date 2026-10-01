@@ -16,6 +16,7 @@ import {
   Desa,
   User,
   KecamatanProfile,
+  SystemAnnouncement,
 } from '../types';
 import {
   INITIAL_DESA_LIST,
@@ -700,5 +701,66 @@ export async function bootstrapFirestoreIfEmpty(): Promise<void> {
     }
   } catch (error) {
     console.warn('[Firestore] Bootstrap check note:', error);
+  }
+}
+
+const announcementSubscribers = new Set<(list: SystemAnnouncement[]) => void>();
+
+export function subscribeAnnouncements(callback: (list: SystemAnnouncement[]) => void): () => void {
+  announcementSubscribers.add(callback);
+  try {
+    const unsub = onSnapshot(
+      collection(db, 'announcements'),
+      (snapshot) => {
+        const list: SystemAnnouncement[] = [];
+        snapshot.forEach((d) => {
+          const data = d.data() as SystemAnnouncement;
+          if (data && data.id) {
+            list.push(data);
+          }
+        });
+        list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        callback(list);
+      },
+      (err: any) => {
+        if (err?.code === 'resource-exhausted') {
+          notifyQuotaStatus('EXHAUSTED', 'Batas kuota harian Firebase Firestore (Spark Plan) telah tercapai hari ini. Kuota akan direset otomatis pukul 14:00 WIB.');
+        } else {
+          console.warn('[Firestore] subscribeAnnouncements notice:', err);
+        }
+      }
+    );
+    return () => {
+      announcementSubscribers.delete(callback);
+      unsub();
+    };
+  } catch (e) {
+    console.warn('[Firestore] Failed to subscribe announcements:', e);
+    return () => {
+      announcementSubscribers.delete(callback);
+    };
+  }
+}
+
+export async function saveAnnouncementToCloud(ann: SystemAnnouncement): Promise<void> {
+  try {
+    const cleaned = cleanForFirestore(ann);
+    const docRef = doc(db, 'announcements', ann.id);
+    await setDoc(docRef, cleaned, { merge: true });
+  } catch (err: any) {
+    if (err?.code === 'resource-exhausted') {
+      notifyQuotaStatus('EXHAUSTED', 'Batas kuota harian Firebase Firestore (Spark Plan) telah tercapai hari ini. Kuota akan direset otomatis pukul 14:00 WIB.');
+      return;
+    }
+    console.warn('[Firestore] saveAnnouncementToCloud notice:', err);
+  }
+}
+
+export async function deleteAnnouncementFromCloud(annId: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'announcements', annId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn('[Firestore] deleteAnnouncementFromCloud notice:', err);
   }
 }

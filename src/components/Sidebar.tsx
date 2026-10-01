@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { NiasBaratLogo } from './NiasBaratLogo';
 import { FirestoreQuotaModal } from './FirestoreQuotaModal';
+import { AnnouncementReaderModal } from './AnnouncementReaderModal';
 import {
   LayoutDashboard,
   Boxes,
@@ -11,6 +12,7 @@ import {
   Users,
   LogOut,
   Database,
+  Bell,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -26,9 +28,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
     logout,
     verifikasiList,
     firestoreQuotaStatus,
+    unreadAnnouncementCount,
   } = useApp();
 
   const [showQuotaModal, setShowQuotaModal] = useState(false);
+  const [showAnnounceReader, setShowAnnounceReader] = useState(false);
 
   // Desa only sees badge for their own pending mutations
   const pendingVerifCount = verifikasiList.filter((v) => {
@@ -96,20 +100,48 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
       <aside className="w-64 lg:w-72 shrink-0 bg-[#153422] text-white flex flex-col justify-between p-4 h-full overflow-y-auto border-r border-[#1e4830] select-none relative shadow-2xl md:shadow-none">
         <div className="space-y-4">
           {/* Header Brand */}
-          <div className="flex items-center gap-3 px-1 py-1">
-            <NiasBaratLogo size={40} />
-            <div className="min-w-0">
-              <h1 className="text-sm font-extrabold tracking-wider text-white uppercase leading-tight truncate">
-                {currentUser?.role === 'admin_desa'
-                  ? (currentUser.desaName || 'ADMIN DESA')
-                  : currentUser?.role === 'super_admin'
-                  ? 'SUPER ADMIN'
-                  : 'ADMIN KECAMATAN'}
-              </h1>
-              <p className="text-[11px] text-emerald-200/70 font-medium truncate">
-                Kec. Sirombu — Nias Barat
-              </p>
+          <div className="flex items-center justify-between gap-2 px-1 py-1">
+            <div className="flex items-center gap-3 min-w-0">
+              <NiasBaratLogo size={40} />
+              <div className="min-w-0">
+                <h1 className="text-sm font-extrabold tracking-wider text-white uppercase leading-tight truncate">
+                  {currentUser?.role === 'admin_desa'
+                    ? (currentUser.desaName || 'ADMIN DESA')
+                    : currentUser?.role === 'super_admin'
+                    ? 'SUPER ADMIN'
+                    : 'ADMIN KECAMATAN'}
+                </h1>
+                <p className="text-[11px] text-emerald-200/70 font-medium truncate">
+                  Kec. Sirombu — Nias Barat
+                </p>
+              </div>
             </div>
+
+            {/* Notification Bell with Blinking Indicator */}
+            <button
+              type="button"
+              onClick={() => setShowAnnounceReader(true)}
+              className={`relative p-2 rounded-xl border transition-all cursor-pointer shrink-0 ${
+                unreadAnnouncementCount > 0
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 shadow-md shadow-amber-500/20 hover:bg-amber-500/30'
+                  : 'bg-emerald-900/40 text-emerald-300 border-emerald-700/40 hover:bg-emerald-800/50 hover:text-white'
+              }`}
+              title={
+                unreadAnnouncementCount > 0
+                  ? `Ada ${unreadAnnouncementCount} pengumuman baru dari Super Admin (Klik untuk baca)`
+                  : 'Pemberitahuan & Pengumuman'
+              }
+            >
+              <Bell className={`w-4 h-4 ${unreadAnnouncementCount > 0 ? 'text-amber-300 animate-bounce' : ''}`} />
+              {unreadAnnouncementCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 flex h-4.5 w-4.5 items-center justify-center">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                  <span className="relative inline-flex items-center justify-center rounded-full h-4.5 w-4.5 bg-red-600 text-[9px] font-black text-white shadow-sm">
+                    {unreadAnnouncementCount}
+                  </span>
+                </span>
+              )}
+            </button>
           </div>
 
           {/* Navigation Links */}
@@ -217,6 +249,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
           onClose={() => setShowQuotaModal(false)}
         />
       )}
+
+      {/* Modal Pembaca Pengumuman Resmi untuk Semua User/Desa */}
+      <AnnouncementReaderModal
+        isOpen={showAnnounceReader}
+        onClose={() => setShowAnnounceReader(false)}
+      />
     </>
   );
 };
