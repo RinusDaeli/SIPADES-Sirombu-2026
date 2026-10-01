@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { NiasBaratLogo } from './NiasBaratLogo';
+import { FirestoreQuotaModal } from './FirestoreQuotaModal';
 import {
   LayoutDashboard,
   Boxes,
@@ -9,6 +10,7 @@ import {
   BarChart3,
   Users,
   LogOut,
+  Database,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -23,7 +25,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
     currentUser,
     logout,
     verifikasiList,
+    firestoreQuotaStatus,
   } = useApp();
+
+  const [showQuotaModal, setShowQuotaModal] = useState(false);
 
   // Desa only sees badge for their own pending mutations
   const pendingVerifCount = verifikasiList.filter((v) => {
@@ -151,6 +156,32 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
           </nav>
         </div>
 
+        {/* Khusus Super Admin: Tombol Cek Kuota Langsung Firebase */}
+        {isSuperAdmin && (
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => setShowQuotaModal(true)}
+              className={`w-full p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs font-bold transition-all cursor-pointer shadow-md ${
+                firestoreQuotaStatus === 'EXHAUSTED'
+                  ? 'bg-amber-950/80 border-amber-500/70 text-amber-200 animate-pulse hover:bg-amber-900/80'
+                  : 'bg-emerald-950/80 hover:bg-emerald-900 border-amber-500/50 hover:border-amber-400 text-amber-300'
+              }`}
+              title="Cek Kuota Langsung Google Cloud Firestore & Jadwal Reset (Khusus Super Admin)"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Database className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="truncate">
+                  {firestoreQuotaStatus === 'EXHAUSTED' ? '⚠️ Kuota Habis' : 'Cek Kuota Firebase'}
+                </span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold shrink-0">
+                {firestoreQuotaStatus === 'EXHAUSTED' ? '14:00' : 'Cek'}
+              </span>
+            </button>
+          </div>
+        )}
+
         {/* Bottom Section - User Info */}
         <div className="pt-4 border-t border-[#1e4830]">
           <div className="px-1 flex items-center justify-between gap-2">
@@ -178,6 +209,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
           </div>
         </div>
       </aside>
+
+      {/* Modal Kuota Langsung Google Cloud Firestore (Khusus Super Admin) */}
+      {isSuperAdmin && (
+        <FirestoreQuotaModal
+          isOpen={showQuotaModal}
+          onClose={() => setShowQuotaModal(false)}
+        />
+      )}
     </>
   );
 };

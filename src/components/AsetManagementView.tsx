@@ -13,6 +13,7 @@ import { BarcodeModal } from './BarcodeModal';
 import { AsetDetailModal } from './AsetDetailModal';
 import { SyncDevicesModal } from './SyncDevicesModal';
 import { BackupRestoreModal } from './BackupRestoreModal';
+import { FirestoreQuotaModal } from './FirestoreQuotaModal';
 import { IndonesianDatePicker } from './IndonesianDatePicker';
 import { syncManager } from '../utils/cloudSyncService';
 import { fileToCompressedDataUrl } from '../utils/imageCompressor';
@@ -63,10 +64,12 @@ export const AsetManagementView: React.FC = () => {
     selectedYear,
     isServerConnected,
     refreshServerData,
+    firestoreQuotaStatus,
   } = useApp();
 
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
+  const [showQuotaModal, setShowQuotaModal] = useState(false);
   const [peerCount, setPeerCount] = useState<number>(() => syncManager.getConnectedCount());
 
   useEffect(() => {
@@ -707,6 +710,28 @@ export const AsetManagementView: React.FC = () => {
             >
               <Database className="w-4 h-4 text-emerald-400" />
               <span className="hidden sm:inline">Backup & Restore</span>
+            </button>
+          )}
+
+          {/* Tombol Cek Kuota Langsung Firebase (Khusus Super Admin) */}
+          {currentUser?.role === 'super_admin' && (
+            <button
+              type="button"
+              onClick={() => setShowQuotaModal(true)}
+              className={`p-2 sm:px-3 sm:py-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 shadow-md transition-all cursor-pointer shrink-0 ${
+                firestoreQuotaStatus === 'EXHAUSTED'
+                  ? 'bg-amber-950/80 border-amber-500/70 text-amber-200 animate-pulse hover:bg-amber-900/80'
+                  : 'bg-slate-900/90 hover:bg-slate-800 border-amber-500/40 hover:border-amber-400 text-amber-300 hover:text-white'
+              }`}
+              title="Cek Kuota Langsung Google Cloud Firestore & Jadwal Reset (Khusus Super Admin)"
+            >
+              <Database className="w-4 h-4 text-amber-400 shrink-0" />
+              <span className="hidden sm:inline">
+                {firestoreQuotaStatus === 'EXHAUSTED' ? '⚠️ Kuota Habis (Reset 14:00)' : 'Cek Kuota Firebase'}
+              </span>
+              <span className="sm:hidden">
+                {firestoreQuotaStatus === 'EXHAUSTED' ? '⚠️ Kuota' : 'Kuota'}
+              </span>
             </button>
           )}
 
@@ -2855,6 +2880,14 @@ export const AsetManagementView: React.FC = () => {
         <BackupRestoreModal
           isOpen={showBackupModal}
           onClose={() => setShowBackupModal(false)}
+        />
+      )}
+
+      {/* MODAL: Status & Cek Kuota Langsung Firestore (Khusus Super Admin) */}
+      {currentUser?.role === 'super_admin' && (
+        <FirestoreQuotaModal
+          isOpen={showQuotaModal}
+          onClose={() => setShowQuotaModal(false)}
         />
       )}
     </div>
