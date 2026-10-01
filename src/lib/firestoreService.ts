@@ -708,8 +708,41 @@ const announcementSubscribers = new Set<(list: SystemAnnouncement[]) => void>();
 
 export function subscribeAnnouncements(callback: (list: SystemAnnouncement[]) => void): () => void {
   announcementSubscribers.add(callback);
+
+  // Immediate Initial One-Shot Fetch from both sources so Firefox & other browsers load instantly
+  const fetchInitial = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'announcements')).catch(() => null);
+      if (snap && !snap.empty) {
+        const list: SystemAnnouncement[] = [];
+        snap.forEach((d) => {
+          const data = d.data() as SystemAnnouncement;
+          if (data && data.id) list.push(data);
+        });
+        list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        callback(list);
+        return;
+      }
+    } catch {}
+
+    try {
+      const sysSnap = await getDoc(doc(db, 'system', 'announcements')).catch(() => null);
+      if (sysSnap && sysSnap.exists()) {
+        const data = sysSnap.data();
+        if (Array.isArray(data?.items) && data.items.length > 0) {
+          const list = [...data.items];
+          list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+          callback(list);
+        }
+      }
+    } catch {}
+  };
+  fetchInitial();
+
+  // Real-time listener for /announcements collection
+  let unsubCol: (() => void) | null = null;
   try {
-    const unsub = onSnapshot(
+    unsubCol = onSnapshot(
       collection(db, 'announcements'),
       (snapshot) => {
         const list: SystemAnnouncement[] = [];
@@ -726,33 +759,70 @@ export function subscribeAnnouncements(callback: (list: SystemAnnouncement[]) =>
         if (err?.code === 'resource-exhausted') {
           notifyQuotaStatus('EXHAUSTED', 'Batas kuota harian Firebase Firestore (Spark Plan) telah tercapai hari ini. Kuota akan direset otomatis pukul 14:00 WIB.');
         } else {
-          console.warn('[Firestore] subscribeAnnouncements notice:', err);
+          console.warn('[Firestore] subscribeAnnouncements col notice:', err);
         }
       }
     );
-    return () => {
-      announcementSubscribers.delete(callback);
-      unsub();
-    };
   } catch (e) {
-    console.warn('[Firestore] Failed to subscribe announcements:', e);
-    return () => {
-      announcementSubscribers.delete(callback);
-    };
+    console.warn('[Firestore] Failed to subscribe announcements collection:', e);
   }
+
+  // Also real-time listener for /system/announcements doc
+  let unsubSys: (() => void) | null = null;
+  try {
+    unsubSys = onSnapshot(
+      doc(db, 'system', 'announcements'),
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          if (Array.isArray(data?.items)) {
+            const list = [...data.items];
+            list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+            callback(list);
+          }
+        }
+      },
+      () => {}
+    );
+  } catch {}
+
+  return () => {
+    announcementSubscribers.delete(callback);
+    if (unsubCol) unsubCol();
+    if (unsubSys) unsubSys();
+  };
 }
 
 export async function saveAnnouncementToCloud(ann: SystemAnnouncement): Promise<void> {
+  const cleaned = cleanForFirestore(ann);
+
+  // 1. Save to /announcements/{ann.id}
   try {
-    const cleaned = cleanForFirestore(ann);
     const docRef = doc(db, 'announcements', ann.id);
     await setDoc(docRef, cleaned, { merge: true });
   } catch (err: any) {
     if (err?.code === 'resource-exhausted') {
       notifyQuotaStatus('EXHAUSTED', 'Batas kuota harian Firebase Firestore (Spark Plan) telah tercapai hari ini. Kuota akan direset otomatis pukul 14:00 WIB.');
-      return;
+    } else {
+      console.warn('[Firestore] save to /announcements failed:', err);
     }
-    console.warn('[Firestore] saveAnnouncementToCloud notice:', err);
+  }
+
+  // 2. ALSO save to /system/announcements as redundant array for maximum cross-browser reliability
+  try {
+    const sysDocRef = doc(db, 'system', 'announcements');
+    const existingSnap = await getDoc(sysDocRef).catch(() => null);
+    let items: SystemAnnouncement[] = [];
+    if (existingSnap && existingSnap.exists()) {
+      const data = existingSnap.data();
+      if (Array.isArray(data?.items)) {
+        items = data.items.filter((item: SystemAnnouncement) => item.id !== ann.id);
+      }
+    }
+    items.unshift(cleaned);
+    await setDoc(sysDocRef, { items: items.slice(0, 50), updatedAt: new Date().toISOString() }, { merge: true });
+  } catch (err: any) {
+    console.warn('[Firestore] mirror to /system/announcements notice:', err);
   }
 }
 
@@ -762,5 +832,19 @@ export async function deleteAnnouncementFromCloud(annId: string): Promise<void> 
     await deleteDoc(docRef);
   } catch (err) {
     console.warn('[Firestore] deleteAnnouncementFromCloud notice:', err);
+  }
+
+  try {
+    const sysDocRef = doc(db, 'system', 'announcements');
+    const existingSnap = await getDoc(sysDocRef).catch(() => null);
+    if (existingSnap && existingSnap.exists()) {
+      const data = existingSnap.data();
+      if (Array.isArray(data?.items)) {
+        const nextItems = data.items.filter((item: SystemAnnouncement) => item.id !== annId);
+        await setDoc(sysDocRef, { items: nextItems, updatedAt: new Date().toISOString() }, { merge: true });
+      }
+    }
+  } catch (err) {
+    console.warn('[Firestore] delete from /system/announcements notice:', err);
   }
 }

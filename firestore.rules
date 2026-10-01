@@ -32,5 +32,9 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if true;
     }
+
+    match /announcements/{annId} {
+      allow read, write: if true;
+    }
   }
 }

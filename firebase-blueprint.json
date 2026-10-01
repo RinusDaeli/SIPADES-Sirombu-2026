@@ -50,6 +50,21 @@
         "namaKecamatan": { "type": "string" },
         "namaCamat": { "type": "string" }
       }
+    },
+    "SystemAnnouncement": {
+      "title": "SystemAnnouncement",
+      "description": "Pengumuman dan siaran dari Super Admin",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "senderName": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "priority": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "title", "message", "createdAt"]
     }
   },
   "firestore": {
@@ -68,6 +83,10 @@
     "/system/{docId}": {
       "schema": "KecamatanProfile",
       "description": "Konfigurasi profil kecamatan dan camat"
+    },
+    "/announcements/{annId}": {
+      "schema": "SystemAnnouncement",
+      "description": "Pengumuman siaran real-time lintas perangkat dan browser"
     }
   }
 }
