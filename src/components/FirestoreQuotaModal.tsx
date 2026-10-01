@@ -8,7 +8,6 @@ import {
   RefreshCw,
   X,
   CheckCircle2,
-  Copy,
   Check,
   Database,
   Info,
@@ -37,7 +36,6 @@ export const FirestoreQuotaModal: React.FC<FirestoreQuotaModalProps> = ({ isOpen
 
   const [isChecking, setIsChecking] = useState(false);
   const [lastCheckResult, setLastCheckResult] = useState<{ status: string; detail: string; time: string } | null>(null);
-  const [copied, setCopied] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
 
@@ -87,23 +85,6 @@ export const FirestoreQuotaModal: React.FC<FirestoreQuotaModalProps> = ({ isOpen
       'Pemberitahuan: Kuota Google Cloud Firestore telah direset dan sistem sinkronisasi cloud telah aktif normal kembali. Seluruh Admin Desa dan Operator Aset dapat melanjutkan pekerjaan pencatatan aset seperti biasa.'
     );
     setAnnPriority('normal');
-  };
-
-  const announcementTemplate = `📢 *PEMBERITAHUAN SIPADES KECAMATAN SIROMBU*
-Kepada Yth. Bapak/Ibu Kepala Desa & Operator/Kaur Aset se-Kecamatan Sirombu:
-
-Diberitahukan bahwa kuota sinkronisasi basis data cloud harian saat ini telah mencapai batas harian.
-Mohon untuk *menunda sementara* penginputan data aset baru atau pengajuan mutasi hari ini.
-
-Sistem akan otomatis tereset dan aktif kembali normal pada pukul *14:00 WIB*.
-Semua data aset yang telah tersimpan sebelumnya tetap aman dan utuh di sistem. Terima kasih atas pengertiannya.
-
-— *Super Admin SIPADES Sirombu*`;
-
-  const handleCopyAnnouncement = () => {
-    navigator.clipboard.writeText(announcementTemplate);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 3000);
   };
 
   const firebaseConsoleUrl =
@@ -281,26 +262,6 @@ Semua data aset yang telah tersimpan sebelumnya tetap aman dan utuh di sistem. T
                       <span className="text-slate-300 font-medium">Penghapusan (Deletes):</span>
                       <span className="font-mono font-bold text-amber-400">20.000 / hari</span>
                     </div>
-                  </div>
-                </div>
-
-                {/* Format WhatsApp Imbauan */}
-                <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs font-bold text-white flex items-center gap-2">
-                      <span>Format WhatsApp Siap Kirim</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleCopyAnnouncement}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors cursor-pointer shadow"
-                    >
-                      {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copied ? 'Tersalin!' : 'Salin Pesan WA'}</span>
-                    </button>
-                  </div>
-                  <div className="p-3 bg-slate-950/90 border border-slate-800 rounded-xl text-xs font-mono text-slate-300 whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto">
-                    {announcementTemplate}
                   </div>
                 </div>
 
