@@ -31,6 +31,61 @@ function cleanForFirestore<T>(data: T): T {
   return JSON.parse(JSON.stringify(data));
 }
 
+export type FirestoreQuotaStatus = 'NORMAL' | 'EXHAUSTED' | 'CHECKING' | 'OFFLINE';
+
+let currentQuotaStatus: FirestoreQuotaStatus = 'NORMAL';
+let quotaStatusListeners = new Set<(status: FirestoreQuotaStatus, detail?: string) => void>();
+let lastQuotaCheckTime: Date = new Date();
+let lastQuotaErrorDetail: string = '';
+
+export function onQuotaStatusChange(cb: (status: FirestoreQuotaStatus, detail?: string) => void): () => void {
+  quotaStatusListeners.add(cb);
+  cb(currentQuotaStatus, lastQuotaErrorDetail);
+  return () => quotaStatusListeners.delete(cb);
+}
+
+export function notifyQuotaStatus(status: FirestoreQuotaStatus, detail: string = '') {
+  currentQuotaStatus = status;
+  lastQuotaErrorDetail = detail;
+  lastQuotaCheckTime = new Date();
+  quotaStatusListeners.forEach((cb) => {
+    try {
+      cb(status, detail);
+    } catch {}
+  });
+}
+
+/**
+ * Super Admin check: tests actual live read & write access to Firestore
+ * and detects whether the daily free quota has been exhausted.
+ */
+export async function checkFirestoreQuota(): Promise<{ status: FirestoreQuotaStatus; detail: string; timestamp: Date }> {
+  notifyQuotaStatus('CHECKING', 'Sedang memverifikasi kuota Google Cloud Firestore...');
+  try {
+    const testDoc = doc(db, 'system', 'connectionCheck');
+    // Test write with timeout
+    const testWritePromise = setDoc(testDoc, { lastCheck: new Date().toISOString() }, { merge: true });
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 4000));
+    await Promise.race([testWritePromise, timeoutPromise]);
+    
+    // Test read
+    await getDoc(testDoc);
+    const detail = 'Kuota baca & tulis Google Cloud Firestore aktif normal dan aman.';
+    notifyQuotaStatus('NORMAL', detail);
+    return { status: 'NORMAL', detail, timestamp: new Date() };
+  } catch (err: any) {
+    const msg = err?.message || String(err);
+    if (err?.code === 'resource-exhausted' || msg.includes('Quota exceeded') || msg.includes('resource-exhausted')) {
+      const detail = 'Batas kuota harian gratis Firebase Firestore (Spark Plan) telah tercapai hari ini. Kuota akan direset otomatis oleh Google Cloud setiap hari pukul 14:00 WIB.';
+      notifyQuotaStatus('EXHAUSTED', detail);
+      return { status: 'EXHAUSTED', detail, timestamp: new Date() };
+    }
+    const detail = 'Koneksi ke Firestore lambat atau perangkat sedang offline.';
+    notifyQuotaStatus('OFFLINE', detail);
+    return { status: 'OFFLINE', detail, timestamp: new Date() };
+  }
+}
+
 export interface InitialCloudData {
   asets: Aset[];
   desas: Desa[];
@@ -222,6 +277,7 @@ export function subscribeAsets(callback: (asets: Aset[]) => void): () => void {
       },
       (err: any) => {
         if (err?.code === 'resource-exhausted') {
+          notifyQuotaStatus('EXHAUSTED', 'Batas kuota harian Firebase Firestore (Spark Plan) telah tercapai hari ini. Kuota akan direset otomatis pukul 14:00 WIB.');
           console.warn('[Firestore] Notice: Quota limit reached on free tier. Using synchronized server and local state.');
         } else {
           console.warn('[Firestore] subscribeAsets error:', err);
@@ -420,6 +476,7 @@ export async function saveAsetToCloud(aset: Aset): Promise<void> {
     triggerAsetsListenerRefresh(aset).catch(() => {});
   } catch (err: any) {
     if (err?.code === 'resource-exhausted') {
+      notifyQuotaStatus('EXHAUSTED', 'Batas kuota harian Firebase Firestore (Spark Plan) telah tercapai hari ini. Kuota akan direset otomatis pukul 14:00 WIB.');
       return;
     }
     console.warn('[Firestore] saveAsetToCloud notice:', err);
@@ -479,6 +536,7 @@ export async function saveDesaToCloud(desa: Desa): Promise<boolean> {
     return true;
   } catch (err: any) {
     if (err?.code === 'resource-exhausted') {
+      notifyQuotaStatus('EXHAUSTED', 'Batas kuota harian Firebase Firestore (Spark Plan) telah tercapai hari ini. Kuota akan direset otomatis pukul 14:00 WIB.');
       console.warn('[Firestore] Quota limit reached; saved to server & local storage safely.');
       return false;
     }

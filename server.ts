@@ -82,10 +82,28 @@ function loadDatabase(): DatabaseSchema {
   return defaultState;
 }
 
+function syncDesasToInitialData(desas: Desa[]) {
+  try {
+    const initFile = path.join(__dirname, 'src/data/initialData.ts');
+    if (fs.existsSync(initFile)) {
+      let content = fs.readFileSync(initFile, 'utf-8');
+      const desasJson = JSON.stringify(desas, null, 2);
+      const regex = /export const INITIAL_DESA_LIST: Desa\[\] = (\[[\s\S]*?\]);\n\nexport const INITIAL_USERS/;
+      if (regex.test(content)) {
+        content = content.replace(regex, 'export const INITIAL_DESA_LIST: Desa[] = ' + desasJson + ';\n\nexport const INITIAL_USERS');
+        fs.writeFileSync(initFile, content, 'utf-8');
+      }
+    }
+  } catch (e) {
+    console.warn('[Sync] syncDesasToInitialData notice:', e);
+  }
+}
+
 function saveDatabase(state: DatabaseSchema) {
   try {
     state.updatedAt = new Date().toISOString();
     fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), 'utf-8');
+    syncDesasToInitialData(state.desas);
     broadcastEvent('DATA_CHANGED', state);
   } catch (error) {
     console.error('[Database] Failed to save database file:', error);

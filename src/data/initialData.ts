@@ -118,14 +118,14 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "name": "DESA LAHAWA",
     "code": "12.25.01.2009",
     "kepalaDesa": "MEINARIA WARUWU, S.Pd",
-    "nipKepalaDesa": "",
+    "nipKepalaDesa": "19740505 199606 2001",
     "alamatDesa": "Desa Lahawa Kecamatan Sirombu Kabupaten Nias Barat",
     "emailDesa": "",
-    "nomorHp": "",
+    "nomorHp": "081396597552",
     "kodePos": "22863",
     "kaurAset": "",
     "sekdes": "",
-    "kontak": ""
+    "kontak": "081396597552"
   },
   {
     "id": "desa-10",
@@ -146,42 +146,42 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "name": "DESA SINENEETO",
     "code": "12.25.01.2011",
     "kepalaDesa": "AINAL WAZNA TANJUNG, SE",
-    "nipKepalaDesa": "-",
+    "nipKepalaDesa": "19960918 200903 2 009",
     "alamatDesa": "Desa Sineneeto Kecamatan Sirombu Kabupaten Nias Barat",
     "emailDesa": "",
-    "nomorHp": "",
+    "nomorHp": "082384202667",
     "kodePos": "22863",
     "kaurAset": "",
     "sekdes": "",
-    "kontak": ""
+    "kontak": "082384202667"
   },
   {
     "id": "desa-12",
     "name": "DESA BALOWONDRATE",
     "code": "12.25.01.2012",
     "kepalaDesa": "HETTY HENDRAWATI DAELI, S.Th",
-    "nipKepalaDesa": "-",
+    "nipKepalaDesa": "19840312201209 2 001",
     "alamatDesa": "Desa Balowondrate Kecamatan Sirombu Kabupaten Nias Barat",
     "emailDesa": "",
-    "nomorHp": "",
+    "nomorHp": "081255059604",
     "kodePos": "22863",
     "kaurAset": "",
     "sekdes": "",
-    "kontak": ""
+    "kontak": "081255059604"
   },
   {
     "id": "desa-13",
     "name": "DESA HILIMBERUANAA",
     "code": "12.25.01.2013",
     "kepalaDesa": "ROSTINA BU'ULOLO",
-    "nipKepalaDesa": "-",
+    "nipKepalaDesa": "19690310 199401 2 001",
     "alamatDesa": "Desa Hilimberuanaa Kecamatan Sirombu Kabupaten Nias Barat",
     "emailDesa": "",
-    "nomorHp": "",
+    "nomorHp": "082165101983",
     "kodePos": "22863",
     "kaurAset": "",
     "sekdes": "",
-    "kontak": ""
+    "kontak": "082165101983"
   },
   {
     "id": "desa-14",
@@ -202,14 +202,14 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "name": "DESA OMBOLATA",
     "code": "12.25.01.2015",
     "kepalaDesa": "FATIELI HIA",
-    "nipKepalaDesa": "-",
+    "nipKepalaDesa": "19740413 200701 1 018",
     "alamatDesa": "Desa Ombolata Kecamatan Sirombu Kabupaten Nias Barat",
     "emailDesa": "",
-    "nomorHp": "",
+    "nomorHp": "081265876952",
     "kodePos": "22863",
     "kaurAset": "",
     "sekdes": "",
-    "kontak": ""
+    "kontak": "081265876952"
   },
   {
     "id": "desa-16",
@@ -258,7 +258,7 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "name": "DESA FADORO",
     "code": "12.25.01.2019",
     "kepalaDesa": "TAROMALIMO ZIDUHU MARUNDURI, ST",
-    "nipKepalaDesa": "19860117 201503 1 001",
+    "nipKepalaDesa": "198601172015031001",
     "alamatDesa": "Desa Fadoro Kecamatan Sirombu Kabupaten Nias Barat",
     "emailDesa": "",
     "nomorHp": "085353505086",
@@ -300,28 +300,28 @@ export const INITIAL_DESA_LIST: Desa[] = [
     "name": "DESA TOGIDEU",
     "code": "12.25.01.2022",
     "kepalaDesa": "MARIUS FIVE FINISMAN DAELI, S.STP",
-    "nipKepalaDesa": "-",
+    "nipKepalaDesa": "19951207 201808 1 001",
     "alamatDesa": "Desa Togideu Kecamatan Sirombu Kabupaten Nias Barat",
     "emailDesa": "",
-    "nomorHp": "",
+    "nomorHp": "082180727755",
     "kodePos": "22863",
     "kaurAset": "",
     "sekdes": "",
-    "kontak": ""
+    "kontak": "082180727755"
   },
   {
     "id": "desa-23",
     "name": "DESA TUGALA",
     "code": "12.25.01.2023",
     "kepalaDesa": "SUDI MURNIATI MENDROFA",
-    "nipKepalaDesa": "-",
+    "nipKepalaDesa": "19720424 201407 2 005",
     "alamatDesa": "Desa Tugala Kecamatan Sirombu Kabupaten Nias Barat",
     "emailDesa": "",
-    "nomorHp": "",
+    "nomorHp": "082298327109",
     "kodePos": "22863",
     "kaurAset": "",
     "sekdes": "",
-    "kontak": ""
+    "kontak": "082298327109"
   },
   {
     "id": "desa-24",

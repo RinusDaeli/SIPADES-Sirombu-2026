@@ -48,6 +48,9 @@ import {
   deleteUserFromCloud,
   bootstrapFirestoreIfEmpty,
   fetchInitialFirestoreData,
+  FirestoreQuotaStatus,
+  checkFirestoreQuota,
+  onQuotaStatusChange,
 } from '../lib/firestoreService';
 
 export interface AuthSession {
@@ -74,6 +77,9 @@ interface AppContextType {
   isServerConnected: boolean;
   lastSyncTime: Date;
   refreshServerData: () => Promise<void>;
+  firestoreQuotaStatus: FirestoreQuotaStatus;
+  firestoreQuotaDetail: string;
+  checkFirestoreQuotaStatus: () => Promise<{ status: FirestoreQuotaStatus; detail: string; timestamp: Date }>;
   saveAllToCloudFirebase: (overrides?: {
     desas?: Desa[];
     kecamatanProfile?: KecamatanProfile;
@@ -253,7 +259,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return defaultDeleted;
   });
 
-  const CURRENT_DATA_REVISION = '2026_10_01_fadoro_v2';
+  const [firestoreQuotaStatus, setFirestoreQuotaStatus] = useState<FirestoreQuotaStatus>('NORMAL');
+  const [firestoreQuotaDetail, setFirestoreQuotaDetail] = useState<string>('Kuota Google Cloud Firestore beroperasi normal.');
+
+  useEffect(() => {
+    const unsub = onQuotaStatusChange((status, detail) => {
+      setFirestoreQuotaStatus(status);
+      if (detail) setFirestoreQuotaDetail(detail);
+    });
+    return () => unsub();
+  }, []);
+
+  const checkFirestoreQuotaStatus = useCallback(async () => {
+    return await checkFirestoreQuota();
+  }, []);
+
+  const CURRENT_DATA_REVISION = '2026_10_01_balowondrate_v3';
   const [desas, setDesas] = useState<Desa[]>(() => {
     try {
       const storedRev = localStorage.getItem('SIPADES_DATA_REVISION');
@@ -503,14 +524,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
           if (Array.isArray(serverData.desas) && serverData.desas.length > 0) {
             setDesas((prev) => {
-              const merged = prev.map((current) => {
-                const srv = serverData.desas.find((d: Desa) => d.id === current.id);
-                if (!srv) return current;
-                return {
-                  ...current,
-                  ...srv,
-                };
+              const map = new Map<string, Desa>(prev.map((d) => [d.id, d]));
+              serverData.desas.forEach((srv: Desa) => {
+                if (srv && srv.id) {
+                  const exist = map.get(srv.id);
+                  if (exist) {
+                    map.set(srv.id, {
+                      ...exist,
+                      ...srv,
+                      nomorHp: srv.nomorHp || exist.nomorHp || '',
+                      kontak: srv.kontak || exist.kontak || srv.nomorHp || exist.nomorHp || '',
+                      nipKepalaDesa: srv.nipKepalaDesa && srv.nipKepalaDesa !== '-' ? srv.nipKepalaDesa : exist.nipKepalaDesa,
+                      kepalaDesa: srv.kepalaDesa || exist.kepalaDesa,
+                      kaurAset: srv.kaurAset || exist.kaurAset || '',
+                      alamatDesa: srv.alamatDesa || exist.alamatDesa || '',
+                      kodePos: srv.kodePos || exist.kodePos || '22863',
+                      emailDesa: srv.emailDesa || exist.emailDesa || '',
+                    });
+                  } else {
+                    map.set(srv.id, srv);
+                  }
+                }
               });
+              const merged = Array.from(map.values());
               if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
               safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(merged));
               return merged;
@@ -685,8 +721,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(serverData.users));
               }
               if (Array.isArray(serverData.desas) && serverData.desas.length > 0) {
-                setDesas(serverData.desas);
-                safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(serverData.desas));
+                setDesas((prev) => {
+                  const map = new Map<string, Desa>(prev.map((d) => [d.id, d]));
+                  serverData.desas.forEach((srv: Desa) => {
+                    if (srv && srv.id) {
+                      const exist = map.get(srv.id);
+                      if (exist) {
+                        map.set(srv.id, {
+                          ...exist,
+                          ...srv,
+                          nomorHp: srv.nomorHp || exist.nomorHp || '',
+                          kontak: srv.kontak || exist.kontak || srv.nomorHp || exist.nomorHp || '',
+                          nipKepalaDesa: srv.nipKepalaDesa && srv.nipKepalaDesa !== '-' ? srv.nipKepalaDesa : exist.nipKepalaDesa,
+                          kepalaDesa: srv.kepalaDesa || exist.kepalaDesa,
+                          kaurAset: srv.kaurAset || exist.kaurAset || '',
+                          alamatDesa: srv.alamatDesa || exist.alamatDesa || '',
+                          kodePos: srv.kodePos || exist.kodePos || '22863',
+                          emailDesa: srv.emailDesa || exist.emailDesa || '',
+                        });
+                      } else {
+                        map.set(srv.id, srv);
+                      }
+                    }
+                  });
+                  const merged = Array.from(map.values());
+                  safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(merged));
+                  return merged;
+                });
               }
               if (serverData.kecamatanProfile) {
                 setKecamatanProfile(serverData.kecamatanProfile);
@@ -1918,6 +1979,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isServerConnected,
         lastSyncTime,
         refreshServerData,
+        firestoreQuotaStatus,
+        firestoreQuotaDetail,
+        checkFirestoreQuotaStatus,
         login,
         logout,
         switchUser,

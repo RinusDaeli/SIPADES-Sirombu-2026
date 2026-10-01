@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { NiasBaratLogo } from './NiasBaratLogo';
 import { BackupRestoreModal } from './BackupRestoreModal';
+import { FirestoreQuotaModal } from './FirestoreQuotaModal';
 import {
   Bell,
   ShieldCheck,
@@ -29,13 +30,16 @@ export const Navbar: React.FC = () => {
     resetToDefault,
     isServerConnected,
     refreshServerData,
+    firestoreQuotaStatus,
   } = useApp();
 
   const [showSwitchMenu, setShowSwitchMenu] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
+  const [showQuotaModal, setShowQuotaModal] = useState(false);
 
   const isDesa = currentUser?.role === 'admin_desa';
+  const isSuperAdmin = currentUser?.role === 'super_admin';
   const isAdminOrSuper = currentUser?.role === 'super_admin' || currentUser?.role === 'admin_kecamatan';
 
   // Desa only counts their own pending mutations
@@ -104,6 +108,29 @@ export const Navbar: React.FC = () => {
             <span className="text-slate-300 font-semibold">{isServerConnected ? 'Firebase & Server Aktif' : 'Offline'}</span>
             <RefreshCw className="w-3 h-3 text-slate-400" />
           </button>
+
+          {/* Khusus Super Admin: Indikator & Kontrol Kuota Firestore */}
+          {isSuperAdmin && (
+            <button
+              onClick={() => setShowQuotaModal(true)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer shadow-sm ${
+                firestoreQuotaStatus === 'EXHAUSTED'
+                  ? 'bg-amber-950/80 border-amber-500/70 text-amber-200 animate-pulse hover:bg-amber-900/80'
+                  : firestoreQuotaStatus === 'CHECKING'
+                  ? 'bg-blue-950/80 border-blue-500/50 text-blue-200'
+                  : 'bg-slate-900/90 hover:bg-slate-800 border-emerald-500/40 text-emerald-300'
+              }`}
+              title="Panel Monitoring Kuota Google Cloud Firestore (Khusus Super Admin)"
+            >
+              <Database className={`w-3.5 h-3.5 ${firestoreQuotaStatus === 'EXHAUSTED' ? 'text-amber-400' : 'text-emerald-400'}`} />
+              <span className="hidden sm:inline">
+                {firestoreQuotaStatus === 'EXHAUSTED' ? '⚠️ Kuota Habis (Reset 14:00)' : 'Kuota Cloud: Aman'}
+              </span>
+              <span className="sm:hidden">
+                {firestoreQuotaStatus === 'EXHAUSTED' ? '⚠️ Kuota' : 'Kuota'}
+              </span>
+            </button>
+          )}
 
           {/* Year selector */}
           <div className="hidden sm:flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs text-slate-300">
@@ -366,6 +393,14 @@ export const Navbar: React.FC = () => {
         <BackupRestoreModal
           isOpen={showBackupModal}
           onClose={() => setShowBackupModal(false)}
+        />
+      )}
+
+      {/* Firestore Quota Modal (Khusus Super Admin) */}
+      {isSuperAdmin && (
+        <FirestoreQuotaModal
+          isOpen={showQuotaModal}
+          onClose={() => setShowQuotaModal(false)}
         />
       )}
     </header>
