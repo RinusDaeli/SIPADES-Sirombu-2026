@@ -68,6 +68,9 @@ export interface Aset {
   sumberDana: SumberDana;
   volume?: string; // e.g. Luas 2200 m2, 1 Unit, 800m
   lokasi?: string;
+  merk?: string; // Merk barang/aset (e.g. Honda, Epson, Asus)
+  tipe?: string; // Tipe/Model (e.g. Vario 125, L3110)
+  nomorSeri?: string; // Nomor Seri / Pabrik / Rangka / Mesin
   keterangan: string;
   fotoAset?: string[]; // Foto fisik aset (maksimal 5 foto, minimal 1 foto saat input)
   fotoBast?: string; // Foto BAST Aset kepada pengguna / Berita Acara Serah Terima

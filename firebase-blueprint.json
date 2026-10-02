@@ -14,7 +14,11 @@
         "tahunPerolehan": { "type": "number" },
         "nilaiPerolehan": { "type": "number" },
         "kondisi": { "type": "string" },
-        "status": { "type": "string" }
+        "status": { "type": "string" },
+        "merk": { "type": "string" },
+        "tipe": { "type": "string" },
+        "nomorSeri": { "type": "string" },
+        "keterangan": { "type": "string" }
       },
       "required": ["id", "desaId", "namaAset", "kodeAset"]
     },

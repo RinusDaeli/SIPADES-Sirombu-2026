@@ -123,6 +123,9 @@ export const AsetManagementView: React.FC = () => {
     sumberDana: 'DDS' as SumberDana,
     volume: '',
     lokasi: '',
+    merk: '',
+    tipe: '',
+    nomorSeri: '',
     keterangan: '',
     fotoAset: ['', '', '', '', ''] as string[],
     fotoBast: '' as string,
@@ -286,6 +289,9 @@ export const AsetManagementView: React.FC = () => {
         item.kodeAset.toLowerCase().includes(query) ||
         item.desaName.toLowerCase().includes(query) ||
         (item.bukti?.nomor && item.bukti.nomor.toLowerCase().includes(query)) ||
+        (item.merk && item.merk.toLowerCase().includes(query)) ||
+        (item.tipe && item.tipe.toLowerCase().includes(query)) ||
+        (item.nomorSeri && item.nomorSeri.toLowerCase().includes(query)) ||
         (item.keterangan && item.keterangan.toLowerCase().includes(query));
 
       return matchDesa && matchKlas && matchDana && matchKondisi && matchTahun && matchSearch;
@@ -409,6 +415,9 @@ export const AsetManagementView: React.FC = () => {
       sumberDana: 'DDS',
       volume: '1 Unit',
       lokasi: '',
+      merk: '',
+      tipe: '',
+      nomorSeri: '',
       keterangan: '',
       fotoAset: ['', '', '', '', ''],
       fotoBast: '',
@@ -438,6 +447,9 @@ export const AsetManagementView: React.FC = () => {
       sumberDana: item.sumberDana,
       volume: item.volume || '',
       lokasi: item.lokasi || '',
+      merk: item.merk || '',
+      tipe: item.tipe || '',
+      nomorSeri: item.nomorSeri || '',
       keterangan: item.keterangan || '',
       fotoAset: existingPhotos.slice(0, 5),
       fotoBast: item.fotoBast || '',
@@ -451,6 +463,19 @@ export const AsetManagementView: React.FC = () => {
     const validPhotos = formData.fotoAset.filter((p) => p && p.trim().length > 0);
     if (validPhotos.length === 0) {
       setPhotoError('Wajib mengunggah minimal 1 Foto Fisik Aset!');
+      return;
+    }
+
+    if (!formData.merk || !formData.merk.trim()) {
+      showToast('Merk barang wajib diisi!');
+      return;
+    }
+    if (!formData.tipe || !formData.tipe.trim()) {
+      showToast('Type / Model barang wajib diisi!');
+      return;
+    }
+    if (!formData.nomorSeri || !formData.nomorSeri.trim()) {
+      showToast('Nomor Seri / Pabrik / Rangka wajib diisi!');
       return;
     }
 
@@ -501,6 +526,9 @@ export const AsetManagementView: React.FC = () => {
         sumberDana: formData.sumberDana,
         volume: formData.volume || '1 Unit',
         lokasi: formData.lokasi,
+        merk: formData.merk?.trim() || undefined,
+        tipe: formData.tipe?.trim() || undefined,
+        nomorSeri: formData.nomorSeri?.trim() || undefined,
         keterangan: formData.keterangan,
         fotoAset: validPhotos,
         fotoBast: formData.fotoBast || undefined,
@@ -527,6 +555,9 @@ export const AsetManagementView: React.FC = () => {
           sumberDana: formData.sumberDana,
           volume: formData.volume || '1 Unit',
           lokasi: formData.lokasi,
+          merk: formData.merk?.trim() || undefined,
+          tipe: formData.tipe?.trim() || undefined,
+          nomorSeri: formData.nomorSeri?.trim() || undefined,
           keterangan: formData.keterangan,
           fotoAset: validPhotos,
           fotoBast: formData.fotoBast || undefined,
@@ -546,6 +577,20 @@ export const AsetManagementView: React.FC = () => {
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedAset) return;
+
+    if (!formData.merk || !formData.merk.trim()) {
+      showToast('Merk barang wajib diisi!');
+      return;
+    }
+    if (!formData.tipe || !formData.tipe.trim()) {
+      showToast('Type / Model barang wajib diisi!');
+      return;
+    }
+    if (!formData.nomorSeri || !formData.nomorSeri.trim()) {
+      showToast('Nomor Seri / Pabrik / Rangka wajib diisi!');
+      return;
+    }
+
     const validPhotos = formData.fotoAset.filter((p) => p && p.trim().length > 0);
     const desa = desas.find((d) => d.id === formData.desaId);
     updateAset(selectedAset.id, {
@@ -565,6 +610,9 @@ export const AsetManagementView: React.FC = () => {
       sumberDana: formData.sumberDana,
       volume: formData.volume,
       lokasi: formData.lokasi,
+      merk: formData.merk?.trim() || undefined,
+      tipe: formData.tipe?.trim() || undefined,
+      nomorSeri: formData.nomorSeri?.trim() || undefined,
       keterangan: formData.keterangan,
       fotoAset: validPhotos.length > 0 ? validPhotos : selectedAset.fotoAset,
       fotoBast: formData.fotoBast || selectedAset.fotoBast,
@@ -1066,6 +1114,13 @@ export const AsetManagementView: React.FC = () => {
                                     Lokasi: {item.lokasi}
                                   </div>
                                 )}
+                                {(item.merk || item.tipe || item.nomorSeri) && (
+                                  <div className="mt-0.5 text-[10px] text-emerald-300 font-mono flex items-center gap-1 flex-wrap">
+                                    {item.merk && <span className="bg-emerald-950/70 border border-emerald-500/30 px-1 py-0.2 rounded">Merk: {item.merk}</span>}
+                                    {item.tipe && <span className="bg-emerald-950/70 border border-emerald-500/30 px-1 py-0.2 rounded">Type: {item.tipe}</span>}
+                                    {item.nomorSeri && <span className="bg-slate-900 border border-slate-700 px-1 py-0.2 rounded text-slate-300">SN: {item.nomorSeri}</span>}
+                                  </div>
+                                )}
                                 {item.keterangan && (
                                   <div
                                     className="mt-1 text-[10px] text-amber-200/90 bg-amber-950/40 border border-amber-500/30 rounded px-1.5 py-0.5 max-w-[280px] break-words"
@@ -1379,6 +1434,13 @@ export const AsetManagementView: React.FC = () => {
                                           {item.lokasi && (
                                             <div className="text-[10px] text-slate-400 truncate">
                                               Lokasi: {item.lokasi}
+                                            </div>
+                                          )}
+                                          {(item.merk || item.tipe || item.nomorSeri) && (
+                                            <div className="mt-0.5 text-[10px] text-emerald-300 font-mono flex items-center gap-1 flex-wrap">
+                                              {item.merk && <span className="bg-emerald-950/70 border border-emerald-500/30 px-1 py-0.2 rounded">Merk: {item.merk}</span>}
+                                              {item.tipe && <span className="bg-emerald-950/70 border border-emerald-500/30 px-1 py-0.2 rounded">Type: {item.tipe}</span>}
+                                              {item.nomorSeri && <span className="bg-slate-900 border border-slate-700 px-1 py-0.2 rounded text-slate-300">SN: {item.nomorSeri}</span>}
                                             </div>
                                           )}
                                           {item.keterangan && (
@@ -2080,6 +2142,59 @@ export const AsetManagementView: React.FC = () => {
                 </div>
               </div>
 
+              {/* Spesifikasi Barang / Aset: Merk, Type, Nomor Seri */}
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider block">
+                    Spesifikasi Barang / Aset (Wajib Diisi)
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-medium">
+                    *Otomatis digabung ke kolom Keterangan saat cetak aset
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-slate-300 mb-1 font-semibold text-xs">
+                      Merk <span className="text-red-400 font-bold">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Contoh: Honda, Epson, Asus, dll"
+                      value={formData.merk}
+                      onChange={(e) => setFormData({ ...formData, merk: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 mb-1 font-semibold text-xs">
+                      Type / Model <span className="text-red-400 font-bold">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Contoh: Vario 125, L3210, dll"
+                      value={formData.tipe}
+                      onChange={(e) => setFormData({ ...formData, tipe: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 mb-1 font-semibold text-xs">
+                      Nomor Seri / Pabrik / Rangka <span className="text-red-400 font-bold">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="No. Seri / Rangka / Mesin"
+                      value={formData.nomorSeri}
+                      onChange={(e) => setFormData({ ...formData, nomorSeri: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Lokasi & Keterangan */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -2494,6 +2609,59 @@ export const AsetManagementView: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, volume: e.target.value })}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
                   />
+                </div>
+              </div>
+
+              {/* Spesifikasi Barang / Aset: Merk, Type, Nomor Seri */}
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider block">
+                    Spesifikasi Barang / Aset (Wajib Diisi)
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-medium">
+                    *Otomatis digabung ke kolom Keterangan saat cetak aset
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-slate-300 mb-1 font-semibold text-xs">
+                      Merk <span className="text-red-400 font-bold">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Contoh: Honda, Epson, Asus, dll"
+                      value={formData.merk}
+                      onChange={(e) => setFormData({ ...formData, merk: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 mb-1 font-semibold text-xs">
+                      Type / Model <span className="text-red-400 font-bold">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Contoh: Vario 125, L3210, dll"
+                      value={formData.tipe}
+                      onChange={(e) => setFormData({ ...formData, tipe: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 mb-1 font-semibold text-xs">
+                      Nomor Seri / Pabrik / Rangka <span className="text-red-400 font-bold">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="No. Seri / Rangka / Mesin"
+                      value={formData.nomorSeri}
+                      onChange={(e) => setFormData({ ...formData, nomorSeri: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
                 </div>
               </div>
 

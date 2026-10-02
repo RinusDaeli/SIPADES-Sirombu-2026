@@ -9,6 +9,7 @@ import {
   formatRupiah,
   formatNumber,
   ROMAN_KLASIFIKASI,
+  formatKeteranganWithSpecs,
 } from '../utils/reportGenerator';
 import { NiasBaratLogo } from './NiasBaratLogo';
 import {
@@ -472,7 +473,7 @@ export const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({
                                       <td className="border border-black px-2 py-0.5 text-right">{formatNumber(item.nilaiPerolehan)}</td>
                                       <td className="border border-black text-center py-0.5">{item.kondisi}</td>
                                       <td className="border border-black px-2 py-0.5">
-                                        {item.lokasi ? `${item.lokasi}. ` : ''}{item.keterangan || ''} [{item.sumberDana}]
+                                        {formatKeteranganWithSpecs(item)}
                                       </td>
                                     </tr>
                                   ))}
@@ -530,7 +531,7 @@ export const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({
                                 <td className="border border-black px-2 py-0.5 text-right">{formatNumber(item.nilaiPerolehan)}</td>
                                 <td className="border border-black text-center py-0.5">{item.kondisi}</td>
                                 <td className="border border-black px-2 py-0.5">
-                                  {item.lokasi ? `${item.lokasi}. ` : ''}{item.keterangan || ''} [{item.sumberDana}]
+                                  {formatKeteranganWithSpecs(item)}
                                 </td>
                               </tr>
                             ))}

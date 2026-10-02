@@ -11,6 +11,7 @@ import {
   formatNamaDesaTitleCase,
   KLASIFIKASI_LIST,
   ROMAN_KLASIFIKASI,
+  formatKeteranganWithSpecs,
 } from '../utils/reportGenerator';
 import { NiasBaratLogo } from './NiasBaratLogo';
 import { PdfPreviewModal } from './PdfPreviewModal';
@@ -552,8 +553,8 @@ export const LaporanPermendagriView: React.FC = () => {
                                         {item.kondisi}
                                       </span>
                                     </td>
-                                    <td className="py-2 px-3 text-slate-400 text-[11px]">
-                                      {item.keterangan || (item.lokasi ? `Lokasi: ${item.lokasi}` : '-')}
+                                    <td className="py-2 px-3 text-slate-300 text-[11px]">
+                                      {formatKeteranganWithSpecs(item)}
                                     </td>
                                   </tr>
                                 ))}
@@ -642,8 +643,8 @@ export const LaporanPermendagriView: React.FC = () => {
                                 {item.kondisi}
                               </span>
                             </td>
-                            <td className="py-2 px-3 text-slate-400 text-[11px]">
-                              {item.keterangan || (item.lokasi ? `Lokasi: ${item.lokasi}` : '-')}
+                            <td className="py-2 px-3 text-slate-300 text-[11px]">
+                              {formatKeteranganWithSpecs(item)}
                             </td>
                           </tr>
                         ))}

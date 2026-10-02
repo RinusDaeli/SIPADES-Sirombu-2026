@@ -488,19 +488,23 @@ async function startServer() {
   });
 
   // ==================== VITE MIDDLEWARE / SPA SERVING ====================
-  const isProduction = process.env.NODE_ENV === 'production' || process.env.K_SERVICE !== undefined;
-  if (!isProduction) {
+  const distPath = path.join(process.cwd(), 'dist');
+  const indexHtmlPath = path.join(distPath, 'index.html');
+  const hasDist = fs.existsSync(indexHtmlPath);
+
+  // Use static dist only when explicitly in production AND dist/index.html is built
+  if (process.env.NODE_ENV === 'production' && hasDist) {
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(indexHtmlPath);
+    });
+  } else {
+    // In development or when dist has not been generated, mount Vite dev middlewares
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
   }
 
   app.listen(PORT, '0.0.0.0', () => {

@@ -282,6 +282,32 @@ export const AsetDetailModal: React.FC<AsetDetailModalProps> = ({
                     </div>
                   )}
 
+                  {(aset.merk || aset.tipe || aset.nomorSeri) && (
+                    <div className="pt-2 border-t border-slate-800 space-y-1.5">
+                      <div className="text-slate-400 font-medium">Spesifikasi Barang / Aset:</div>
+                      <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800 text-[11px] space-y-1 font-mono">
+                        {aset.merk && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-400 font-sans">Merk:</span>
+                            <span className="text-emerald-400 font-bold">{aset.merk}</span>
+                          </div>
+                        )}
+                        {aset.tipe && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-400 font-sans">Type:</span>
+                            <span className="text-slate-200">{aset.tipe}</span>
+                          </div>
+                        )}
+                        {aset.nomorSeri && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-400 font-sans">No. Seri:</span>
+                            <span className="text-amber-300 font-bold">{aset.nomorSeri}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="pt-2 border-t border-slate-800">
                     <div className="text-slate-400 font-medium mb-1">Bukti Kepemilikan:</div>
                     <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800 text-[11px] space-y-0.5">

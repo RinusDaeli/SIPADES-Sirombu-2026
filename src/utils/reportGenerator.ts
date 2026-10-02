@@ -66,6 +66,41 @@ export function formatNamaDesaTitleCase(name?: string): string {
     .join(' ');
 }
 
+/**
+ * Menggabungkan Merk, Type, Nomor Seri ke dalam kolom Keterangan saat cetak aset
+ * Sesuai instruksi: gabungkan hasil entriannya di kolom Keterangan saat cetak aset
+ */
+export function formatKeteranganWithSpecs(item: {
+  keterangan?: string;
+  merk?: string;
+  tipe?: string;
+  nomorSeri?: string;
+  lokasi?: string;
+  sumberDana?: string;
+}): string {
+  const specs: string[] = [];
+  if (item.merk && item.merk.trim()) specs.push(`Merk: ${item.merk.trim()}`);
+  if (item.tipe && item.tipe.trim()) specs.push(`Type: ${item.tipe.trim()}`);
+  if (item.nomorSeri && item.nomorSeri.trim()) specs.push(`No. Seri: ${item.nomorSeri.trim()}`);
+
+  const specText = specs.join(', ');
+  const mainKet = item.keterangan ? item.keterangan.trim() : '';
+
+  let mergedKet = '';
+  if (specText && mainKet) {
+    mergedKet = `${specText} - ${mainKet}`;
+  } else if (specText) {
+    mergedKet = specText;
+  } else {
+    mergedKet = mainKet;
+  }
+
+  const lokasiPart = item.lokasi && item.lokasi.trim() ? `${item.lokasi.trim()}. ` : '';
+  const danaPart = item.sumberDana ? ` [${item.sumberDana}]` : '';
+
+  return `${lokasiPart}${mergedKet || '-'}${danaPart}`;
+}
+
 export interface RomanKlasifikasi {
   roman: string;
   title: string;
@@ -558,7 +593,7 @@ export const generatePermendagriPDF = async (options: PermendagriPdfOptions): Pr
                 { content: item.tahunPerolehan.toString(), styles: { halign: 'center' } },
                 { content: formatNumber(item.nilaiPerolehan), styles: { halign: 'right' } },
                 { content: item.kondisi, styles: { halign: 'center' } },
-                { content: `${item.lokasi ? `${item.lokasi}. ` : ''}${item.keterangan || ''} [${item.sumberDana}]`, styles: { font: 'helvetica' } },
+                { content: formatKeteranganWithSpecs(item), styles: { font: 'helvetica' } },
               ]);
             });
           }
@@ -614,7 +649,7 @@ export const generatePermendagriPDF = async (options: PermendagriPdfOptions): Pr
               { content: item.tahunPerolehan.toString(), styles: { halign: 'center' } },
               { content: formatNumber(item.nilaiPerolehan), styles: { halign: 'right' } },
               { content: item.kondisi, styles: { halign: 'center' } },
-              { content: `${item.lokasi ? `${item.lokasi}. ` : ''}${item.keterangan || ''} [${item.sumberDana}]`, styles: { font: 'helvetica' } },
+              { content: formatKeteranganWithSpecs(item), styles: { font: 'helvetica' } },
             ]);
           });
         }
@@ -833,7 +868,7 @@ export const exportToCSV = (desa: Desa, year: number, asets: Aset[]) => {
       const cleanJenis = `"${(item.bukti?.jenis || '').replace(/"/g, '""')}"`;
       const cleanNo = `"${(item.bukti?.nomor || '').replace(/"/g, '""')}"`;
       const cleanTgl = `"${(item.bukti?.tanggal || '').replace(/"/g, '""')}"`;
-      const cleanKet = `"${(item.keterangan || '').replace(/"/g, '""')}"`;
+      const cleanKet = `"${(formatKeteranganWithSpecs(item) || '').replace(/"/g, '""')}"`;
       const cleanLokasi = `"${(item.lokasi || item.volume || '').replace(/"/g, '""')}"`;
 
       csvContent += `${rowCounter},"${klas}",${cleanName},${cleanJenis},${cleanNo},${cleanTgl},"${item.kodeAset}",${item.tahunPerolehan},${item.nilaiPerolehan},"${item.kondisi}","${item.sumberDana}",${cleanLokasi},${cleanKet}\n`;
