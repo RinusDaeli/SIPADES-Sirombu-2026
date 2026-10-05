@@ -426,7 +426,8 @@ export const generatePermendagriPDF = async (options: PermendagriPdfOptions): Pr
         ? `${desa.name.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} Kecamatan Sirombu Kabupaten Nias Barat`
         : 'Desa Sirombu Kecamatan Sirombu Kabupaten Nias Barat';
       const alamatDesaText = desa?.alamatDesa ? (desa.alamatDesa.startsWith('Alamat') ? desa.alamatDesa : `Alamat : ${desa.alamatDesa}`) : `Alamat : ${properDesaFallback}`;
-      doc.text(`${alamatDesaText}      KP. ${desa?.kodePos || '22863'}`, centerX, 24.5, { align: 'center' });
+      const emailDesaPart = desa?.emailDesa && desa.emailDesa.trim() ? `      Email : ${desa.emailDesa.trim()},` : '';
+      doc.text(`${alamatDesaText}${emailDesaPart}      KP. ${desa?.kodePos || '22863'}`, centerX, 24.5, { align: 'center' });
       lineY = 27.5;
     }
     doc.setDrawColor(0, 0, 0);
@@ -484,11 +485,11 @@ export const generatePermendagriPDF = async (options: PermendagriPdfOptions): Pr
     doc.setFont('helvetica', 'italic');
     doc.setFontSize(8);
     const alamatDesaText = desa?.alamatDesa || `${namaDesaClean.toLowerCase().replace('desa ', 'Desa ')} Kecamatan Sirombu Kabupaten Nias Barat`;
-    const emailDesaText = desa?.emailDesa ? `Email : ${desa.emailDesa}` : 'Email : pemdes@niasbarat.go.id';
+    const emailDesaPart = desa?.emailDesa && desa.emailDesa.trim() ? `      Email : ${desa.emailDesa.trim()},` : '';
     const kodePosText = desa?.kodePos ? `KP. ${desa.kodePos}` : 'KP. 22863';
 
     doc.text(
-      `Alamat : ${alamatDesaText}      ${emailDesaText}      ${kodePosText}`,
+      `Alamat : ${alamatDesaText}${emailDesaPart}      ${kodePosText}`,
       centerX,
       24.5,
       { align: 'center' }

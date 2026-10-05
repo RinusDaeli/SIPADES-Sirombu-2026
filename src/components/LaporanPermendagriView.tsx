@@ -31,6 +31,7 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  Mail,
 } from 'lucide-react';
 
 export const LaporanPermendagriView: React.FC = () => {
@@ -313,11 +314,24 @@ export const LaporanPermendagriView: React.FC = () => {
                       : `DESA ${currentDesa.name.toUpperCase()}`}
                   </h2>
                 )}
-                <p className="text-[10px] sm:text-xs italic text-slate-800 leading-tight pt-0.5">
-                  {isAllDesaMode
-                    ? `Alamat : ${alamatKecamatan} KP. ${kodePosKecamatan}`
-                    : `Alamat : ${currentDesa.alamatDesa || `${currentDesa.name ? currentDesa.name.toLowerCase().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Desa Sirombu'} Kecamatan Sirombu Kabupaten Nias Barat`}      KP. ${currentDesa.kodePos || '22863'}`}
-                </p>
+                <div className="text-[10px] sm:text-xs italic text-slate-800 leading-tight pt-0.5 flex items-center justify-center gap-1.5 flex-wrap">
+                  <span>
+                    {isAllDesaMode
+                      ? `Alamat : ${alamatKecamatan}`
+                      : `Alamat : ${currentDesa.alamatDesa || `${currentDesa.name ? currentDesa.name.toLowerCase().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Desa Sirombu'} Kecamatan Sirombu Kabupaten Nias Barat`}`}
+                  </span>
+                  {!isAllDesaMode && currentDesa.emailDesa?.trim() && (
+                    <span className="inline-flex items-center gap-1 font-medium not-italic text-slate-800">
+                      <Mail className="w-3 h-3 text-slate-700 shrink-0 inline" />
+                      <span>{currentDesa.emailDesa.trim()},</span>
+                    </span>
+                  )}
+                  <span>
+                    {isAllDesaMode
+                      ? `KP. ${kodePosKecamatan}`
+                      : `KP. ${currentDesa.kodePos || '22863'}`}
+                  </span>
+                </div>
               </div>
             </div>
           </div>

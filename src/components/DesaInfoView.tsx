@@ -920,8 +920,17 @@ export const DesaInfoView: React.FC = () => {
                               ? formData.name.toUpperCase()
                               : `DESA ${formData.name.toUpperCase()}`}
                           </div>
-                          <div className="text-[8.5px] italic text-slate-800 leading-tight pt-0.5">
-                            Alamat : {formData.alamatDesa || `${formData.name ? formData.name.toLowerCase().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Desa Sirombu'} Kecamatan Sirombu Kabupaten Nias Barat`} KP. {formData.kodePos || '22863'}
+                          <div className="text-[8.5px] italic text-slate-800 leading-tight pt-0.5 flex items-center justify-center gap-1.5 flex-wrap">
+                            <span>
+                              Alamat : {formData.alamatDesa || `${formData.name ? formData.name.toLowerCase().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Desa Sirombu'} Kecamatan Sirombu Kabupaten Nias Barat`}
+                            </span>
+                            {formData.emailDesa?.trim() && (
+                              <span className="inline-flex items-center gap-0.5 font-medium not-italic text-slate-800">
+                                <Mail className="w-2.5 h-2.5 text-slate-600 shrink-0 inline" />
+                                <span>{formData.emailDesa.trim()},</span>
+                              </span>
+                            )}
+                            <span>KP. {formData.kodePos || '22863'}</span>
                           </div>
                         </div>
                       )}

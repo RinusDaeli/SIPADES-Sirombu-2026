@@ -24,6 +24,7 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
+  Mail,
 } from 'lucide-react';
 
 interface PdfPreviewModalProps {
@@ -353,11 +354,24 @@ export const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({
                       {namaDesaDisplay}
                     </h2>
                   )}
-                  <p className="text-[10px] italic text-gray-800 mt-1">
-                    {isAllDesaMode
-                      ? `Alamat : ${effectiveAlamatKecamatan} KP. ${effectiveKodePosKecamatan}`
-                      : `Alamat : ${desa?.alamatDesa || `${desa?.name ? desa.name.toLowerCase().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Desa Sirombu'} Kecamatan Sirombu Kabupaten Nias Barat`}      ${desa?.emailDesa ? `Email : ${desa.emailDesa}      ` : ''}KP. ${desa?.kodePos || '22863'}`}
-                  </p>
+                  <div className="text-[10px] italic text-gray-800 mt-1 flex items-center justify-center gap-1.5 flex-wrap">
+                    <span>
+                      {isAllDesaMode
+                        ? `Alamat : ${effectiveAlamatKecamatan}`
+                        : `Alamat : ${desa?.alamatDesa || `${desa?.name ? desa.name.toLowerCase().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Desa Sirombu'} Kecamatan Sirombu Kabupaten Nias Barat`}`}
+                    </span>
+                    {!isAllDesaMode && desa?.emailDesa?.trim() && (
+                      <span className="inline-flex items-center gap-1 font-medium not-italic text-gray-800">
+                        <Mail className="w-3 h-3 text-gray-700 shrink-0 inline" />
+                        <span>{desa.emailDesa.trim()},</span>
+                      </span>
+                    )}
+                    <span>
+                      {isAllDesaMode
+                        ? `KP. ${effectiveKodePosKecamatan}`
+                        : `KP. ${desa?.kodePos || '22863'}`}
+                    </span>
+                  </div>
                 </div>
               </div>
 

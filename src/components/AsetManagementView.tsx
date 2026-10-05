@@ -1730,17 +1730,17 @@ export const AsetManagementView: React.FC = () => {
                     <input
                       type="number"
                       min="1"
-                      max="200"
+                      max="300"
                       value={jumlahUnit}
                       onChange={(e) => {
                         const val = parseInt(e.target.value, 10);
-                        setJumlahUnit(isNaN(val) || val < 1 ? 1 : Math.min(200, val));
+                        setJumlahUnit(isNaN(val) || val < 1 ? 1 : Math.min(300, val));
                       }}
                       className="w-16 bg-slate-950 border border-amber-500/50 rounded-lg px-2 py-1 text-center font-mono font-bold text-sm text-amber-300 focus:outline-none focus:border-amber-400"
                     />
                     <button
                       type="button"
-                      onClick={() => setJumlahUnit((prev) => Math.min(200, prev + 1))}
+                      onClick={() => setJumlahUnit((prev) => Math.min(300, prev + 1))}
                       className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center transition-colors cursor-pointer"
                       title="Tambah 1 unit"
                     >
@@ -1753,7 +1753,7 @@ export const AsetManagementView: React.FC = () => {
                 {/* Quick Unit Presets */}
                 <div className="flex items-center gap-1.5 flex-wrap pt-1">
                   <span className="text-[10px] text-slate-400 font-medium mr-1">Pilihan Cepat:</span>
-                  {[1, 2, 3, 5, 10, 20].map((num) => (
+                  {[1, 2, 3, 5, 10, 20, 50, 100, 200, 300].map((num) => (
                     <button
                       key={num}
                       type="button"
@@ -2127,7 +2127,7 @@ export const AsetManagementView: React.FC = () => {
                       const numMatch = newVol.match(/^(\d+)\s*(unit|buah|set|paket|item|pcs|meja|kursi|laptop|titik)?/i);
                       if (numMatch) {
                         const parsed = parseInt(numMatch[1], 10);
-                        if (parsed >= 1 && parsed <= 200 && parsed !== jumlahUnit) {
+                        if (parsed >= 1 && parsed <= 300 && parsed !== jumlahUnit) {
                           setJumlahUnit(parsed);
                         }
                       }
