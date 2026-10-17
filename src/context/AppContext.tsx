@@ -551,8 +551,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     saveAsetsToIndexedDB(list).catch(() => {});
   }, []);
 
-  // Central Server Synchronization
+  // Central Server & Cloud Synchronization
   const refreshServerData = useCallback(async () => {
+    // 1. Fetch live authoritative data from Google Cloud Firestore
+    try {
+      const cloudData = await fetchInitialFirestoreData();
+      if (cloudData) {
+        if (Array.isArray(cloudData.asets) && cloudData.asets.length > 0) {
+          setAsets((prev) => {
+            const clean = deduplicateAsets(cloudData.asets, deletedAssetIds);
+            const { asets: normalized } = normalizeAsetRegisters(clean, desas);
+            if (JSON.stringify(prev) === JSON.stringify(normalized)) return prev;
+            persistAsetsSafely(normalized);
+            return normalized;
+          });
+        }
+        if (Array.isArray(cloudData.desas) && cloudData.desas.length > 0) {
+          setDesas(cloudData.desas);
+          safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(cloudData.desas));
+        }
+        if (Array.isArray(cloudData.users) && cloudData.users.length > 0) {
+          setUsers(cloudData.users);
+          safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(cloudData.users));
+        }
+        if (Array.isArray(cloudData.verifikasiList)) {
+          setVerifikasiList(cloudData.verifikasiList);
+          safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(cloudData.verifikasiList));
+        }
+        if (Array.isArray(cloudData.pengesahanList)) {
+          setPengesahanList(cloudData.pengesahanList);
+          safeLocalStorageSetItem(STORAGE_KEYS.PENGESAHAN, JSON.stringify(cloudData.pengesahanList));
+        }
+        if (cloudData.kecamatanProfile) {
+          setKecamatanProfile(cloudData.kecamatanProfile);
+          safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(cloudData.kecamatanProfile));
+        }
+        setIsServerConnected(true);
+        setLastSyncTime(new Date());
+      }
+    } catch (e) {
+      console.warn('[Firestore] Sync in refreshServerData:', e);
+    }
+
+    // 2. Also query local Express server if present (for hybrid server setups)
     try {
       const res = await fetch('/api/data');
       if (res.ok) {

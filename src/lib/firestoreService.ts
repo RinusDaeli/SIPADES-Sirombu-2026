@@ -112,7 +112,7 @@ export async function fetchInitialFirestoreData(): Promise<InitialCloudData | nu
       getDoc(doc(db, 'system', 'kecamatanProfile')),
     ]);
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Firestore initial fetch timeout')), 5000)
+      setTimeout(() => reject(new Error('Firestore initial fetch timeout')), 15000)
     );
 
     const [asetsSnap, desasSnap, verifSnap, pengesahanSnap, usersSnap, kecSnap] = (await Promise.race([
