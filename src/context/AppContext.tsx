@@ -416,34 +416,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return INITIAL_USERS;
   });
 
+  // Lock main data source strictly to Cloud Firestore & Master Dataset.
+  // Stale laptop caches are completely ignored so every laptop sees identical data.
   const [asets, setAsets] = useState<Aset[]>(() => {
-    let deletedSet = new Set<string>(['ast-test-1']);
-    try {
-      const savedDeleted = localStorage.getItem(STORAGE_KEYS.DELETED_ASETS);
-      if (savedDeleted) {
-        const parsed = JSON.parse(savedDeleted);
-        if (Array.isArray(parsed)) {
-          deletedSet = new Set([...deletedSet, ...parsed]);
-        }
-      }
-    } catch {}
-
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.ASETS);
-      if (saved) {
-        const parsed: Aset[] = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const mapped = parsed.filter((a: any) => a && a.id).map((a) => ({
-            ...a,
-            klasifikasi: (a?.klasifikasi ? a.klasifikasi.replace(/^[I|V|X]+\.\s*/, '') : 'Tanah') as KlasAset,
-          }));
-          return deduplicateAsets(mapped, deletedSet);
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    return deduplicateAsets(INITIAL_ASETS, deletedSet);
+    return deduplicateAsets(INITIAL_ASETS);
   });
 
   const [verifikasiList, setVerifikasiList] = useState<PermohonanVerifikasi[]>(() => {
@@ -559,7 +535,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (cloudData) {
         if (Array.isArray(cloudData.asets) && cloudData.asets.length > 0) {
           setAsets((prev) => {
-            const clean = deduplicateAsets(cloudData.asets, deletedAssetIds);
+            const clean = deduplicateAsets(cloudData.asets);
             const { asets: normalized } = normalizeAsetRegisters(clean, desas);
             if (JSON.stringify(prev) === JSON.stringify(normalized)) return prev;
             persistAsetsSafely(normalized);
@@ -702,16 +678,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [persistAsetsSafely]);
 
-  // Cloud Firestore Real-Time Multi-Device Synchronization
+  // Cloud Firestore Real-Time Multi-Device Synchronization (Authoritative Single Source of Truth)
   useEffect(() => {
     bootstrapFirestoreIfEmpty();
+
+    // Clean obsolete laptop cache tombstones
+    try {
+      localStorage.removeItem(STORAGE_KEYS.DELETED_ASETS);
+    } catch {}
 
     // Directly fetch live authoritative data from Google Cloud Firestore FIRST on boot
     // so every laptop, mobile phone, and tablet starts with the exact same cloud data
     fetchInitialFirestoreData().then((cloudData) => {
       if (cloudData) {
         if (Array.isArray(cloudData.asets) && cloudData.asets.length > 0) {
-          const clean = deduplicateAsets(cloudData.asets, deletedAssetIds);
+          const clean = deduplicateAsets(cloudData.asets);
           const { asets: normalized } = normalizeAsetRegisters(clean, desas);
           setAsets(normalized);
           persistAsetsSafely(normalized);
@@ -746,9 +727,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubAsets = subscribeAsets((cloudAsets) => {
       if (cloudAsets && cloudAsets.length > 0) {
         setAsets((prev) => {
-          // Cloud Firestore is the primary authoritative source of truth across all devices.
-          // Initial & live data loaded strictly matches Cloud Firestore so every device sees identical data.
-          const cleanCloud = deduplicateAsets(cloudAsets, deletedAssetIds);
+          // Cloud Firestore is the absolute authoritative source across all laptops.
+          // Direct assignment from Firestore guarantees every laptop has identical data.
+          const cleanCloud = deduplicateAsets(cloudAsets);
           const { asets: normalized } = normalizeAsetRegisters(cleanCloud, desas);
           if (JSON.stringify(prev) === JSON.stringify(normalized)) return prev;
           persistAsetsSafely(normalized);
@@ -1954,6 +1935,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         saveAsetsToIndexedDB(payload.asets);
         payload.asets.forEach((a: Aset) => saveAsetToCloud(a).catch(() => {}));
       }
+
+      // Replicate all restored data immediately to Google Cloud Firestore in unified batch
+      syncAllToFirestore({
+        desas: payload.desas,
+        users: payload.users,
+        asets: payload.asets,
+        kecamatanProfile: payload.kecamatanProfile,
+      }).catch((err) => console.warn('[Firestore] Restore to cloud notice:', err));
+
       if (Array.isArray(payload.verifikasiList)) {
         setVerifikasiList(payload.verifikasiList);
         safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(payload.verifikasiList));
