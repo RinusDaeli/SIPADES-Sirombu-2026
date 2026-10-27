@@ -50,6 +50,7 @@ import {
   Calendar,
   Database,
   Bell,
+  Loader2,
 } from 'lucide-react';
 
 export const AsetManagementView: React.FC = () => {
@@ -205,9 +206,13 @@ export const AsetManagementView: React.FC = () => {
     return inputNilai * jumlahUnit;
   }, [inputNilai, jumlahUnit, tipeHarga]);
 
-  // Photo handlers
+  // Photo handlers with HD loading state
+  const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
+  const [uploadingBast, setUploadingBast] = useState<boolean>(false);
+
   const handlePhotoUpload = async (index: number, file: File) => {
     try {
+      setUploadingSlot(index);
       const compressed = await fileToCompressedDataUrl(file);
       setFormData((prev) => {
         const updated = [...prev.fotoAset];
@@ -217,6 +222,8 @@ export const AsetManagementView: React.FC = () => {
       setPhotoError('');
     } catch (err) {
       console.error(err);
+    } finally {
+      setUploadingSlot(null);
     }
   };
 
@@ -230,10 +237,13 @@ export const AsetManagementView: React.FC = () => {
 
   const handleBastUpload = async (file: File) => {
     try {
+      setUploadingBast(true);
       const compressed = await fileToCompressedDataUrl(file);
       setFormData((prev) => ({ ...prev, fotoBast: compressed }));
     } catch (err) {
       console.error(err);
+    } finally {
+      setUploadingBast(false);
     }
   };
 
@@ -2226,9 +2236,12 @@ export const AsetManagementView: React.FC = () => {
               {/* Foto Fisik Aset: Sediakan 5 foto, minimal 1 wajib diisi */}
               <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                  <label className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <label className="font-bold text-white text-xs flex items-center gap-1.5 flex-wrap">
                     <Camera className="w-4 h-4 text-amber-400" />
                     <span>Foto Fisik Aset * (Sediakan 5 Slot, Minimal 1 Wajib Diisi)</span>
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/30">
+                      Kualitas HD 1600px
+                    </span>
                   </label>
                   <span className="text-[11px] text-amber-300/90 font-medium">
                     Terisi: {formData.fotoAset.filter((p) => p && p.trim().length > 0).length} dari 5 Foto
@@ -2246,19 +2259,27 @@ export const AsetManagementView: React.FC = () => {
                   {[0, 1, 2, 3, 4].map((slotIdx) => {
                     const isRequired = slotIdx === 0;
                     const photoUrl = formData.fotoAset[slotIdx];
+                    const isSlotLoading = uploadingSlot === slotIdx;
 
                     return (
                       <div
                         key={slotIdx}
                         className={`relative rounded-xl border-2 border-dashed p-2 flex flex-col items-center justify-center min-h-[110px] text-center transition-all ${
-                          photoUrl
+                          isSlotLoading
+                            ? 'border-cyan-500 bg-cyan-950/30 animate-pulse'
+                            : photoUrl
                             ? 'border-emerald-500/80 bg-slate-950'
                             : isRequired
                             ? 'border-amber-500/60 bg-slate-950/50 hover:bg-slate-950'
                             : 'border-slate-700/80 bg-slate-950/30 hover:bg-slate-950/60'
                         }`}
                       >
-                        {photoUrl ? (
+                        {isSlotLoading ? (
+                          <div className="flex flex-col items-center justify-center p-2 text-cyan-400">
+                            <Loader2 className="w-5 h-5 animate-spin mb-1 text-cyan-400" />
+                            <span className="text-[9px] font-bold text-cyan-300">Memproses HD...</span>
+                          </div>
+                        ) : photoUrl ? (
                           <div className="relative w-full h-full flex flex-col items-center">
                             <img
                               src={photoUrl}
@@ -2301,7 +2322,7 @@ export const AsetManagementView: React.FC = () => {
                               Foto {slotIdx + 1}
                             </span>
                             <span className="text-[9px] text-slate-500">
-                              {isRequired ? '(Wajib)' : '(Opsional)'}
+                              {isRequired ? '(Wajib - HD)' : '(Opsional - HD)'}
                             </span>
                           </label>
                         )}
@@ -2310,7 +2331,7 @@ export const AsetManagementView: React.FC = () => {
                   })}
                 </div>
                 <p className="text-[10px] text-slate-400">
-                  Format gambar didukung: JPG, PNG, WebP. Gambar dikompresi otomatis untuk efisiensi penyimpanan.
+                  Format gambar: JPG, PNG, WebP. Resolusi otomatis dioptimalkan ke resolusi tinggi (HD 1600px) agar detail fisik, merk, dan plat/nomor seri terbaca tajam.
                 </p>
               </div>
 
@@ -2696,9 +2717,12 @@ export const AsetManagementView: React.FC = () => {
               {/* Foto Fisik Aset: Sediakan 5 foto */}
               <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                  <label className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <label className="font-bold text-white text-xs flex items-center gap-1.5 flex-wrap">
                     <Camera className="w-4 h-4 text-amber-400" />
                     <span>Foto Fisik Aset (Sediakan 5 Slot)</span>
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/30">
+                      Kualitas HD 1600px
+                    </span>
                   </label>
                   <span className="text-[11px] text-amber-300/90 font-medium">
                     Terisi: {formData.fotoAset.filter((p) => p && p.trim().length > 0).length} dari 5 Foto
@@ -2708,17 +2732,25 @@ export const AsetManagementView: React.FC = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                   {[0, 1, 2, 3, 4].map((slotIdx) => {
                     const photoUrl = formData.fotoAset[slotIdx];
+                    const isSlotLoading = uploadingSlot === slotIdx;
 
                     return (
                       <div
                         key={slotIdx}
                         className={`relative rounded-xl border-2 border-dashed p-2 flex flex-col items-center justify-center min-h-[110px] text-center transition-all ${
-                          photoUrl
+                          isSlotLoading
+                            ? 'border-cyan-500 bg-cyan-950/30 animate-pulse'
+                            : photoUrl
                             ? 'border-emerald-500/80 bg-slate-950'
                             : 'border-slate-700/80 bg-slate-950/30 hover:bg-slate-950/60'
                         }`}
                       >
-                        {photoUrl ? (
+                        {isSlotLoading ? (
+                          <div className="flex flex-col items-center justify-center p-2 text-cyan-400">
+                            <Loader2 className="w-5 h-5 animate-spin mb-1 text-cyan-400" />
+                            <span className="text-[9px] font-bold text-cyan-300">Memproses HD...</span>
+                          </div>
+                        ) : photoUrl ? (
                           <div className="relative w-full h-full flex flex-col items-center">
                             <img
                               src={photoUrl}
@@ -2753,7 +2785,7 @@ export const AsetManagementView: React.FC = () => {
                               Foto {slotIdx + 1}
                             </span>
                             <span className="text-[9px] text-slate-500">
-                              (Slot {slotIdx + 1})
+                              (Slot {slotIdx + 1} - HD)
                             </span>
                           </label>
                         )}
@@ -2762,7 +2794,7 @@ export const AsetManagementView: React.FC = () => {
                   })}
                 </div>
                 <p className="text-[10px] text-slate-400">
-                  Perbarui atau lengkapi foto fisik aset. Foto akan otomatis dikompresi.
+                  Perbarui atau lengkapi foto fisik aset. Foto diproses otomatis dalam resolusi tinggi (HD 1600px).
                 </p>
               </div>
 
@@ -2772,13 +2804,21 @@ export const AsetManagementView: React.FC = () => {
                   <label className="font-bold text-white text-xs flex items-center gap-1.5">
                     <FileCheck2 className="w-4 h-4 text-emerald-400" />
                     <span>Foto BAST Aset Kepada Pengguna (Berita Acara Serah Terima)</span>
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/30">
+                      HD Tajam
+                    </span>
                   </label>
                   {formData.fotoBast && (
                     <span className="text-[11px] text-emerald-400 font-semibold">Tersimpan</span>
                   )}
                 </div>
 
-                {formData.fotoBast ? (
+                {uploadingBast ? (
+                  <div className="p-4 bg-cyan-950/30 border border-cyan-500/50 rounded-xl flex items-center justify-center gap-2 text-cyan-300 text-xs font-bold animate-pulse">
+                    <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
+                    <span>Sedang memproses dokumen BAST beresolusi HD...</span>
+                  </div>
+                ) : formData.fotoBast ? (
                   <div className="relative w-full p-2.5 bg-slate-950 rounded-xl border border-emerald-500/60 flex items-center gap-3">
                     <img
                       src={formData.fotoBast}
@@ -2787,10 +2827,10 @@ export const AsetManagementView: React.FC = () => {
                     />
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-bold text-emerald-300">
-                        Foto Dokumen / Penyerahan BAST Siap
+                        Foto Dokumen / Penyerahan BAST Siap (Resolusi HD)
                       </div>
                       <p className="text-[10px] text-slate-400 mt-0.5">
-                        Dapat dilihat langsung oleh Admin Desa dan Admin Kecamatan
+                        Tulisan dan tanda tangan terbaca jelas oleh Admin Desa dan Kecamatan
                       </p>
                     </div>
                     <button
@@ -2818,7 +2858,7 @@ export const AsetManagementView: React.FC = () => {
                         Unggah Foto BAST Aset kepada Pengguna
                       </div>
                       <div className="text-[10px] text-slate-400">
-                        Foto dokumen Berita Acara Serah Terima atau dokumentasi penyerahan fisik kepada pengguna
+                        Foto dokumen Berita Acara Serah Terima otomatis disimpan dalam resolusi tinggi agar tulisan terbaca jelas
                       </div>
                     </div>
                   </label>

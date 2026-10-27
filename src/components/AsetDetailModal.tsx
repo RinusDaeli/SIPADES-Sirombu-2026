@@ -11,7 +11,9 @@ import {
   FileCheck2,
   QrCode,
   Maximize2,
-  AlertCircle
+  AlertCircle,
+  Download,
+  Sparkles,
 } from 'lucide-react';
 
 interface AsetDetailModalProps {
@@ -53,12 +55,24 @@ export const AsetDetailModal: React.FC<AsetDetailModalProps> = ({
         >
           <button
             onClick={() => setLightboxImage(null)}
-            className="absolute top-5 right-5 text-white/80 hover:text-white p-2 rounded-full bg-slate-800/80"
+            className="absolute top-5 right-5 text-white/80 hover:text-white p-2 rounded-full bg-slate-800/80 cursor-pointer"
           >
             <X className="w-6 h-6" />
           </button>
-          <div className="text-white text-sm font-semibold mb-3 bg-slate-900/80 px-4 py-1.5 rounded-full border border-slate-700">
-            {lightboxImage.title} (Klik di mana saja untuk menutup)
+          <div className="flex items-center gap-2 mb-3 flex-wrap justify-center">
+            <div className="text-white text-xs sm:text-sm font-semibold bg-slate-900/90 px-4 py-1.5 rounded-full border border-slate-700">
+              {lightboxImage.title}
+            </div>
+            <a
+              href={lightboxImage.url}
+              download={`${lightboxImage.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.jpg`}
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs font-bold text-emerald-300 hover:text-white bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-500/40 px-3.5 py-1.5 rounded-full flex items-center gap-1.5 transition-colors cursor-pointer shadow-md"
+              title="Unduh foto fisik ini dalam resolusi tinggi"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Unduh Foto HD</span>
+            </a>
           </div>
           <img
             src={lightboxImage.url}
