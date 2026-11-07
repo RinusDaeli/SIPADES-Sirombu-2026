@@ -40,11 +40,26 @@ export async function saveAsetsToIndexedDB(asets: Aset[]): Promise<boolean> {
     return new Promise((resolve) => {
       const tx = db.transaction(IDB_STORE_ASETS, 'readwrite');
       const store = tx.objectStore(IDB_STORE_ASETS);
-      store.clear();
+      const req = store.getAll();
 
-      for (const item of asets) {
-        store.put(item);
-      }
+      req.onsuccess = () => {
+        const existing: Aset[] = req.result || [];
+        const incomingMap = new Map<string, Aset>(asets.map((a) => [a.id, a]));
+
+        // If existing store holds more assets (e.g. 308 items vs 200 partial items), preserve all of them!
+        if (existing.length > asets.length) {
+          existing.forEach((item) => {
+            if (item && item.id && !incomingMap.has(item.id) && item.status !== 'terhapus') {
+              incomingMap.set(item.id, item);
+            }
+          });
+        }
+
+        store.clear();
+        for (const item of incomingMap.values()) {
+          store.put(item);
+        }
+      };
 
       tx.oncomplete = () => {
         db.close();

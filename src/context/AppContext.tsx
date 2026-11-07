@@ -531,9 +531,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Central Storage Helpers
   const persistAsetsSafely = useCallback((list: Aset[]) => {
+    // If current storage holds more assets (e.g. 308 items), don't shrink when receiving a partial list (e.g. 200 items)
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ASETS);
+      if (saved) {
+        const existing: Aset[] = JSON.parse(saved);
+        if (Array.isArray(existing) && existing.length > list.length) {
+          const map = new Map<string, Aset>(list.map((a) => [a.id, a]));
+          existing.forEach((e) => {
+            if (e && e.id && !map.has(e.id) && !deletedAssetIds.has(e.id) && e.status !== 'terhapus') {
+              map.set(e.id, e);
+            }
+          });
+          list = Array.from(map.values());
+        }
+      }
+    } catch {}
+
     safeLocalStorageSetItem(STORAGE_KEYS.ASETS, JSON.stringify(list));
     saveAsetsToIndexedDB(list).catch(() => {});
-  }, []);
+  }, [deletedAssetIds]);
 
   const lastCloudFetchRef = useRef<number>(0);
 
@@ -552,11 +569,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setAsets((prev) => {
               const clean = deduplicateAsets(cloudData.asets);
               let listToUse = clean;
-              // If local holds 308 real assets and cloud has only the 100 initial seeds, preserve and merge
-              if (prev.length > clean.length && clean.length <= 100) {
+              // If local holds 308 real assets and cloud has only partial assets (e.g. 200), preserve and merge!
+              if (prev.length > clean.length) {
                 const map = new Map<string, Aset>(clean.map((a) => [a.id, a]));
                 prev.forEach((p) => {
-                  if (p && p.id && !map.has(p.id)) map.set(p.id, p);
+                  if (p && p.id && !map.has(p.id) && !deletedAssetIds.has(p.id) && p.status !== 'terhapus') {
+                    map.set(p.id, p);
+                  }
                 });
                 listToUse = Array.from(map.values());
               }
@@ -717,17 +736,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const cleanCloud = deduplicateAsets(incomingAsets);
         let listToUse = cleanCloud;
 
-        // Protection: If local state has 308 real assets and cloud has only the 100 sample seeds,
-        // merge them and push to Firestore so all laptops get the complete 308 assets!
-        if (prev.length > cleanCloud.length && cleanCloud.length <= 100) {
+        // Non-destructive protection: If local state has more assets than cloud (e.g. 308 vs 200),
+        // NEVER delete the user's real assets! Merge cloud updates with remaining local assets!
+        if (prev.length > cleanCloud.length) {
           const map = new Map<string, Aset>(cleanCloud.map((a) => [a.id, a]));
           prev.forEach((p) => {
-            if (p && p.id && !map.has(p.id)) {
+            if (p && p.id && !map.has(p.id) && !deletedAssetIds.has(p.id) && p.status !== 'terhapus') {
               map.set(p.id, p);
             }
           });
           listToUse = Array.from(map.values());
-          syncAllToFirestore({ asets: listToUse }).catch(() => {});
         }
 
         const { asets: normalized } = normalizeAsetRegisters(listToUse, desas);
@@ -1100,7 +1118,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
             const merged = deduplicateAsets(Array.from(map.values()), deletedAssetIds);
             persistAsetsSafely(merged);
-            syncAllToFirestore({ asets: merged }).catch(() => {});
             return merged;
           }
           return current.map((c) => {

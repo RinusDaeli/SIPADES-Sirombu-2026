@@ -87,6 +87,17 @@ export async function checkFirestoreQuota(): Promise<{ status: FirestoreQuotaSta
   }
 }
 
+export function isQuotaError(err: any): boolean {
+  if (!err) return false;
+  const code = String(err?.code || '');
+  const msg = String(err?.message || err || '');
+  return (
+    code === 'resource-exhausted' ||
+    msg.toLowerCase().includes('quota') ||
+    msg.toLowerCase().includes('resource-exhausted')
+  );
+}
+
 export interface InitialCloudData {
   asets: Aset[];
   desas: Desa[];
@@ -575,12 +586,12 @@ export async function syncAllToFirestore(payload: {
 
     console.log(`[Firestore] Complete unified sync to Cloud Firestore succeeded (${operations.length} items)`);
   } catch (err: any) {
-    if (err?.code === 'resource-exhausted') {
+    if (isQuotaError(err)) {
+      notifyQuotaStatus('EXHAUSTED', 'Batas kuota harian Firebase Firestore (Spark Plan) telah tercapai hari ini. Kuota akan direset otomatis pukul 14:00 WIB.');
       console.warn('[Firestore] Quota limit reached during unified sync; local and server data remain safe and intact.');
       return;
     }
     console.warn('[Firestore] syncAllToFirestore notice:', err);
-    throw err;
   }
 }
 
