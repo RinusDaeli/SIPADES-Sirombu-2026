@@ -529,24 +529,24 @@ export async function syncAllToFirestore(payload: {
   asets?: Aset[];
 }): Promise<void> {
   try {
-    const batch = writeBatch(db);
+    const operations: { ref: any; data: any }[] = [];
 
     if (Array.isArray(payload.desas)) {
       for (const d of payload.desas) {
         if (d && d.id) {
-          batch.set(doc(db, 'desas', d.id), cleanForFirestore(d), { merge: true });
+          operations.push({ ref: doc(db, 'desas', d.id), data: cleanForFirestore(d) });
         }
       }
     }
 
     if (payload.kecamatanProfile) {
-      batch.set(doc(db, 'system', 'kecamatanProfile'), cleanForFirestore(payload.kecamatanProfile), { merge: true });
+      operations.push({ ref: doc(db, 'system', 'kecamatanProfile'), data: cleanForFirestore(payload.kecamatanProfile) });
     }
 
     if (Array.isArray(payload.users)) {
       for (const u of payload.users) {
         if (u && u.id) {
-          batch.set(doc(db, 'users', u.id), cleanForFirestore(u), { merge: true });
+          operations.push({ ref: doc(db, 'users', u.id), data: cleanForFirestore(u) });
         }
       }
     }
@@ -554,19 +554,33 @@ export async function syncAllToFirestore(payload: {
     if (Array.isArray(payload.asets)) {
       for (const a of payload.asets) {
         if (a && a.id) {
-          batch.set(doc(db, 'asets', a.id), cleanForFirestore(a), { merge: true });
+          operations.push({ ref: doc(db, 'asets', a.id), data: cleanForFirestore(a) });
         }
       }
     }
 
-    await batch.commit();
-    console.log('[Firestore] Complete unified sync to Cloud Firestore succeeded');
+    // Chunk into safe batches of 200 operations (well below Firestore 500 limit)
+    const BATCH_SIZE = 200;
+    for (let i = 0; i < operations.length; i += BATCH_SIZE) {
+      const chunk = operations.slice(i, i + BATCH_SIZE);
+      const batch = writeBatch(db);
+      for (const op of chunk) {
+        batch.set(op.ref, op.data, { merge: true });
+      }
+      await batch.commit();
+      if (i + BATCH_SIZE < operations.length) {
+        await new Promise((r) => setTimeout(r, 60));
+      }
+    }
+
+    console.log(`[Firestore] Complete unified sync to Cloud Firestore succeeded (${operations.length} items)`);
   } catch (err: any) {
     if (err?.code === 'resource-exhausted') {
       console.warn('[Firestore] Quota limit reached during unified sync; local and server data remain safe and intact.');
       return;
     }
     console.warn('[Firestore] syncAllToFirestore notice:', err);
+    throw err;
   }
 }
 

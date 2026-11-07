@@ -416,9 +416,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return INITIAL_USERS;
   });
 
-  // Lock main data source strictly to Cloud Firestore & Master Dataset.
-  // Stale laptop caches are completely ignored so every laptop sees identical data.
+  // Primary state: loads from verified saved storage to prevent flashing 100 on refresh, then synchronizes with Cloud Firestore
   const [asets, setAsets] = useState<Aset[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ASETS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return deduplicateAsets(parsed);
+        }
+      }
+    } catch {}
     return deduplicateAsets(INITIAL_ASETS);
   });
 
@@ -543,7 +551,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (Array.isArray(cloudData.asets) && cloudData.asets.length > 0) {
             setAsets((prev) => {
               const clean = deduplicateAsets(cloudData.asets);
-              const { asets: normalized } = normalizeAsetRegisters(clean, desas);
+              let listToUse = clean;
+              // If local holds 308 real assets and cloud has only the 100 initial seeds, preserve and merge
+              if (prev.length > clean.length && clean.length <= 100) {
+                const map = new Map<string, Aset>(clean.map((a) => [a.id, a]));
+                prev.forEach((p) => {
+                  if (p && p.id && !map.has(p.id)) map.set(p.id, p);
+                });
+                listToUse = Array.from(map.values());
+              }
+              const { asets: normalized } = normalizeAsetRegisters(listToUse, desas);
               if (JSON.stringify(prev) === JSON.stringify(normalized)) return prev;
               persistAsetsSafely(normalized);
               return normalized;
@@ -695,15 +712,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.removeItem(STORAGE_KEYS.DELETED_ASETS);
     } catch {}
 
+    const applyAuthoritativeCloudAsets = (incomingAsets: Aset[]) => {
+      setAsets((prev) => {
+        const cleanCloud = deduplicateAsets(incomingAsets);
+        let listToUse = cleanCloud;
+
+        // Protection: If local state has 308 real assets and cloud has only the 100 sample seeds,
+        // merge them and push to Firestore so all laptops get the complete 308 assets!
+        if (prev.length > cleanCloud.length && cleanCloud.length <= 100) {
+          const map = new Map<string, Aset>(cleanCloud.map((a) => [a.id, a]));
+          prev.forEach((p) => {
+            if (p && p.id && !map.has(p.id)) {
+              map.set(p.id, p);
+            }
+          });
+          listToUse = Array.from(map.values());
+          syncAllToFirestore({ asets: listToUse }).catch(() => {});
+        }
+
+        const { asets: normalized } = normalizeAsetRegisters(listToUse, desas);
+        if (JSON.stringify(prev) === JSON.stringify(normalized)) return prev;
+        persistAsetsSafely(normalized);
+        return normalized;
+      });
+      setIsServerConnected(true);
+      setLastSyncTime(new Date());
+    };
+
     // Directly fetch live authoritative data from Google Cloud Firestore FIRST on boot
-    // so every laptop, mobile phone, and tablet starts with the exact same cloud data
     fetchInitialFirestoreData().then((cloudData) => {
       if (cloudData) {
         if (Array.isArray(cloudData.asets) && cloudData.asets.length > 0) {
-          const clean = deduplicateAsets(cloudData.asets);
-          const { asets: normalized } = normalizeAsetRegisters(clean, desas);
-          setAsets(normalized);
-          persistAsetsSafely(normalized);
+          applyAuthoritativeCloudAsets(cloudData.asets);
         }
         if (Array.isArray(cloudData.desas) && cloudData.desas.length > 0) {
           setDesas(cloudData.desas);
@@ -734,17 +774,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const unsubAsets = subscribeAsets((cloudAsets) => {
       if (cloudAsets && cloudAsets.length > 0) {
-        setAsets((prev) => {
-          // Cloud Firestore is the absolute authoritative source across all laptops.
-          // Direct assignment from Firestore guarantees every laptop has identical data.
-          const cleanCloud = deduplicateAsets(cloudAsets);
-          const { asets: normalized } = normalizeAsetRegisters(cleanCloud, desas);
-          if (JSON.stringify(prev) === JSON.stringify(normalized)) return prev;
-          persistAsetsSafely(normalized);
-          return normalized;
-        });
-        setIsServerConnected(true);
-        setLastSyncTime(new Date());
+        applyAuthoritativeCloudAsets(cloudAsets);
       }
     });
 
@@ -1062,6 +1092,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (Array.isArray(idbAsets) && idbAsets.length > 0) {
         setAsets((current) => {
           if (current.length === 0) return deduplicateAsets(idbAsets, deletedAssetIds);
+          // If IndexedDB has more real assets (e.g. 308 vs 100), preserve all of them!
+          if (idbAsets.length > current.length) {
+            const map = new Map<string, Aset>(idbAsets.map((a) => [a.id, a]));
+            current.forEach((c) => {
+              if (c && c.id) map.set(c.id, { ...(map.get(c.id) || {}), ...c });
+            });
+            const merged = deduplicateAsets(Array.from(map.values()), deletedAssetIds);
+            persistAsetsSafely(merged);
+            syncAllToFirestore({ asets: merged }).catch(() => {});
+            return merged;
+          }
           return current.map((c) => {
             const matched = idbAsets.find((item) => item && item.id === c.id);
             if (matched && (!c.fotoAset || c.fotoAset.length === 0) && matched.fotoAset && matched.fotoAset.length > 0) {
@@ -1945,7 +1986,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setAsets(payload.asets);
         persistAsetsSafely(payload.asets);
         saveAsetsToIndexedDB(payload.asets);
-        payload.asets.forEach((a: Aset) => saveAsetToCloud(a).catch(() => {}));
       }
 
       // Replicate all restored data immediately to Google Cloud Firestore in unified batch
