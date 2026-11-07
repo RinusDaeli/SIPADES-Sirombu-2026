@@ -179,59 +179,28 @@ const kecamatanSubscribers = new Set<(profile: KecamatanProfile) => void>();
 const usersSubscribers = new Set<(users: User[]) => void>();
 
 /**
- * Re-triggers all active Firestore listeners immediately after a successful write
- * ensuring all connected devices see the change in real-time without delay.
+ * Re-triggers active listeners optimistically without redundant getDocs full collection scans.
+ * Firestore onSnapshot listeners automatically broadcast the authoritative delta across all devices with minimal quota usage.
  */
 export async function triggerDesasListenerRefresh(updatedDesa?: Desa): Promise<void> {
-  // 1. Optimistic notification to active local subscribers
   if (updatedDesa) {
     desaSubscribers.forEach((cb) => {
       try {
-        // Trigger with updated desa
         cb([updatedDesa]);
       } catch {}
     });
   }
-
-  // 2. Fetch authoritative live list from Firestore and re-broadcast to all subscribers
-  try {
-    const snap = await getDocs(collection(db, 'desas'));
-    if (!snap.empty) {
-      const list: Desa[] = [];
-      snap.forEach((d) => {
-        const data = d.data() as Desa;
-        if (data && data.id) list.push(data);
-      });
-      list.sort((a, b) => (a?.name || '').localeCompare(b?.name || ''));
-      desaSubscribers.forEach((cb) => {
-        try {
-          cb(list);
-        } catch {}
-      });
-    }
-  } catch (e) {
-    console.warn('[Firestore] triggerDesasListenerRefresh notice:', e);
-  }
 }
 
 export async function triggerAsetsListenerRefresh(updatedAset?: Aset, deletedId?: string): Promise<void> {
-  try {
-    const snap = await getDocs(collection(db, 'asets'));
-    if (!snap.empty) {
-      const list: Aset[] = [];
-      snap.forEach((d) => {
-        const data = d.data() as Aset;
-        if (data && data.id && data.id !== deletedId) list.push(data);
-      });
-      list.sort((a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime());
-      asetSubscribers.forEach((cb) => {
-        try {
-          cb(list);
-        } catch {}
-      });
-    }
-  } catch (e) {
-    console.warn('[Firestore] triggerAsetsListenerRefresh notice:', e);
+  // onSnapshot(collection(db, 'asets')) automatically receives the delta from Firestore.
+  // We avoid getDocs(collection(db, 'asets')) here to prevent burning 100+ reads per asset mutation.
+  if (updatedAset) {
+    asetSubscribers.forEach((cb) => {
+      try {
+        cb([updatedAset]);
+      } catch {}
+    });
   }
 }
 
@@ -242,19 +211,6 @@ export async function triggerKecamatanListenerRefresh(profile?: KecamatanProfile
         cb(profile);
       } catch {}
     });
-  }
-  try {
-    const snap = await getDoc(doc(db, 'system', 'kecamatanProfile'));
-    if (snap.exists()) {
-      const data = snap.data() as KecamatanProfile;
-      kecamatanSubscribers.forEach((cb) => {
-        try {
-          cb(data);
-        } catch {}
-      });
-    }
-  } catch (e) {
-    console.warn('[Firestore] triggerKecamatanListenerRefresh notice:', e);
   }
 }
 
@@ -708,36 +664,6 @@ const announcementSubscribers = new Set<(list: SystemAnnouncement[]) => void>();
 
 export function subscribeAnnouncements(callback: (list: SystemAnnouncement[]) => void): () => void {
   announcementSubscribers.add(callback);
-
-  // Immediate Initial One-Shot Fetch from both sources so Firefox & other browsers load instantly
-  const fetchInitial = async () => {
-    try {
-      const snap = await getDocs(collection(db, 'announcements')).catch(() => null);
-      if (snap && !snap.empty) {
-        const list: SystemAnnouncement[] = [];
-        snap.forEach((d) => {
-          const data = d.data() as SystemAnnouncement;
-          if (data && data.id) list.push(data);
-        });
-        list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-        callback(list);
-        return;
-      }
-    } catch {}
-
-    try {
-      const sysSnap = await getDoc(doc(db, 'system', 'announcements')).catch(() => null);
-      if (sysSnap && sysSnap.exists()) {
-        const data = sysSnap.data();
-        if (Array.isArray(data?.items) && data.items.length > 0) {
-          const list = [...data.items];
-          list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-          callback(list);
-        }
-      }
-    } catch {}
-  };
-  fetchInitial();
 
   // Real-time listener for /announcements collection
   let unsubCol: (() => void) | null = null;

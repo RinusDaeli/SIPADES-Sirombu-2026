@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   User,
   Desa,
@@ -80,7 +80,7 @@ interface AppContextType {
   setSelectedDesaFilter: (desaId: string) => void;
   isServerConnected: boolean;
   lastSyncTime: Date;
-  refreshServerData: () => Promise<void>;
+  refreshServerData: (force?: boolean) => Promise<void>;
   firestoreQuotaStatus: FirestoreQuotaStatus;
   firestoreQuotaDetail: string;
   checkFirestoreQuotaStatus: () => Promise<{ status: FirestoreQuotaStatus; detail: string; timestamp: Date }>;
@@ -527,46 +527,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     saveAsetsToIndexedDB(list).catch(() => {});
   }, []);
 
-  // Central Server & Cloud Synchronization
-  const refreshServerData = useCallback(async () => {
-    // 1. Fetch live authoritative data from Google Cloud Firestore
-    try {
-      const cloudData = await fetchInitialFirestoreData();
-      if (cloudData) {
-        if (Array.isArray(cloudData.asets) && cloudData.asets.length > 0) {
-          setAsets((prev) => {
-            const clean = deduplicateAsets(cloudData.asets);
-            const { asets: normalized } = normalizeAsetRegisters(clean, desas);
-            if (JSON.stringify(prev) === JSON.stringify(normalized)) return prev;
-            persistAsetsSafely(normalized);
-            return normalized;
-          });
+  const lastCloudFetchRef = useRef<number>(0);
+
+  // Central Server & Cloud Synchronization (Protected with a 30s cooldown to preserve Firestore free tier quota)
+  const refreshServerData = useCallback(async (force = false) => {
+    const now = Date.now();
+    const shouldFetchCloud = force || now - lastCloudFetchRef.current > 30000;
+
+    // 1. Fetch live authoritative data from Google Cloud Firestore if cooldown has passed
+    if (shouldFetchCloud) {
+      lastCloudFetchRef.current = now;
+      try {
+        const cloudData = await fetchInitialFirestoreData();
+        if (cloudData) {
+          if (Array.isArray(cloudData.asets) && cloudData.asets.length > 0) {
+            setAsets((prev) => {
+              const clean = deduplicateAsets(cloudData.asets);
+              const { asets: normalized } = normalizeAsetRegisters(clean, desas);
+              if (JSON.stringify(prev) === JSON.stringify(normalized)) return prev;
+              persistAsetsSafely(normalized);
+              return normalized;
+            });
+          }
+          if (Array.isArray(cloudData.desas) && cloudData.desas.length > 0) {
+            setDesas(cloudData.desas);
+            safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(cloudData.desas));
+          }
+          if (Array.isArray(cloudData.users) && cloudData.users.length > 0) {
+            setUsers(cloudData.users);
+            safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(cloudData.users));
+          }
+          if (Array.isArray(cloudData.verifikasiList)) {
+            setVerifikasiList(cloudData.verifikasiList);
+            safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(cloudData.verifikasiList));
+          }
+          if (Array.isArray(cloudData.pengesahanList)) {
+            setPengesahanList(cloudData.pengesahanList);
+            safeLocalStorageSetItem(STORAGE_KEYS.PENGESAHAN, JSON.stringify(cloudData.pengesahanList));
+          }
+          if (cloudData.kecamatanProfile) {
+            setKecamatanProfile(cloudData.kecamatanProfile);
+            safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(cloudData.kecamatanProfile));
+          }
+          setIsServerConnected(true);
+          setLastSyncTime(new Date());
         }
-        if (Array.isArray(cloudData.desas) && cloudData.desas.length > 0) {
-          setDesas(cloudData.desas);
-          safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(cloudData.desas));
-        }
-        if (Array.isArray(cloudData.users) && cloudData.users.length > 0) {
-          setUsers(cloudData.users);
-          safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(cloudData.users));
-        }
-        if (Array.isArray(cloudData.verifikasiList)) {
-          setVerifikasiList(cloudData.verifikasiList);
-          safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(cloudData.verifikasiList));
-        }
-        if (Array.isArray(cloudData.pengesahanList)) {
-          setPengesahanList(cloudData.pengesahanList);
-          safeLocalStorageSetItem(STORAGE_KEYS.PENGESAHAN, JSON.stringify(cloudData.pengesahanList));
-        }
-        if (cloudData.kecamatanProfile) {
-          setKecamatanProfile(cloudData.kecamatanProfile);
-          safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(cloudData.kecamatanProfile));
-        }
-        setIsServerConnected(true);
-        setLastSyncTime(new Date());
+      } catch (e) {
+        console.warn('[Firestore] Sync in refreshServerData:', e);
       }
-    } catch (e) {
-      console.warn('[Firestore] Sync in refreshServerData:', e);
     }
 
     // 2. Also query local Express server if present (for hybrid server setups)
@@ -1066,17 +1074,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }).catch(() => {});
   }, []);
 
-  // Initial load and fast periodic polling (every 4 seconds) to guarantee sync across all devices
+  // One-time check for hybrid local server if present.
+  // Real-time synchronization across devices is passively handled by Firestore onSnapshot & BroadcastChannel without polling.
   useEffect(() => {
-    refreshServerData();
-    const interval = setInterval(refreshServerData, 4000);
-    const onFocus = () => refreshServerData();
-    window.addEventListener('focus', onFocus);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
-    };
-  }, [refreshServerData]);
+    fetch('/api/data')
+      .then((res) => {
+        if (res.ok) {
+          const cType = res.headers.get('content-type');
+          if (cType && cType.includes('application/json')) {
+            setIsServerConnected(true);
+            setLastSyncTime(new Date());
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Local storage persistence fallbacks with safe storage protection against QuotaExceededError
   useEffect(() => {
