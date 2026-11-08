@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
@@ -102,20 +103,48 @@ function syncDesasToInitialData(desas: Desa[]) {
   }
 }
 
-function saveDatabase(state: DatabaseSchema) {
+function saveDatabase(state: DatabaseSchema, syncMaster = false) {
   try {
     state.updatedAt = new Date().toISOString();
     fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), 'utf-8');
-    syncDesasToInitialData(state.desas);
+    if (syncMaster) {
+      syncDesasToInitialData(state.desas);
+    }
     broadcastEvent('DATA_CHANGED', state);
   } catch (error) {
     console.error('[Database] Failed to save database file:', error);
   }
 }
 
+function resolvePort(): number {
+  // 1. Honor CLI argument: --port <num>
+  const portArgIndex = process.argv.indexOf('--port');
+  if (portArgIndex !== -1 && process.argv[portArgIndex + 1]) {
+    const parsed = parseInt(process.argv[portArgIndex + 1], 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  // 2. Honor explicit APP_PORT
+  if (process.env.APP_PORT) {
+    const parsed = parseInt(process.env.APP_PORT, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  // 3. Standalone production (e.g. Cloud Run where PORT is dedicated to node)
+  if (process.env.NODE_ENV === 'production' && process.env.PORT) {
+    const parsed = parseInt(process.env.PORT, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  // 4. In development container, PORT=8080 is reserved for Nginx. Dev server MUST listen on 3000.
+  if (process.env.PORT && process.env.PORT !== '8080') {
+    const parsed = parseInt(process.env.PORT, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  return 3000;
+}
+
 async function startServer() {
   const app = express();
-  const PORT = Number(process.env.PORT) || 3000;
+  const PORT = resolvePort();
+  const server = http.createServer(app);
 
   // Universal CORS for cross-device access (Vercel, local network, custom domains)
   app.use((req, res, next) => {
@@ -463,7 +492,7 @@ async function startServer() {
     if (Array.isArray(asets)) {
       dbState.asets = asets;
     }
-    saveDatabase(dbState);
+    saveDatabase(dbState, true);
     res.json({
       success: true,
       message: 'Semua data berhasil disimpan permanen ke Basis Data Server dan disinkronkan ke Firebase.',
@@ -500,16 +529,60 @@ async function startServer() {
     });
   } else {
     // In development or when dist has not been generated, mount Vite dev middlewares
+    const isHmrDisabled = process.env.DISABLE_HMR === 'true';
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: isHmrDisabled ? false : { server },
+        watch: isHmrDisabled ? null : {},
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
+
+    // SPA fallback: transform and serve index.html for client-side navigation
+    app.use('*', async (req, res, next) => {
+      const url = req.originalUrl;
+      if (url.startsWith('/api')) {
+        return next();
+      }
+      try {
+        const rootIndexHtml = path.resolve(process.cwd(), 'index.html');
+        if (!fs.existsSync(rootIndexHtml)) {
+          return next();
+        }
+        let template = fs.readFileSync(rootIndexHtml, 'utf-8');
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
+      } catch (e) {
+        vite.ssrFixStacktrace(e as Error);
+        next(e);
+      }
+    });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`[SIPADES Server] Berjalan pada http://0.0.0.0:${PORT}`);
+  });
+
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`[SIPADES Server] Port ${PORT} sedang digunakan oleh proses lain:`, err.message);
+    } else {
+      console.error('[SIPADES Server] Server error:', err);
+    }
   });
 }
 
-startServer();
+// Global safety handlers to keep the process resilient
+process.on('uncaughtException', (err) => {
+  console.error('[SIPADES Server] Uncaught exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[SIPADES Server] Unhandled rejection at:', promise, 'reason:', reason);
+});
+
+startServer().catch((err) => {
+  console.error('[SIPADES Server] Gagal menjalankan server:', err);
+});
