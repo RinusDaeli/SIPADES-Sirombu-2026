@@ -75,6 +75,11 @@ export interface Aset {
   fotoAset?: string[]; // Foto fisik aset (maksimal 5 foto, minimal 1 foto saat input)
   fotoBast?: string; // Foto BAST Aset kepada pengguna / Berita Acara Serah Terima
   status: StatusAset;
+  statusVerifikasi?: 'sudah_diverifikasi' | 'sedang_diproses' | 'belum_diverifikasi' | 'perlu_perbaikan';
+  diverifikasiOleh?: string;
+  tanggalVerifikasi?: string;
+  catatanVerifikasi?: string;
+  nomorSKVerifikasi?: string;
   createdAt: string;
   updatedAt: string;
 }

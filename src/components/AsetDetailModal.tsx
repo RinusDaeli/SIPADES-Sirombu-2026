@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Aset } from '../types';
+import { getAsetVerificationStatus, AsetVerificationBadge } from '../utils/verificationHelper';
 import {
   X,
   Camera,
@@ -108,6 +109,7 @@ export const AsetDetailModal: React.FC<AsetDetailModalProps> = ({
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-500/40">
                   KODE: {aset.kodeAset}
                 </span>
+                <AsetVerificationBadge statusInfo={getAsetVerificationStatus(aset)} size="sm" />
               </div>
               <h2 className="text-lg font-bold text-white leading-snug">
                 {aset.namaAset}
@@ -328,6 +330,33 @@ export const AsetDetailModal: React.FC<AsetDetailModalProps> = ({
                       <div className="font-bold text-amber-300">{aset.bukti.jenis}</div>
                       <div className="text-slate-300">Nomor: {aset.bukti.nomor || '-'}</div>
                       <div className="text-slate-400">Tanggal: {aset.bukti.tanggal || '-'}</div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800">
+                    <div className="text-slate-400 font-medium mb-1">Status Verifikasi & Validasi:</div>
+                    <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800 text-[11px] space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Status:</span>
+                        <AsetVerificationBadge statusInfo={getAsetVerificationStatus(aset)} size="sm" />
+                      </div>
+                      {aset.diverifikasiOleh && (
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-slate-400">Diverifikasi Oleh:</span>
+                          <span className="text-emerald-400 font-bold">{aset.diverifikasiOleh}</span>
+                        </div>
+                      )}
+                      {aset.tanggalVerifikasi && (
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-slate-400">Tanggal:</span>
+                          <span className="text-slate-300 font-mono">{aset.tanggalVerifikasi}</span>
+                        </div>
+                      )}
+                      {aset.catatanVerifikasi && (
+                        <div className="text-[10px] text-slate-400 italic pt-1 border-t border-slate-900">
+                          &quot;{aset.catatanVerifikasi}&quot;
+                        </div>
+                      )}
                     </div>
                   </div>
 

@@ -10,6 +10,7 @@ import { LoginView } from './components/LoginView';
 import { DashboardView } from './components/DashboardView';
 import { AsetManagementView } from './components/AsetManagementView';
 import { VerifikasiView } from './components/VerifikasiView';
+import { VerifikasiAsetView } from './components/VerifikasiAsetView';
 import { LaporanPermendagriView } from './components/LaporanPermendagriView';
 import { UserManagementView } from './components/UserManagementView';
 import { DesaInfoView } from './components/DesaInfoView';
@@ -114,6 +115,7 @@ const MainLayout: React.FC = () => {
         <main className="flex-1 p-3 sm:p-5 md:p-8 lg:p-10 max-w-7xl w-full mx-auto text-slate-100">
           {activeTab === 'dashboard' && <DashboardView />}
           {activeTab === 'aset' && <AsetManagementView />}
+          {activeTab === 'verifikasi_aset' && (currentUser?.role === 'super_admin' || currentUser?.role === 'admin_kecamatan') && <VerifikasiAsetView />}
           {activeTab === 'verifikasi' && <VerifikasiView />}
           {activeTab === 'laporan' && <LaporanPermendagriView />}
           {activeTab === 'users' && (currentUser?.role === 'super_admin' || currentUser?.role === 'admin_kecamatan') && <UserManagementView />}

@@ -19,6 +19,10 @@ import { IndonesianDatePicker } from './IndonesianDatePicker';
 import { syncManager } from '../utils/cloudSyncService';
 import { fileToCompressedDataUrl } from '../utils/imageCompressor';
 import {
+  getAsetVerificationStatus,
+  AsetVerificationBadge,
+} from '../utils/verificationHelper';
+import {
   Plus,
   Search,
   Filter,
@@ -51,13 +55,17 @@ import {
   Database,
   Bell,
   Loader2,
+  ShieldCheck,
 } from 'lucide-react';
 
 export const AsetManagementView: React.FC = () => {
   const {
     asets,
+    verifikasiList,
+    pengesahanList,
     desas,
     currentUser,
+    setActiveTab,
     addAset,
     addAsetBatch,
     updateAset,
@@ -70,6 +78,10 @@ export const AsetManagementView: React.FC = () => {
     firestoreQuotaStatus,
     announcements,
     unreadAnnouncementCount,
+    verifikasiAset,
+    verifikasiSemuaAsetPending,
+    pendingVerificationCount,
+    pendingAsetVerificationCount,
   } = useApp();
 
   const [showSyncModal, setShowSyncModal] = useState(false);
@@ -776,6 +788,24 @@ export const AsetManagementView: React.FC = () => {
             </button>
           )}
 
+          {/* Tombol Pintas Menu Verifikasi Aset (Khusus Admin / Super Admin) */}
+          {isAdminOrSuper && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('verifikasi_aset')}
+              className="p-2 sm:px-3 sm:py-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/50 hover:border-amber-400 text-amber-300 hover:text-white text-xs font-bold flex items-center gap-2 shadow-md transition-all cursor-pointer shrink-0"
+              title="Buka Menu Verifikasi Aset Masuk yang Diinput Desa"
+            >
+              <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
+              <span className="hidden sm:inline">Verifikasi Aset</span>
+              {pendingAsetVerificationCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 font-black text-[10px]">
+                  {pendingAsetVerificationCount}
+                </span>
+              )}
+            </button>
+          )}
+
           {/* Tombol Lonceng Pesan Berkedip (Isi pesan tersembunyi sampai diklik) */}
           {announcements.length > 0 && (
             <button
@@ -836,6 +866,50 @@ export const AsetManagementView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Pemberitahuan Verifikasi Aset Masuk untuk Akun Admin / Super Admin */}
+      {isAdminOrSuper && pendingVerificationCount > 0 && (
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-950/90 via-slate-900 to-emerald-950/80 border-2 border-amber-500/60 p-4 sm:p-5 shadow-2xl shadow-amber-950/50">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 shadow-inner">
+                <FileCheck2 className="w-6 h-6 animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500 text-slate-950">
+                    Pemberitahuan Admin
+                  </span>
+                  <span className="text-xs text-amber-300 font-semibold flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                    {pendingVerificationCount} Aset Baru Memerlukan Verifikasi
+                  </span>
+                </div>
+                <h3 className="text-sm sm:text-base font-extrabold text-white mt-1">
+                  Antrean Verifikasi Aset Baru dari Pemerintah Desa
+                </h3>
+                <p className="text-xs text-slate-300 mt-0.5 max-w-2xl leading-relaxed">
+                  Data aset baru diinput berstatus <strong className="text-amber-300 font-bold">&quot;Sedang Diproses&quot;</strong>. Klik tombol verifikasi pada baris tabel atau sahkan seluruh aset sekaligus.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={async () => {
+                const res = await verifikasiSemuaAsetPending();
+                if (res.success) {
+                  showToast(`Berhasil memverifikasi & mengesahkan ${res.count} aset desa.`);
+                }
+              }}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-950/60 cursor-pointer shrink-0 transition-all"
+            >
+              <CheckCircle className="w-4 h-4" />
+              <span>Verifikasi Semua ({pendingVerificationCount})</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="bg-[#0E1526] border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
@@ -1010,25 +1084,23 @@ export const AsetManagementView: React.FC = () => {
       <div className="bg-[#0E1526] border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-300">
-            <thead className="bg-slate-900/90 text-slate-400 text-[11px] font-bold uppercase border-b border-slate-800">
+            <thead className="bg-slate-900/90 text-slate-400 text-[10px] font-bold uppercase tracking-wider border-b border-slate-800">
               <tr>
-                <th className="py-3 px-3">No</th>
-                <th className="py-3 px-3">Klasifikasi & Nama Aset Tetap</th>
-                <th className="py-3 px-3">Desa</th>
-                <th className="py-3 px-3">Bukti Kepemilikan</th>
-                <th className="py-3 px-3">Kode Aset</th>
-                <th className="py-3 px-3 text-center">Tahun</th>
-                <th className="py-3 px-3 text-right">Nilai Perolehan</th>
-                <th className="py-3 px-3 text-center">Kondisi</th>
-                <th className="py-3 px-3 text-center">Dana</th>
-                <th className="py-3 px-3 text-center">Status</th>
-                <th className="py-3 px-3 text-center">Aksi / Verifikasi</th>
+                <th className="py-2.5 px-2 text-center w-8">No</th>
+                <th className="py-2.5 px-3 min-w-[200px] max-w-[260px]">Objek Aset Tetap</th>
+                <th className="py-2.5 px-2 min-w-[120px] max-w-[150px]">Bukti Kepemilikan</th>
+                <th className="py-2.5 px-2 min-w-[125px] max-w-[150px]">Kode & Register</th>
+                <th className="py-2.5 px-2 min-w-[135px]">Nilai & Spesifikasi</th>
+                <th className="py-2.5 px-2 text-center min-w-[110px]">Status</th>
+                <th className="py-2.5 px-3 text-center sticky right-0 bg-slate-900 z-20 border-l border-slate-800 shadow-[-6px_0_12px_rgba(0,0,0,0.6)] min-w-[150px]">
+                  Aksi
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-16 text-center text-slate-500">
+                  <td colSpan={7} className="py-16 text-center text-slate-500">
                     <Boxes className="w-10 h-10 mx-auto mb-2 text-slate-600 opacity-60" />
                     <p className="font-semibold text-slate-400">Belum ada data aset tercatat.</p>
                     <p className="text-[11px] text-slate-500 mt-1">
@@ -1042,14 +1114,14 @@ export const AsetManagementView: React.FC = () => {
                   <React.Fragment key={`desa-year-${yearGroup.year}`}>
                     {/* Header Grup Tahun Anggaran */}
                     <tr className="bg-gradient-to-r from-amber-500/20 via-slate-900 to-slate-950 border-t-2 border-b border-amber-500/40">
-                      <td colSpan={11} className="py-2.5 px-4 font-bold text-amber-300">
+                      <td colSpan={7} className="py-2 px-3 font-bold text-amber-300">
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-amber-400" />
+                            <Calendar className="w-3.5 h-3.5 text-amber-400" />
                             <span className="text-xs uppercase tracking-wide">
                               TAHUN ANGGARAN {yearGroup.year}
                             </span>
-                            <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            <span className="text-[10px] px-2 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
                               {yearGroup.items.length} Unit Aset
                             </span>
                           </div>
@@ -1073,16 +1145,16 @@ export const AsetManagementView: React.FC = () => {
                             isTerhapus ? 'opacity-50 line-through bg-slate-950/40' : ''
                           }`}
                         >
-                          <td className="py-3 px-3 text-slate-400 font-mono text-[11px]">
+                          <td className="py-2 px-2 text-center text-slate-400 font-mono text-[11px] w-8">
                             {idx + 1}
                           </td>
-                          <td className="py-3 px-3 min-w-[260px]">
-                            <div className="flex items-start gap-2.5">
+                          <td className="py-2 px-3 min-w-[200px] max-w-[260px]">
+                            <div className="flex items-start gap-2">
                               {/* Photo Thumbnail / Badge */}
                               <button
                                 type="button"
                                 onClick={() => handleOpenDetail(item)}
-                                className="shrink-0 w-11 h-11 rounded-lg overflow-hidden border border-slate-700 bg-slate-900 flex items-center justify-center relative group hover:border-amber-400 transition-all cursor-pointer shadow-sm"
+                                className="shrink-0 w-8 h-8 rounded-md overflow-hidden border border-slate-700 bg-slate-900 flex items-center justify-center relative group hover:border-amber-400 transition-all cursor-pointer shadow-sm"
                                 title="Klik untuk Lihat Foto & Detail Aset"
                               >
                                 {item.fotoAset && item.fotoAset.length > 0 && item.fotoAset[0] ? (
@@ -1093,47 +1165,42 @@ export const AsetManagementView: React.FC = () => {
                                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                                     />
                                     {item.fotoAset.length > 1 && (
-                                      <span className="absolute bottom-0 right-0 bg-black/85 text-[8px] font-bold text-amber-300 px-1 rounded-tl">
+                                      <span className="absolute bottom-0 right-0 bg-black/85 text-[7px] font-bold text-amber-300 px-0.5 rounded-tl">
                                         +{item.fotoAset.length - 1}
                                       </span>
                                     )}
                                   </>
                                 ) : (
-                                  <Camera className="w-4 h-4 text-slate-500 group-hover:text-amber-400" />
+                                  <Camera className="w-3.5 h-3.5 text-slate-500 group-hover:text-amber-400" />
                                 )}
                               </button>
 
                               <div className="min-w-0 flex-1">
-                                <span className="text-[10px] font-semibold text-amber-400 block truncate">
+                                <span className="text-[9px] font-semibold text-amber-400 block truncate">
                                   {item.klasifikasi}
                                 </span>
                                 <button
                                   type="button"
                                   onClick={() => handleOpenDetail(item)}
-                                  className="font-bold text-white leading-tight text-left hover:text-amber-300 transition-colors block cursor-pointer"
+                                  className="font-bold text-white text-xs leading-snug text-left hover:text-amber-300 transition-colors block cursor-pointer truncate max-w-[220px]"
+                                  title={item.namaAset}
                                 >
                                   {item.namaAset}
                                 </button>
-                                {item.volume && (
-                                  <div className="text-[10px] text-slate-400 mt-0.5">
-                                    Volume: {item.volume}
-                                  </div>
-                                )}
-                                {item.lokasi && (
-                                  <div className="text-[10px] text-slate-400 truncate">
-                                    Lokasi: {item.lokasi}
-                                  </div>
-                                )}
+                                <div className="text-[10px] text-slate-400 flex items-center gap-1.5 flex-wrap">
+                                  {item.volume && <span>Vol: {item.volume}</span>}
+                                  {item.lokasi && <span className="truncate max-w-[110px]" title={item.lokasi}>• {item.lokasi}</span>}
+                                </div>
                                 {(item.merk || item.tipe || item.nomorSeri) && (
-                                  <div className="mt-0.5 text-[10px] text-emerald-300 font-mono flex items-center gap-1 flex-wrap">
-                                    {item.merk && <span className="bg-emerald-950/70 border border-emerald-500/30 px-1 py-0.2 rounded">Merk: {item.merk}</span>}
-                                    {item.tipe && <span className="bg-emerald-950/70 border border-emerald-500/30 px-1 py-0.2 rounded">Type: {item.tipe}</span>}
-                                    {item.nomorSeri && <span className="bg-slate-900 border border-slate-700 px-1 py-0.2 rounded text-slate-300">SN: {item.nomorSeri}</span>}
+                                  <div className="text-[9px] text-emerald-300 font-mono flex items-center gap-1 flex-wrap mt-0.5">
+                                    {item.merk && <span className="bg-emerald-950/70 border border-emerald-500/30 px-1 rounded">Merk: {item.merk}</span>}
+                                    {item.tipe && <span className="bg-emerald-950/70 border border-emerald-500/30 px-1 rounded">Type: {item.tipe}</span>}
+                                    {item.nomorSeri && <span className="bg-slate-900 border border-slate-700 px-1 rounded text-slate-300">SN: {item.nomorSeri}</span>}
                                   </div>
                                 )}
                                 {item.keterangan && (
                                   <div
-                                    className="mt-1 text-[10px] text-amber-200/90 bg-amber-950/40 border border-amber-500/30 rounded px-1.5 py-0.5 max-w-[280px] break-words"
+                                    className="mt-0.5 text-[9px] text-amber-200/90 bg-amber-950/30 border border-amber-500/20 rounded px-1 py-0.2 truncate max-w-[220px]"
                                     title={item.keterangan}
                                   >
                                     <span className="font-bold text-amber-400">Ket:</span> {item.keterangan}
@@ -1142,84 +1209,85 @@ export const AsetManagementView: React.FC = () => {
                               </div>
                             </div>
                           </td>
-                          <td className="py-3 px-3">
-                            <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300 font-semibold text-[10px] block truncate max-w-[120px]">
-                              {(item.desaName || 'Desa').replace('DESA ', '')}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3 max-w-[180px]">
-                            <div className="font-semibold text-slate-200 text-[11px]">
+                          <td className="py-2 px-2 max-w-[140px]">
+                            <div className="font-semibold text-slate-200 text-[10px] truncate" title={item.bukti?.jenis || '-'}>
                               {item.bukti?.jenis || '-'}
                             </div>
-                            <div className="text-[10px] text-slate-400 font-mono truncate">
+                            <div className="text-[10px] text-slate-400 font-mono truncate" title={`No: ${item.bukti?.nomor || '-'}`}>
                               No: {item.bukti?.nomor || '-'}
                             </div>
-                            <div className="text-[10px] text-slate-400">
+                            <div className="text-[9px] text-slate-500">
                               Tgl: {item.bukti?.tanggal || '-'}
                             </div>
                           </td>
-                          <td className="py-3 px-3 font-mono text-[11px]">
-                            <div className="font-bold text-emerald-400 tracking-wide">
+                          <td className="py-2 px-2 font-mono text-[11px] min-w-[125px]">
+                            <div className="font-bold text-emerald-400 tracking-tight text-[11px]">
                               {item.kodeAset}
                             </div>
                             {item.nomorRegister && (
                               <div className="text-[10px] text-amber-300 font-mono flex items-center gap-1 mt-0.5">
-                                <span className="text-slate-500 font-sans">No. Reg:</span>
+                                <span className="text-slate-500 text-[9px] font-sans">Reg:</span>
                                 <span className="px-1 py-0.2 rounded bg-amber-500/10 border border-amber-500/30 font-bold">
                                   {item.nomorRegister}
                                 </span>
                               </div>
                             )}
                           </td>
-                          <td className="py-3 px-3 text-center font-bold text-slate-200">
-                            {item.tahunPerolehan}
-                          </td>
-                          <td className="py-3 px-3 text-right font-mono font-bold text-emerald-400">
-                            {formatRupiah(item.nilaiPerolehan)}
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                item.kondisi === 'Baik'
-                                  ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300'
-                                  : item.kondisi === 'Rusak Ringan'
-                                  ? 'bg-amber-950/80 border-amber-500/40 text-amber-300'
-                                  : 'bg-red-950/80 border-red-500/40 text-red-300'
-                              }`}
-                            >
-                              {item.kondisi}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-amber-300 font-mono text-[10px] font-bold">
-                              {item.sumberDana}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            {isMutasiDiajukan ? (
-                              <span className="px-2 py-0.5 rounded-full bg-blue-950/80 border border-blue-500/40 text-blue-300 text-[10px] font-bold flex items-center gap-1 justify-center">
-                                <Clock className="w-3 h-3" /> Mutasi
+                          <td className="py-2 px-2 min-w-[135px]">
+                            <div className="font-mono font-bold text-emerald-400 text-xs">
+                              {formatRupiah(item.nilaiPerolehan)}
+                            </div>
+                            <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5 flex-wrap">
+                              <span className="font-semibold text-slate-300">TA {item.tahunPerolehan}</span>
+                              <span>•</span>
+                              <span className="text-amber-300 font-mono font-bold">{item.sumberDana}</span>
+                              <span>•</span>
+                              <span
+                                className={`px-1 rounded text-[9px] font-bold border ${
+                                  item.kondisi === 'Baik'
+                                    ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300'
+                                    : item.kondisi === 'Rusak Ringan'
+                                    ? 'bg-amber-950/80 border-amber-500/40 text-amber-300'
+                                    : 'bg-red-950/80 border-red-500/40 text-red-300'
+                                }`}
+                              >
+                                {item.kondisi}
                               </span>
-                            ) : isHapusDiajukan ? (
-                              <span className="px-2 py-0.5 rounded-full bg-red-950/80 border border-red-500/40 text-red-300 text-[10px] font-bold flex items-center gap-1 justify-center">
-                                <Clock className="w-3 h-3" /> Hapus
-                              </span>
-                            ) : isTerhapus ? (
+                            </div>
+                          </td>
+                          <td className="py-2 px-2 text-center min-w-[110px]">
+                            {isTerhapus ? (
                               <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold">
                                 Terhapus
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold">
-                                Aktif
-                              </span>
+                              <AsetVerificationBadge
+                                statusInfo={getAsetVerificationStatus(item, verifikasiList, pengesahanList)}
+                                size="sm"
+                              />
                             )}
                           </td>
-                          <td className="py-3 px-3 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
+                          <td className="py-2 px-2 text-center sticky right-0 bg-[#0E1526] z-10 border-l border-slate-800 shadow-[-6px_0_12px_rgba(0,0,0,0.6)] min-w-[150px]">
+                            <div className="flex items-center justify-center gap-1">
+                              {isAdminOrSuper && !isTerhapus && getAsetVerificationStatus(item, verifikasiList, pengesahanList).status === 'sedang_diproses' && (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const res = await verifikasiAset(item.id, `Diverifikasi oleh ${currentUser?.name || 'Admin'}`);
+                                    if (res.success) {
+                                      showToast(`Aset "${item.namaAset}" berhasil diverifikasi & disahkan.`);
+                                    }
+                                  }}
+                                  className="p-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all shadow-md cursor-pointer"
+                                  title="Verifikasi & Sahkan Aset Ini Sekarang (Wewenang Admin/Super Admin)"
+                                >
+                                  <CheckCircle className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               {/* Cetak Barcode button */}
                               <button
                                 onClick={() => handleOpenBarcode(item)}
-                                className="p-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-400 border border-amber-500/40 text-amber-300 hover:text-slate-950 transition-colors cursor-pointer"
+                                className="p-1 rounded-md bg-amber-500/20 hover:bg-amber-400 border border-amber-500/40 text-amber-300 hover:text-slate-950 transition-colors cursor-pointer"
                                 title="Cetak Barcode & Label Inventaris Aset"
                               >
                                 <QrCode className="w-3.5 h-3.5" />
@@ -1228,7 +1296,7 @@ export const AsetManagementView: React.FC = () => {
                               {/* Lihat Foto & Detail button */}
                               <button
                                 onClick={() => handleOpenDetail(item)}
-                                className="p-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-600 border border-emerald-500/30 text-emerald-300 hover:text-white transition-colors cursor-pointer"
+                                className="p-1 rounded-md bg-emerald-950/60 hover:bg-emerald-600 border border-emerald-500/30 text-emerald-300 hover:text-white transition-colors cursor-pointer"
                                 title="Lihat Foto Fisik & BAST Aset"
                               >
                                 <Eye className="w-3.5 h-3.5" />
@@ -1240,7 +1308,7 @@ export const AsetManagementView: React.FC = () => {
                                   <button
                                     onClick={() => handleOpenEdit(item)}
                                     disabled={isMutasiDiajukan || isHapusDiajukan}
-                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    className="p-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                                     title="Edit Data Aset"
                                   >
                                     <Edit2 className="w-3.5 h-3.5" />
@@ -1250,7 +1318,7 @@ export const AsetManagementView: React.FC = () => {
                                   <button
                                     onClick={() => handleOpenMutasi(item)}
                                     disabled={isMutasiDiajukan || isHapusDiajukan}
-                                    className="p-1.5 rounded-lg bg-blue-950/60 hover:bg-blue-900 border border-blue-500/30 text-blue-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    className="p-1 rounded-md bg-blue-950/60 hover:bg-blue-900 border border-blue-500/30 text-blue-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                                     title="Ajukan Mutasi Aset ke Kecamatan"
                                   >
                                     <ArrowRightLeft className="w-3.5 h-3.5" />
@@ -1260,7 +1328,7 @@ export const AsetManagementView: React.FC = () => {
                                   <button
                                     onClick={() => handleOpenHapus(item)}
                                     disabled={isMutasiDiajukan || isHapusDiajukan}
-                                    className="p-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900 border border-amber-500/30 text-amber-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    className="p-1 rounded-md bg-amber-950/60 hover:bg-amber-900 border border-amber-500/30 text-amber-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                                     title="Ajukan Penghapusan Aset ke Kecamatan"
                                   >
                                     <FileMinus className="w-3.5 h-3.5" />
@@ -1270,7 +1338,7 @@ export const AsetManagementView: React.FC = () => {
                                   <button
                                     onClick={() => handleDeleteDirect(item.id, item.namaAset)}
                                     disabled={isMutasiDiajukan || isHapusDiajukan}
-                                    className="p-1.5 rounded-lg bg-red-950/60 hover:bg-red-900 border border-red-500/30 text-red-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    className="p-1 rounded-md bg-red-950/60 hover:bg-red-900 border border-red-500/30 text-red-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                                     title="Hapus Data Aset Langsung"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -1300,31 +1368,31 @@ export const AsetManagementView: React.FC = () => {
                         className="bg-gradient-to-r from-blue-950 via-slate-900 to-slate-950 border-t-2 border-b border-blue-600/80 cursor-pointer hover:from-blue-900/90 hover:via-slate-800 hover:to-slate-900 transition-all select-none group"
                         title={`Klik untuk ${isExpanded ? 'menyembunyikan' : 'memunculkan semua'} data aset Desa ${desaGroup.desaName}`}
                       >
-                        <td colSpan={11} className="py-3 px-4">
+                        <td colSpan={7} className="py-2.5 px-3">
                           <div className="flex items-center justify-between flex-wrap gap-2">
-                            <div className="flex items-center gap-2.5">
-                              <span className="w-6 h-6 rounded-lg bg-blue-500/20 border border-blue-400/40 text-blue-300 flex items-center justify-center font-bold text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-md bg-blue-500/20 border border-blue-400/40 text-blue-300 flex items-center justify-center font-bold text-[10px]">
                                 {dIdx + 1}
                               </span>
-                              <span className="p-1 rounded-md bg-blue-500/20 text-blue-300 group-hover:bg-blue-500/40 group-hover:text-white transition-colors">
+                              <span className="p-0.5 rounded bg-blue-500/20 text-blue-300 group-hover:bg-blue-500/40 group-hover:text-white transition-colors">
                                 {isExpanded ? (
-                                  <ChevronUp className="w-4 h-4" />
+                                  <ChevronUp className="w-3.5 h-3.5" />
                                 ) : (
-                                  <ChevronDown className="w-4 h-4" />
+                                  <ChevronDown className="w-3.5 h-3.5" />
                                 )}
                               </span>
-                              <Building className="w-4 h-4 text-blue-400" />
+                              <Building className="w-3.5 h-3.5 text-blue-400" />
                               <span className="text-xs font-black text-white uppercase tracking-wide group-hover:text-amber-300 transition-colors">
                                 DESA {desaGroup.desaName.toUpperCase().replace(/^DESA\s+/i, '')}
                               </span>
-                              <span className="text-[11px] text-blue-300 font-mono">
+                              <span className="text-[10px] text-blue-300 font-mono">
                                 (Kode: {desaGroup.desaCode || '-'})
                               </span>
-                              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold">
-                                {desaGroup.totalItems} Unit Aset
+                              <span className="text-[9px] px-2 py-0.2 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold">
+                                {desaGroup.totalItems} Unit
                               </span>
                               <span
-                                className={`text-[10px] px-2.5 py-0.5 rounded-md font-bold flex items-center gap-1 transition-colors ${
+                                className={`text-[9px] px-2 py-0.2 rounded font-bold flex items-center gap-1 transition-colors ${
                                   isExpanded
                                     ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                                     : 'bg-blue-600/30 text-blue-200 border border-blue-400/40 group-hover:bg-blue-600/60'
@@ -1332,21 +1400,21 @@ export const AsetManagementView: React.FC = () => {
                               >
                                 {isExpanded ? (
                                   <>
-                                    <ChevronUp className="w-3 h-3" /> Sembunyikan Aset
+                                    <ChevronUp className="w-3 h-3" /> Sembunyikan
                                   </>
                                 ) : (
                                   <>
-                                    <ChevronDown className="w-3 h-3" /> Klik untuk Buka ({desaGroup.totalItems} Aset)
+                                    <ChevronDown className="w-3 h-3" /> Buka ({desaGroup.totalItems} Aset)
                                   </>
                                 )}
                               </span>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
                               <div className="font-mono text-xs font-bold text-emerald-400">
-                                Total Nilai Aset Desa: {formatRupiah(desaGroup.totalNilai)}
+                                Total: {formatRupiah(desaGroup.totalNilai)}
                               </div>
-                              <span className="text-[11px] text-slate-400 group-hover:text-amber-300 font-medium hidden sm:inline">
-                                {isExpanded ? 'Tutup ▴' : 'Buka Rincian ▾'}
+                              <span className="text-[10px] text-slate-400 group-hover:text-amber-300 font-medium hidden sm:inline">
+                                {isExpanded ? 'Tutup ▴' : 'Buka ▾'}
                               </span>
                             </div>
                           </div>
@@ -1357,7 +1425,7 @@ export const AsetManagementView: React.FC = () => {
                       {isExpanded && (
                         desaGroup.totalItems === 0 ? (
                           <tr>
-                            <td colSpan={11} className="py-5 px-6 text-center text-slate-500 italic bg-slate-900/30">
+                            <td colSpan={7} className="py-4 px-4 text-center text-slate-500 italic bg-slate-900/30">
                               Belum ada data aset tercatat untuk {desaGroup.desaName}.
                             </td>
                           </tr>
@@ -1365,17 +1433,17 @@ export const AsetManagementView: React.FC = () => {
                           desaGroup.yearGroups.map((yearGroup) => (
                             <React.Fragment key={`admin-desa-${desaGroup.desaId}-year-${yearGroup.year}`}>
                               <tr className="bg-slate-900/90 border-b border-slate-800">
-                                <td colSpan={11} className="py-2 px-6 font-bold text-amber-300">
-                                  <div className="flex items-center justify-between flex-wrap gap-2 text-[11px]">
-                                    <div className="flex items-center gap-2">
+                                <td colSpan={7} className="py-1.5 px-4 font-bold text-amber-300">
+                                  <div className="flex items-center justify-between flex-wrap gap-2 text-[10px]">
+                                    <div className="flex items-center gap-1.5">
                                       <span className="text-slate-500 font-mono">↳</span>
-                                      <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                                      <Calendar className="w-3 h-3 text-amber-400" />
                                       <span>Tahun Anggaran {yearGroup.year}</span>
                                       <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400">
                                         {yearGroup.items.length} Unit
                                       </span>
                                     </div>
-                                    <div className="font-mono text-[11px] text-emerald-400">
+                                    <div className="font-mono text-[10px] text-emerald-400">
                                       Subtotal TA {yearGroup.year}: {formatRupiah(yearGroup.totalNilai)}
                                     </div>
                                   </div>
@@ -1395,16 +1463,16 @@ export const AsetManagementView: React.FC = () => {
                                       isTerhapus ? 'opacity-50 line-through bg-slate-950/40' : ''
                                     }`}
                                   >
-                                    <td className="py-3 px-3 text-slate-400 font-mono text-[11px]">
+                                    <td className="py-2 px-2 text-center text-slate-400 font-mono text-[11px] w-8">
                                       {idx + 1}
                                     </td>
-                                    <td className="py-3 px-3 min-w-[260px]">
-                                      <div className="flex items-start gap-2.5">
+                                    <td className="py-2 px-3 min-w-[200px] max-w-[260px]">
+                                      <div className="flex items-start gap-2">
                                         {/* Photo Thumbnail / Badge */}
                                         <button
                                           type="button"
                                           onClick={() => handleOpenDetail(item)}
-                                          className="shrink-0 w-11 h-11 rounded-lg overflow-hidden border border-slate-700 bg-slate-900 flex items-center justify-center relative group hover:border-amber-400 transition-all cursor-pointer shadow-sm"
+                                          className="shrink-0 w-8 h-8 rounded-md overflow-hidden border border-slate-700 bg-slate-900 flex items-center justify-center relative group hover:border-amber-400 transition-all cursor-pointer shadow-sm"
                                           title="Klik untuk Lihat Foto & Detail Aset"
                                         >
                                           {item.fotoAset && item.fotoAset.length > 0 && item.fotoAset[0] ? (
@@ -1415,47 +1483,49 @@ export const AsetManagementView: React.FC = () => {
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                                               />
                                               {item.fotoAset.length > 1 && (
-                                                <span className="absolute bottom-0 right-0 bg-black/85 text-[8px] font-bold text-amber-300 px-1 rounded-tl">
+                                                <span className="absolute bottom-0 right-0 bg-black/85 text-[7px] font-bold text-amber-300 px-0.5 rounded-tl">
                                                   +{item.fotoAset.length - 1}
                                                 </span>
                                               )}
                                             </>
                                           ) : (
-                                            <Camera className="w-4 h-4 text-slate-500 group-hover:text-amber-400" />
+                                            <Camera className="w-3.5 h-3.5 text-slate-500 group-hover:text-amber-400" />
                                           )}
                                         </button>
 
                                         <div className="min-w-0 flex-1">
-                                          <span className="text-[10px] font-semibold text-amber-400 block truncate">
-                                            {item.klasifikasi}
-                                          </span>
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="text-[9px] font-semibold text-amber-400 truncate max-w-[140px]">
+                                              {item.klasifikasi}
+                                            </span>
+                                            {item.desaName && (
+                                              <span className="px-1.5 py-0.2 rounded bg-blue-950/80 border border-blue-500/30 text-blue-300 font-bold text-[9px] truncate max-w-[100px]">
+                                                {item.desaName.replace(/^DESA\s+/i, '')}
+                                              </span>
+                                            )}
+                                          </div>
                                           <button
                                             type="button"
                                             onClick={() => handleOpenDetail(item)}
-                                            className="font-bold text-white leading-tight text-left hover:text-amber-300 transition-colors block cursor-pointer"
+                                            className="font-bold text-white text-xs leading-snug text-left hover:text-amber-300 transition-colors block cursor-pointer truncate max-w-[220px]"
+                                            title={item.namaAset}
                                           >
                                             {item.namaAset}
                                           </button>
-                                          {item.volume && (
-                                            <div className="text-[10px] text-slate-400 mt-0.5">
-                                              Volume: {item.volume}
-                                            </div>
-                                          )}
-                                          {item.lokasi && (
-                                            <div className="text-[10px] text-slate-400 truncate">
-                                              Lokasi: {item.lokasi}
-                                            </div>
-                                          )}
+                                          <div className="text-[10px] text-slate-400 flex items-center gap-1.5 flex-wrap">
+                                            {item.volume && <span>Vol: {item.volume}</span>}
+                                            {item.lokasi && <span className="truncate max-w-[110px]" title={item.lokasi}>• {item.lokasi}</span>}
+                                          </div>
                                           {(item.merk || item.tipe || item.nomorSeri) && (
-                                            <div className="mt-0.5 text-[10px] text-emerald-300 font-mono flex items-center gap-1 flex-wrap">
-                                              {item.merk && <span className="bg-emerald-950/70 border border-emerald-500/30 px-1 py-0.2 rounded">Merk: {item.merk}</span>}
-                                              {item.tipe && <span className="bg-emerald-950/70 border border-emerald-500/30 px-1 py-0.2 rounded">Type: {item.tipe}</span>}
-                                              {item.nomorSeri && <span className="bg-slate-900 border border-slate-700 px-1 py-0.2 rounded text-slate-300">SN: {item.nomorSeri}</span>}
+                                            <div className="text-[9px] text-emerald-300 font-mono flex items-center gap-1 flex-wrap mt-0.5">
+                                              {item.merk && <span className="bg-emerald-950/70 border border-emerald-500/30 px-1 rounded">Merk: {item.merk}</span>}
+                                              {item.tipe && <span className="bg-emerald-950/70 border border-emerald-500/30 px-1 rounded">Type: {item.tipe}</span>}
+                                              {item.nomorSeri && <span className="bg-slate-900 border border-slate-700 px-1 rounded text-slate-300">SN: {item.nomorSeri}</span>}
                                             </div>
                                           )}
                                           {item.keterangan && (
                                             <div
-                                              className="mt-1 text-[10px] text-amber-200/90 bg-amber-950/40 border border-amber-500/30 rounded px-1.5 py-0.5 max-w-[280px] break-words"
+                                              className="mt-0.5 text-[9px] text-amber-200/90 bg-amber-950/30 border border-amber-500/20 rounded px-1 py-0.2 truncate max-w-[220px]"
                                               title={item.keterangan}
                                             >
                                               <span className="font-bold text-amber-400">Ket:</span> {item.keterangan}
@@ -1464,84 +1534,70 @@ export const AsetManagementView: React.FC = () => {
                                         </div>
                                       </div>
                                     </td>
-                                    <td className="py-3 px-3">
-                                      <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300 font-semibold text-[10px] block truncate max-w-[120px]">
-                                        {(item.desaName || 'Desa').replace('DESA ', '')}
-                                      </span>
-                                    </td>
-                                    <td className="py-3 px-3 max-w-[180px]">
-                                      <div className="font-semibold text-slate-200 text-[11px]">
+                                    <td className="py-2 px-2 max-w-[140px]">
+                                      <div className="font-semibold text-slate-200 text-[10px] truncate" title={item.bukti?.jenis || '-'}>
                                         {item.bukti?.jenis || '-'}
                                       </div>
-                                      <div className="text-[10px] text-slate-400 font-mono truncate">
+                                      <div className="text-[10px] text-slate-400 font-mono truncate" title={`No: ${item.bukti?.nomor || '-'}`}>
                                         No: {item.bukti?.nomor || '-'}
                                       </div>
-                                      <div className="text-[10px] text-slate-400">
+                                      <div className="text-[9px] text-slate-500">
                                         Tgl: {item.bukti?.tanggal || '-'}
                                       </div>
                                     </td>
-                                    <td className="py-3 px-3 font-mono text-[11px]">
-                                      <div className="font-bold text-emerald-400 tracking-wide">
+                                    <td className="py-2 px-2 font-mono text-[11px] min-w-[125px]">
+                                      <div className="font-bold text-emerald-400 tracking-tight text-[11px]">
                                         {item.kodeAset}
                                       </div>
                                       {item.nomorRegister && (
                                         <div className="text-[10px] text-amber-300 font-mono flex items-center gap-1 mt-0.5">
-                                          <span className="text-slate-500 font-sans">No. Reg:</span>
+                                          <span className="text-slate-500 text-[9px] font-sans">Reg:</span>
                                           <span className="px-1 py-0.2 rounded bg-amber-500/10 border border-amber-500/30 font-bold">
                                             {item.nomorRegister}
                                           </span>
                                         </div>
                                       )}
                                     </td>
-                                    <td className="py-3 px-3 text-center font-bold text-slate-200">
-                                      {item.tahunPerolehan}
-                                    </td>
-                                    <td className="py-3 px-3 text-right font-mono font-bold text-emerald-400">
-                                      {formatRupiah(item.nilaiPerolehan)}
-                                    </td>
-                                    <td className="py-3 px-3 text-center">
-                                      <span
-                                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                          item.kondisi === 'Baik'
-                                            ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300'
-                                            : item.kondisi === 'Rusak Ringan'
-                                            ? 'bg-amber-950/80 border-amber-500/40 text-amber-300'
-                                            : 'bg-red-950/80 border-red-500/40 text-red-300'
-                                        }`}
-                                      >
-                                        {item.kondisi}
-                                      </span>
-                                    </td>
-                                    <td className="py-3 px-3 text-center">
-                                      <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-amber-300 font-mono text-[10px] font-bold">
-                                        {item.sumberDana}
-                                      </span>
-                                    </td>
-                                    <td className="py-3 px-3 text-center">
-                                      {isMutasiDiajukan ? (
-                                        <span className="px-2 py-0.5 rounded-full bg-blue-950/80 border border-blue-500/40 text-blue-300 text-[10px] font-bold flex items-center gap-1 justify-center">
-                                          <Clock className="w-3 h-3" /> Mutasi
+                                    <td className="py-2 px-2 min-w-[135px]">
+                                      <div className="font-mono font-bold text-emerald-400 text-xs">
+                                        {formatRupiah(item.nilaiPerolehan)}
+                                      </div>
+                                      <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5 flex-wrap">
+                                        <span className="font-semibold text-slate-300">TA {item.tahunPerolehan}</span>
+                                        <span>•</span>
+                                        <span className="text-amber-300 font-mono font-bold">{item.sumberDana}</span>
+                                        <span>•</span>
+                                        <span
+                                          className={`px-1 rounded text-[9px] font-bold border ${
+                                            item.kondisi === 'Baik'
+                                              ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300'
+                                              : item.kondisi === 'Rusak Ringan'
+                                              ? 'bg-amber-950/80 border-amber-500/40 text-amber-300'
+                                              : 'bg-red-950/80 border-red-500/40 text-red-300'
+                                          }`}
+                                        >
+                                          {item.kondisi}
                                         </span>
-                                      ) : isHapusDiajukan ? (
-                                        <span className="px-2 py-0.5 rounded-full bg-red-950/80 border border-red-500/40 text-red-300 text-[10px] font-bold flex items-center gap-1 justify-center">
-                                          <Clock className="w-3 h-3" /> Hapus
-                                        </span>
-                                      ) : isTerhapus ? (
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2 text-center min-w-[110px]">
+                                      {isTerhapus ? (
                                         <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold">
                                           Terhapus
                                         </span>
                                       ) : (
-                                        <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold">
-                                          Aktif
-                                        </span>
+                                        <AsetVerificationBadge
+                                          statusInfo={getAsetVerificationStatus(item, verifikasiList, pengesahanList)}
+                                          size="sm"
+                                        />
                                       )}
                                     </td>
-                                    <td className="py-3 px-3 text-center">
-                                      <div className="flex items-center justify-center gap-1.5">
+                                    <td className="py-2 px-2 text-center sticky right-0 bg-[#0E1526] z-10 border-l border-slate-800 shadow-[-6px_0_12px_rgba(0,0,0,0.6)] min-w-[150px]">
+                                      <div className="flex items-center justify-center gap-1">
                                         {/* Cetak Barcode button */}
                                         <button
                                           onClick={() => handleOpenBarcode(item)}
-                                          className="p-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-400 border border-amber-500/40 text-amber-300 hover:text-slate-950 transition-colors cursor-pointer"
+                                          className="p-1 rounded-md bg-amber-500/20 hover:bg-amber-400 border border-amber-500/40 text-amber-300 hover:text-slate-950 transition-colors cursor-pointer"
                                           title="Cetak Barcode & Label Inventaris Aset"
                                         >
                                           <QrCode className="w-3.5 h-3.5" />
@@ -1550,7 +1606,7 @@ export const AsetManagementView: React.FC = () => {
                                         {/* Lihat Foto & Detail button */}
                                         <button
                                           onClick={() => handleOpenDetail(item)}
-                                          className="p-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-600 border border-emerald-500/30 text-emerald-300 hover:text-white transition-colors cursor-pointer"
+                                          className="p-1 rounded-md bg-emerald-950/60 hover:bg-emerald-600 border border-emerald-500/30 text-emerald-300 hover:text-white transition-colors cursor-pointer"
                                           title="Lihat Foto Fisik & BAST Aset"
                                         >
                                           <Eye className="w-3.5 h-3.5" />
@@ -1562,7 +1618,7 @@ export const AsetManagementView: React.FC = () => {
                                             <button
                                               onClick={() => handleOpenEdit(item)}
                                               disabled={isMutasiDiajukan || isHapusDiajukan}
-                                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                              className="p-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                                               title="Edit Data Aset"
                                             >
                                               <Edit2 className="w-3.5 h-3.5" />
@@ -1572,7 +1628,7 @@ export const AsetManagementView: React.FC = () => {
                                             <button
                                               onClick={() => handleOpenMutasi(item)}
                                               disabled={isMutasiDiajukan || isHapusDiajukan}
-                                              className="p-1.5 rounded-lg bg-blue-950/60 hover:bg-blue-900 border border-blue-500/30 text-blue-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                              className="p-1 rounded-md bg-blue-950/60 hover:bg-blue-900 border border-blue-500/30 text-blue-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                                               title="Ajukan Mutasi Aset ke Kecamatan"
                                             >
                                               <ArrowRightLeft className="w-3.5 h-3.5" />
@@ -1582,7 +1638,7 @@ export const AsetManagementView: React.FC = () => {
                                             <button
                                               onClick={() => handleOpenHapus(item)}
                                               disabled={isMutasiDiajukan || isHapusDiajukan}
-                                              className="p-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900 border border-amber-500/30 text-amber-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                              className="p-1 rounded-md bg-amber-950/60 hover:bg-amber-900 border border-amber-500/30 text-amber-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                                               title="Ajukan Penghapusan Aset ke Kecamatan"
                                             >
                                               <FileMinus className="w-3.5 h-3.5" />
@@ -1592,7 +1648,7 @@ export const AsetManagementView: React.FC = () => {
                                             <button
                                               onClick={() => handleDeleteDirect(item.id, item.namaAset)}
                                               disabled={isMutasiDiajukan || isHapusDiajukan}
-                                              className="p-1.5 rounded-lg bg-red-950/60 hover:bg-red-900 border border-red-500/30 text-red-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                              className="p-1 rounded-md bg-red-950/60 hover:bg-red-900 border border-red-500/30 text-red-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                                               title="Hapus Data Aset Langsung"
                                             >
                                               <Trash2 className="w-3.5 h-3.5" />

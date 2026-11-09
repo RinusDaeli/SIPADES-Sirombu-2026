@@ -13,6 +13,7 @@ import {
   LogOut,
   Database,
   Bell,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -29,6 +30,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
     verifikasiList,
     firestoreQuotaStatus,
     unreadAnnouncementCount,
+    pendingVerificationCount,
+    pendingAsetVerificationCount,
   } = useApp();
 
   const [showQuotaModal, setShowQuotaModal] = useState(false);
@@ -45,12 +48,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
   const isSuperAdmin = currentUser?.role === 'super_admin';
   const isAdminOrSuper = currentUser?.role === 'super_admin' || currentUser?.role === 'admin_kecamatan';
 
-  const menuItems = [
+  const menuItems: Array<{
+    id: string;
+    label: string;
+    icon: any;
+    badge: string | number | null;
+    badgeColor?: 'red' | 'amber' | 'emerald';
+  }> = [
     {
       id: 'dashboard',
       label: 'DASHBOARD',
       icon: LayoutDashboard,
-      badge: null,
+      badge: isAdminOrSuper && pendingAsetVerificationCount > 0 ? `${pendingAsetVerificationCount} Verif` : null,
+      badgeColor: 'amber',
     },
     {
       id: 'aset',
@@ -58,6 +68,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
       icon: Boxes,
       badge: null,
     },
+    ...(isAdminOrSuper
+      ? [
+          {
+            id: 'verifikasi_aset',
+            label: 'VERIFIKASI ASET',
+            icon: ShieldCheck,
+            badge: pendingAsetVerificationCount > 0 ? pendingAsetVerificationCount : null,
+            badgeColor: 'amber' as const,
+          },
+        ]
+      : []),
     {
       id: 'verifikasi',
       label: 'MUTASI ASET',
@@ -174,6 +195,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
                       className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                         isActive
                           ? 'bg-emerald-600 text-white'
+                          : item.badgeColor === 'amber'
+                          ? 'bg-amber-500 text-slate-950 font-black'
                           : typeof item.badge === 'number'
                           ? 'bg-red-500 text-white'
                           : 'bg-emerald-800 text-emerald-200'

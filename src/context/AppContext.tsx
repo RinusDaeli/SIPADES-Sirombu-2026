@@ -118,6 +118,15 @@ interface AppContextType {
   updateAset: (id: string, data: Partial<Aset>) => void;
   deleteAset: (id: string) => { success: boolean; message?: string };
   
+  // Verifikasi Aset Baru (Admin / Super Admin)
+  verifikasiAset: (asetId: string, catatan?: string, nomorSK?: string) => Promise<{ success: boolean; message: string }>;
+  verifikasiSemuaAsetPending: () => Promise<{ success: boolean; count: number; message: string }>;
+  verifikasiAsetBatch: (asetIds: string[], catatan?: string, nomorSK?: string) => Promise<{ success: boolean; count: number; message: string }>;
+  tolakVerifikasiAset: (asetId: string, catatanPerbaikan: string) => Promise<{ success: boolean; message: string }>;
+  batalkanVerifikasiAset: (asetId: string) => Promise<{ success: boolean; message: string }>;
+  pendingVerificationCount: number;
+  pendingAsetVerificationCount: number;
+
   // Verifikasi Mutasi & Penghapusan (Kecamatan Control)
   ajukanMutasi: (
     asetId: string,
@@ -211,13 +220,14 @@ export function deduplicateAsets(list: Aset[], deletedIds?: Set<string>): Aset[]
     if (deletedIds && deletedIds.has(a.id)) continue; // Never allow deleted assets to reappear
     if (seenId.has(a.id)) continue; // Avoid duplicate IDs
 
-    // Unique identity key per asset in a desa: only deduplicate if both non-empty kodeAset and nomorRegister match
+    // Unique identity key per asset in a desa: only deduplicate if the exact same asset name, kodeAset, and nomorRegister match
     const reg = a.nomorRegister ? a.nomorRegister.replace(/^0+/, '') : '';
     const kode = (a.kodeAset || '').trim();
-    if (kode && reg) {
-      const uniqueKey = `${a.desaId || ''}_${kode}_${reg}`;
+    const nama = (a.namaAset || '').trim().toLowerCase();
+    if (kode && reg && nama) {
+      const uniqueKey = `${a.desaId || ''}_${nama}_${kode}_${reg}`;
       if (seenKey.has(uniqueKey)) {
-        continue; // Duplicate entry of the same asset!
+        continue; // Duplicate entry of the exact same asset!
       }
       seenKey.add(uniqueKey);
     }
@@ -423,11 +433,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return deduplicateAsets(parsed);
+          const clean = deduplicateAsets(parsed).map((a) => ({
+            ...a,
+            statusVerifikasi: a.statusVerifikasi || 'sudah_diverifikasi',
+          }));
+          return clean;
         }
       }
     } catch {}
-    return deduplicateAsets(INITIAL_ASETS);
+    return deduplicateAsets(INITIAL_ASETS).map((a) => ({
+      ...a,
+      statusVerifikasi: a.statusVerifikasi || 'sudah_diverifikasi',
+    }));
   });
 
   const [verifikasiList, setVerifikasiList] = useState<PermohonanVerifikasi[]>(() => {
@@ -529,61 +546,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearInterval(interval);
   }, []);
 
-  // Central Storage Helpers
+  // Central Storage Helpers - Pure mirror of authoritative state without reviving deleted items
   const persistAsetsSafely = useCallback((list: Aset[]) => {
-    // If current storage holds more assets (e.g. 308 items), don't shrink when receiving a partial list (e.g. 200 items)
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.ASETS);
-      if (saved) {
-        const existing: Aset[] = JSON.parse(saved);
-        if (Array.isArray(existing) && existing.length > list.length) {
-          const map = new Map<string, Aset>(list.map((a) => [a.id, a]));
-          existing.forEach((e) => {
-            if (e && e.id && !map.has(e.id) && !deletedAssetIds.has(e.id) && e.status !== 'terhapus') {
-              map.set(e.id, e);
-            }
-          });
-          list = Array.from(map.values());
-        }
-      }
-    } catch {}
-
     safeLocalStorageSetItem(STORAGE_KEYS.ASETS, JSON.stringify(list));
     saveAsetsToIndexedDB(list).catch(() => {});
-  }, [deletedAssetIds]);
+  }, []);
 
   const lastCloudFetchRef = useRef<number>(0);
 
-  // Central Server & Cloud Synchronization (Protected with a 30s cooldown to preserve Firestore free tier quota)
+  // Central Server & Cloud Synchronization
   const refreshServerData = useCallback(async (force = false) => {
     const now = Date.now();
     const shouldFetchCloud = force || now - lastCloudFetchRef.current > 30000;
 
-    // 1. Fetch live authoritative data from Google Cloud Firestore if cooldown has passed
+    // 1. Fetch live authoritative data from Google Cloud Firestore
     if (shouldFetchCloud) {
       lastCloudFetchRef.current = now;
       try {
         const cloudData = await fetchInitialFirestoreData();
         if (cloudData) {
-          if (Array.isArray(cloudData.asets) && cloudData.asets.length > 0) {
-            setAsets((prev) => {
-              const clean = deduplicateAsets(cloudData.asets);
-              let listToUse = clean;
-              // If local holds 308 real assets and cloud has only partial assets (e.g. 200), preserve and merge!
-              if (prev.length > clean.length) {
-                const map = new Map<string, Aset>(clean.map((a) => [a.id, a]));
-                prev.forEach((p) => {
-                  if (p && p.id && !map.has(p.id) && !deletedAssetIds.has(p.id) && p.status !== 'terhapus') {
-                    map.set(p.id, p);
-                  }
-                });
-                listToUse = Array.from(map.values());
-              }
-              const { asets: normalized } = normalizeAsetRegisters(listToUse, desas);
-              if (JSON.stringify(prev) === JSON.stringify(normalized)) return prev;
-              persistAsetsSafely(normalized);
-              return normalized;
-            });
+          if (Array.isArray(cloudData.asets)) {
+            const clean = deduplicateAsets(cloudData.asets);
+            const { asets: normalized } = normalizeAsetRegisters(clean, desas);
+            setAsets(normalized);
+            safeLocalStorageSetItem(STORAGE_KEYS.ASETS, JSON.stringify(normalized));
+            saveAsetsToIndexedDB(normalized).catch(() => {});
           }
           if (Array.isArray(cloudData.desas) && cloudData.desas.length > 0) {
             setDesas(cloudData.desas);
@@ -732,27 +719,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
 
     const applyAuthoritativeCloudAsets = (incomingAsets: Aset[]) => {
-      setAsets((prev) => {
-        const cleanCloud = deduplicateAsets(incomingAsets);
-        let listToUse = cleanCloud;
-
-        // Non-destructive protection: If local state has more assets than cloud (e.g. 308 vs 200),
-        // NEVER delete the user's real assets! Merge cloud updates with remaining local assets!
-        if (prev.length > cleanCloud.length) {
-          const map = new Map<string, Aset>(cleanCloud.map((a) => [a.id, a]));
-          prev.forEach((p) => {
-            if (p && p.id && !map.has(p.id) && !deletedAssetIds.has(p.id) && p.status !== 'terhapus') {
-              map.set(p.id, p);
-            }
-          });
-          listToUse = Array.from(map.values());
-        }
-
-        const { asets: normalized } = normalizeAsetRegisters(listToUse, desas);
-        if (JSON.stringify(prev) === JSON.stringify(normalized)) return prev;
-        persistAsetsSafely(normalized);
-        return normalized;
-      });
+      if (!Array.isArray(incomingAsets)) return;
+      const cleanCloud = deduplicateAsets(incomingAsets);
+      const { asets: normalized } = normalizeAsetRegisters(cleanCloud, desas);
+      setAsets(normalized);
+      safeLocalStorageSetItem(STORAGE_KEYS.ASETS, JSON.stringify(normalized));
+      saveAsetsToIndexedDB(normalized).catch(() => {});
       setIsServerConnected(true);
       setLastSyncTime(new Date());
     };
@@ -760,7 +732,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Directly fetch live authoritative data from Google Cloud Firestore FIRST on boot
     fetchInitialFirestoreData().then((cloudData) => {
       if (cloudData) {
-        if (Array.isArray(cloudData.asets) && cloudData.asets.length > 0) {
+        if (Array.isArray(cloudData.asets)) {
           applyAuthoritativeCloudAsets(cloudData.asets);
         }
         if (Array.isArray(cloudData.desas) && cloudData.desas.length > 0) {
@@ -791,7 +763,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     const unsubAsets = subscribeAsets((cloudAsets) => {
-      if (cloudAsets && cloudAsets.length > 0) {
+      if (Array.isArray(cloudAsets)) {
         applyAuthoritativeCloudAsets(cloudAsets);
       }
     });
@@ -996,7 +968,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // 2. Process single updated asset or full asset payload
-    if (payload.updatedAset) {
+    if (payload.deletedId) {
+      setAsets((prev) => {
+        const next = prev.filter((a) => a.id !== payload.deletedId);
+        persistAsetsSafely(next);
+        saveAsetsToIndexedDB(next).catch(() => {});
+        return next;
+      });
+    } else if (payload.updatedAset) {
       const incoming = payload.updatedAset;
       setAsets((prev) => {
         const next = prev.map((a) => (a.id === incoming.id ? { ...a, ...incoming } : a));
@@ -1012,10 +991,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (payload.deletedId) currentDeleted.add(payload.deletedId);
         payload.deletedAssetIds?.forEach((id) => currentDeleted.add(id));
 
-        const existingMap = new Map(prev.map((a) => [a.id, a]));
+        const existingMap = new Map<string, Aset>();
         payload.asets?.forEach((incoming) => {
           if (incoming && incoming.id && !currentDeleted.has(incoming.id) && incoming.id !== 'ast-test-1') {
-            existingMap.set(incoming.id, incoming);
+            const prevItem = prev.find((p) => p.id === incoming.id);
+            const fotoAset = incoming.fotoAset && incoming.fotoAset.length > 0 ? incoming.fotoAset : prevItem?.fotoAset || [];
+            const fotoBast = incoming.fotoBast || prevItem?.fotoBast;
+            existingMap.set(incoming.id, { ...incoming, fotoAset, fotoBast });
           }
         });
         const merged = deduplicateAsets(Array.from(existingMap.values()), currentDeleted);
@@ -1110,16 +1092,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (Array.isArray(idbAsets) && idbAsets.length > 0) {
         setAsets((current) => {
           if (current.length === 0) return deduplicateAsets(idbAsets, deletedAssetIds);
-          // If IndexedDB has more real assets (e.g. 308 vs 100), preserve all of them!
-          if (idbAsets.length > current.length) {
-            const map = new Map<string, Aset>(idbAsets.map((a) => [a.id, a]));
-            current.forEach((c) => {
-              if (c && c.id) map.set(c.id, { ...(map.get(c.id) || {}), ...c });
-            });
-            const merged = deduplicateAsets(Array.from(map.values()), deletedAssetIds);
-            persistAsetsSafely(merged);
-            return merged;
-          }
+          // Never resurrect deleted items from IndexedDB cache!
+          // Google Cloud Firestore is the authoritative source of truth.
+          // Only hydrate photo blobs for assets that are actively in current state.
           return current.map((c) => {
             const matched = idbAsets.find((item) => item && item.id === c.id);
             if (matched && (!c.fotoAset || c.fotoAset.length === 0) && matched.fotoAset && matched.fotoAset.length > 0) {
@@ -1322,6 +1297,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: `ast-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
         desaName: desa?.name || 'Desa',
         status: 'aktif',
+        statusVerifikasi: 'sedang_diproses', // Baru diinput desa -> tampil sedang proses
         createdAt: now,
         updatedAt: now,
       };
@@ -1461,6 +1437,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const filtered = asets.filter((a) => a.id !== id);
     setAsets(filtered);
     persistAsetsSafely(filtered);
+    saveAsetsToIndexedDB(filtered).catch(() => {});
 
     // 3. Broadcast deletion event to all connected devices (P2P + Cloud)
     syncManager.broadcastDelete(id, filtered);
@@ -1473,6 +1450,304 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return { success: true, message: 'Data aset berhasil dihapus permanen.' };
   };
+
+  // Verifikasi Aset Baru (Khusus Admin / Super Admin)
+  // Verifikasi Aset Baru (Khusus Admin / Super Admin)
+  const pendingVerificationCount = useMemo(() => {
+    return asets.filter((a) => {
+      if (a.status === 'terhapus') return false;
+      return (
+        a.statusVerifikasi === 'sedang_diproses' ||
+        a.statusVerifikasi === 'belum_diverifikasi' ||
+        a.statusVerifikasi === 'perlu_perbaikan' ||
+        a.status === 'mutasi_diajukan' ||
+        a.status === 'terhapus_diajukan' ||
+        verifikasiList.some((v) => v.asetId === a.id && v.status === 'menunggu_verifikasi')
+      );
+    }).length;
+  }, [asets, verifikasiList]);
+
+  // Khusus antrean verifikasi aset yang baru diinput atau perlu dicek
+  const pendingAsetVerificationCount = useMemo(() => {
+    return asets.filter((a) => {
+      if (!a || a.status === 'terhapus') return false;
+      return (
+        a.statusVerifikasi === 'sedang_diproses' ||
+        a.statusVerifikasi === 'belum_diverifikasi' ||
+        a.statusVerifikasi === 'perlu_perbaikan'
+      );
+    }).length;
+  }, [asets]);
+
+  const verifikasiAset = useCallback(
+    async (asetId: string, catatan?: string, nomorSK?: string) => {
+      if (!currentUser || (currentUser.role !== 'super_admin' && currentUser.role !== 'admin_kecamatan')) {
+        return {
+          success: false,
+          message: 'Hanya Admin Kecamatan atau Super Admin yang berhak memverifikasi aset.',
+        };
+      }
+
+      const now = new Date().toISOString();
+      const verifierName = currentUser.name || 'Admin Kecamatan Sirombu';
+
+      let verifiedAset: Aset | null = null;
+      setAsets((prev) => {
+        const next = prev.map((a) => {
+          if (a.id === asetId) {
+            verifiedAset = {
+              ...a,
+              statusVerifikasi: 'sudah_diverifikasi',
+              diverifikasiOleh: verifierName,
+              tanggalVerifikasi: now,
+              catatanVerifikasi: catatan || a.catatanVerifikasi || 'Telah diverifikasi fisik & berkas sah oleh Admin Kecamatan Sirombu',
+              nomorSKVerifikasi: nomorSK || a.nomorSKVerifikasi,
+              updatedAt: now,
+            };
+            return verifiedAset;
+          }
+          return a;
+        });
+        persistAsetsSafely(next);
+        return next;
+      });
+
+      if (verifiedAset) {
+        saveAsetToCloud(verifiedAset).catch((err) => console.warn('[Cloud] Verifikasi save error:', err));
+        syncManager.broadcastAsetUpdate(verifiedAset);
+        fetch(`/api/asets/${asetId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(verifiedAset),
+        }).catch(() => {});
+      }
+
+      return {
+        success: true,
+        message: `Aset berhasil diverifikasi dan disahkan oleh ${verifierName}.`,
+      };
+    },
+    [currentUser, persistAsetsSafely]
+  );
+
+  const tolakVerifikasiAset = useCallback(
+    async (asetId: string, catatanPerbaikan: string) => {
+      if (!currentUser || (currentUser.role !== 'super_admin' && currentUser.role !== 'admin_kecamatan')) {
+        return {
+          success: false,
+          message: 'Hanya Admin Kecamatan atau Super Admin yang berhak memeriksa aset.',
+        };
+      }
+
+      const now = new Date().toISOString();
+      const verifierName = currentUser.name || 'Admin Kecamatan Sirombu';
+
+      let rejectedAset: Aset | null = null;
+      setAsets((prev) => {
+        const next = prev.map((a) => {
+          if (a.id === asetId) {
+            rejectedAset = {
+              ...a,
+              statusVerifikasi: 'perlu_perbaikan',
+              diverifikasiOleh: verifierName,
+              tanggalVerifikasi: now,
+              catatanVerifikasi: catatanPerbaikan || 'Perlu perbaikan data / kelengkapan bukti dokumen fisik',
+              updatedAt: now,
+            };
+            return rejectedAset;
+          }
+          return a;
+        });
+        persistAsetsSafely(next);
+        return next;
+      });
+
+      if (rejectedAset) {
+        saveAsetToCloud(rejectedAset).catch((err) => console.warn('[Cloud] Tolak verifikasi save error:', err));
+        syncManager.broadcastAsetUpdate(rejectedAset);
+        fetch(`/api/asets/${asetId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(rejectedAset),
+        }).catch(() => {});
+      }
+
+      return {
+        success: true,
+        message: `Catatan perbaikan berhasil dikirim ke Desa. Aset berstatus Perlu Perbaikan.`,
+      };
+    },
+    [currentUser, persistAsetsSafely]
+  );
+
+  const batalkanVerifikasiAset = useCallback(
+    async (asetId: string) => {
+      if (!currentUser || (currentUser.role !== 'super_admin' && currentUser.role !== 'admin_kecamatan')) {
+        return {
+          success: false,
+          message: 'Hanya Admin Kecamatan atau Super Admin yang berhak mengubah status verifikasi.',
+        };
+      }
+
+      const now = new Date().toISOString();
+      let unverifiedAset: Aset | null = null;
+      setAsets((prev) => {
+        const next = prev.map((a) => {
+          if (a.id === asetId) {
+            unverifiedAset = {
+              ...a,
+              statusVerifikasi: 'sedang_diproses',
+              diverifikasiOleh: undefined,
+              tanggalVerifikasi: undefined,
+              catatanVerifikasi: undefined,
+              nomorSKVerifikasi: undefined,
+              updatedAt: now,
+            };
+            return unverifiedAset;
+          }
+          return a;
+        });
+        persistAsetsSafely(next);
+        return next;
+      });
+
+      if (unverifiedAset) {
+        saveAsetToCloud(unverifiedAset).catch((err) => console.warn('[Cloud] Batalkan verifikasi error:', err));
+        syncManager.broadcastAsetUpdate(unverifiedAset);
+        fetch(`/api/asets/${asetId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(unverifiedAset),
+        }).catch(() => {});
+      }
+
+      return {
+        success: true,
+        message: `Status verifikasi aset berhasil dibatalkan dan dikembalikan ke antrean pemeriksaan.`,
+      };
+    },
+    [currentUser, persistAsetsSafely]
+  );
+
+  const verifikasiAsetBatch = useCallback(
+    async (asetIds: string[], catatan?: string, nomorSK?: string) => {
+      if (!currentUser || (currentUser.role !== 'super_admin' && currentUser.role !== 'admin_kecamatan')) {
+        return {
+          success: false,
+          count: 0,
+          message: 'Hanya Admin Kecamatan atau Super Admin yang berhak memverifikasi aset.',
+        };
+      }
+
+      if (!asetIds || asetIds.length === 0) {
+        return { success: false, count: 0, message: 'Tidak ada aset yang dipilih.' };
+      }
+
+      const now = new Date().toISOString();
+      const verifierName = currentUser.name || 'Admin Kecamatan Sirombu';
+
+      const updatedBatch: Aset[] = [];
+      const updatedList = asets.map((a) => {
+        if (asetIds.includes(a.id)) {
+          const item: Aset = {
+            ...a,
+            statusVerifikasi: 'sudah_diverifikasi',
+            diverifikasiOleh: verifierName,
+            tanggalVerifikasi: now,
+            catatanVerifikasi: catatan || a.catatanVerifikasi || 'Telah diverifikasi serentak oleh Tim Monitoring Kecamatan Sirombu',
+            nomorSKVerifikasi: nomorSK || a.nomorSKVerifikasi,
+            updatedAt: now,
+          };
+          updatedBatch.push(item);
+          return item;
+        }
+        return a;
+      });
+
+      setAsets(updatedList);
+      persistAsetsSafely(updatedList);
+
+      Promise.all(updatedBatch.map((a) => saveAsetToCloud(a))).catch(() => {});
+      fetch('/api/asets/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asets: updatedBatch }),
+      }).catch(() => {});
+
+      return {
+        success: true,
+        count: updatedBatch.length,
+        message: `Berhasil memverifikasi ${updatedBatch.length} aset desa terpilih.`,
+      };
+    },
+    [currentUser, asets, persistAsetsSafely]
+  );
+
+  const verifikasiSemuaAsetPending = useCallback(async () => {
+    if (!currentUser || (currentUser.role !== 'super_admin' && currentUser.role !== 'admin_kecamatan')) {
+      return {
+        success: false,
+        count: 0,
+        message: 'Hanya Admin Kecamatan atau Super Admin yang berhak memverifikasi aset.',
+      };
+    }
+
+    const now = new Date().toISOString();
+    const verifierName = currentUser.name || 'Admin Kecamatan Sirombu';
+
+    const pendingIds = asets
+      .filter(
+        (a) =>
+          a.status !== 'terhapus' &&
+          (a.statusVerifikasi === 'sedang_diproses' ||
+            a.statusVerifikasi === 'belum_diverifikasi' ||
+            a.statusVerifikasi === 'perlu_perbaikan' ||
+            a.status === 'mutasi_diajukan' ||
+            a.status === 'terhapus_diajukan')
+      )
+      .map((a) => a.id);
+
+    if (pendingIds.length === 0) {
+      return {
+        success: true,
+        count: 0,
+        message: 'Tidak ada aset yang sedang menunggu verifikasi.',
+      };
+    }
+
+    const updatedList = asets.map((a) => {
+      if (pendingIds.includes(a.id)) {
+        return {
+          ...a,
+          statusVerifikasi: 'sudah_diverifikasi' as const,
+          status: 'aktif' as const,
+          diverifikasiOleh: verifierName,
+          tanggalVerifikasi: now,
+          catatanVerifikasi: 'Diverifikasi sah serentak oleh Admin Kecamatan',
+          updatedAt: now,
+        };
+      }
+      return a;
+    });
+
+    setAsets(updatedList);
+    persistAsetsSafely(updatedList);
+
+    const verifiedBatch = updatedList.filter((a) => pendingIds.includes(a.id));
+    Promise.all(verifiedBatch.map((a) => saveAsetToCloud(a))).catch(() => {});
+
+    fetch('/api/asets/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ asets: verifiedBatch }),
+    }).catch(() => {});
+
+    return {
+      success: true,
+      count: pendingIds.length,
+      message: `Semua ${pendingIds.length} aset desa berhasil diverifikasi sah oleh ${verifierName}.`,
+    };
+  }, [currentUser, asets, persistAsetsSafely]);
 
   // Mutasi & Penghapusan Verifikasi
   const ajukanMutasi = (
@@ -2204,6 +2479,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addAsetBatch,
         updateAset,
         deleteAset,
+        verifikasiAset,
+        verifikasiSemuaAsetPending,
+        verifikasiAsetBatch,
+        tolakVerifikasiAset,
+        batalkanVerifikasiAset,
+        pendingVerificationCount,
+        pendingAsetVerificationCount,
         ajukanMutasi,
         ajukanPenghapusan,
         prosesVerifikasi,
