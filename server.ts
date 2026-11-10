@@ -245,112 +245,6 @@ async function startServer() {
     res.json({ success: true, updatedAt: dbState.updatedAt });
   });
 
-  // Assets endpoints
-  app.post('/api/asets/batch', (req, res) => {
-    const { asets } = req.body;
-    if (!Array.isArray(asets) || asets.length === 0) {
-      return res.status(400).json({ error: 'Daftar aset tidak valid' });
-    }
-
-    for (const a of asets) {
-      if (a && a.id) {
-        const idx = dbState.asets.findIndex((item) => item.id === a.id);
-        if (idx >= 0) {
-          dbState.asets[idx] = a;
-        } else {
-          dbState.asets.unshift(a);
-        }
-      }
-    }
-
-    saveDatabase(dbState);
-    res.json({ success: true, count: asets.length, total: dbState.asets.length });
-  });
-
-  app.post('/api/asets', (req, res) => {
-    if (Array.isArray(req.body)) {
-      for (const a of req.body) {
-        if (a && a.id) {
-          const idx = dbState.asets.findIndex((item) => item.id === a.id);
-          if (idx >= 0) {
-            dbState.asets[idx] = a;
-          } else {
-            dbState.asets.unshift(a);
-          }
-        }
-      }
-      saveDatabase(dbState);
-      return res.json({ success: true, count: req.body.length, total: dbState.asets.length });
-    }
-
-    const newAset: Aset = req.body;
-    if (!newAset || !newAset.id || !newAset.namaAset) {
-      return res.status(400).json({ error: 'Data aset tidak lengkap' });
-    }
-
-    // Check if asset already exists, replace or append
-    const idx = dbState.asets.findIndex((a) => a.id === newAset.id);
-    if (idx >= 0) {
-      dbState.asets[idx] = newAset;
-    } else {
-      dbState.asets.unshift(newAset);
-    }
-
-    saveDatabase(dbState);
-    res.json({ success: true, aset: newAset, total: dbState.asets.length });
-  });
-
-  app.put('/api/asets/:id', (req, res) => {
-    const { id } = req.params;
-    const updated = req.body;
-    const idx = dbState.asets.findIndex((a) => a.id === id);
-    if (idx === -1) {
-      return res.status(404).json({ error: 'Aset tidak ditemukan' });
-    }
-
-    dbState.asets[idx] = { ...dbState.asets[idx], ...updated };
-    saveDatabase(dbState);
-    res.json({ success: true, aset: dbState.asets[idx] });
-  });
-
-  app.delete('/api/asets/:id', (req, res) => {
-    const { id } = req.params;
-    dbState.asets = dbState.asets.filter((a) => a.id !== id);
-    saveDatabase(dbState);
-    res.json({ success: true, total: dbState.asets.length });
-  });
-
-  // Verifikasi (Mutasi & Penghapusan) endpoints
-  app.post('/api/verifikasi', (req, res) => {
-    const newVerif: PermohonanVerifikasi = req.body;
-    if (!newVerif || !newVerif.id) {
-      return res.status(400).json({ error: 'Data permohonan tidak valid' });
-    }
-
-    const idx = dbState.verifikasiList.findIndex((v) => v.id === newVerif.id);
-    if (idx >= 0) {
-      dbState.verifikasiList[idx] = newVerif;
-    } else {
-      dbState.verifikasiList.push(newVerif);
-    }
-
-    saveDatabase(dbState);
-    res.json({ success: true, verifikasi: newVerif });
-  });
-
-  app.put('/api/verifikasi/:id', (req, res) => {
-    const { id } = req.params;
-    const updateData = req.body;
-    const idx = dbState.verifikasiList.findIndex((v) => v.id === id);
-    if (idx === -1) {
-      return res.status(404).json({ error: 'Permohonan tidak ditemukan' });
-    }
-
-    dbState.verifikasiList[idx] = { ...dbState.verifikasiList[idx], ...updateData };
-    saveDatabase(dbState);
-    res.json({ success: true, verifikasi: dbState.verifikasiList[idx] });
-  });
-
   const CPANEL_DIRECT_IP = '122.173.84.249';
 
   function callCpanelHttp(
@@ -397,6 +291,131 @@ async function startServer() {
       req.end();
     });
   }
+
+  // Assets endpoints
+  app.post('/api/asets/batch', (req, res) => {
+    const { asets } = req.body;
+    if (!Array.isArray(asets) || asets.length === 0) {
+      return res.status(400).json({ error: 'Daftar aset tidak valid' });
+    }
+
+    for (const a of asets) {
+      if (a && a.id) {
+        const idx = dbState.asets.findIndex((item) => item.id === a.id);
+        if (idx >= 0) {
+          dbState.asets[idx] = a;
+        } else {
+          dbState.asets.unshift(a);
+        }
+      }
+    }
+
+    saveDatabase(dbState);
+    // Automatic Real-time Sync to cPanel hosting
+    callCpanelHttp('/cpanel-api.php?action=upload_all', 'POST', JSON.stringify({ data: { asets: dbState.asets } })).catch((e) =>
+      console.warn('[cPanel Sync] batch error:', e.message)
+    );
+    res.json({ success: true, count: asets.length, total: dbState.asets.length });
+  });
+
+  app.post('/api/asets', (req, res) => {
+    if (Array.isArray(req.body)) {
+      for (const a of req.body) {
+        if (a && a.id) {
+          const idx = dbState.asets.findIndex((item) => item.id === a.id);
+          if (idx >= 0) {
+            dbState.asets[idx] = a;
+          } else {
+            dbState.asets.unshift(a);
+          }
+        }
+      }
+      saveDatabase(dbState);
+      callCpanelHttp('/cpanel-api.php?action=upload_all', 'POST', JSON.stringify({ data: { asets: dbState.asets } })).catch(() => {});
+      return res.json({ success: true, count: req.body.length, total: dbState.asets.length });
+    }
+
+    const newAset: Aset = req.body;
+    if (!newAset || !newAset.id || !newAset.namaAset) {
+      return res.status(400).json({ error: 'Data aset tidak lengkap' });
+    }
+
+    // Check if asset already exists, replace or append
+    const idx = dbState.asets.findIndex((a) => a.id === newAset.id);
+    if (idx >= 0) {
+      dbState.asets[idx] = newAset;
+    } else {
+      dbState.asets.unshift(newAset);
+    }
+
+    saveDatabase(dbState);
+    // Automatic Real-time Sync to cPanel hosting
+    callCpanelHttp('/cpanel-api.php?action=save_aset', 'POST', JSON.stringify(newAset)).catch((e) =>
+      console.warn('[cPanel Sync] save error:', e.message)
+    );
+    res.json({ success: true, aset: newAset, total: dbState.asets.length });
+  });
+
+  app.put('/api/asets/:id', (req, res) => {
+    const { id } = req.params;
+    const updated = req.body;
+    const idx = dbState.asets.findIndex((a) => a.id === id);
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Aset tidak ditemukan' });
+    }
+
+    dbState.asets[idx] = { ...dbState.asets[idx], ...updated };
+    saveDatabase(dbState);
+    // Automatic Real-time Sync to cPanel hosting (Updates are saved in cPanel)
+    callCpanelHttp('/cpanel-api.php?action=save_aset', 'POST', JSON.stringify(dbState.asets[idx])).catch((e) =>
+      console.warn('[cPanel Sync] update error:', e.message)
+    );
+    res.json({ success: true, aset: dbState.asets[idx] });
+  });
+
+  app.delete('/api/asets/:id', (req, res) => {
+    const { id } = req.params;
+    dbState.asets = dbState.asets.filter((a) => a.id !== id);
+    saveDatabase(dbState);
+    // Automatic Real-time Sync to cPanel hosting (Deletions are removed in cPanel)
+    callCpanelHttp('/cpanel-api.php?action=delete_aset', 'POST', JSON.stringify({ id })).catch((e) =>
+      console.warn('[cPanel Sync] delete error:', e.message)
+    );
+    res.json({ success: true, total: dbState.asets.length });
+  });
+
+  // Verifikasi (Mutasi & Penghapusan) endpoints
+  app.post('/api/verifikasi', (req, res) => {
+    const newVerif: PermohonanVerifikasi = req.body;
+    if (!newVerif || !newVerif.id) {
+      return res.status(400).json({ error: 'Data permohonan tidak valid' });
+    }
+
+    const idx = dbState.verifikasiList.findIndex((v) => v.id === newVerif.id);
+    if (idx >= 0) {
+      dbState.verifikasiList[idx] = newVerif;
+    } else {
+      dbState.verifikasiList.push(newVerif);
+    }
+
+    saveDatabase(dbState);
+    callCpanelHttp('/cpanel-api.php?action=upload_all', 'POST', JSON.stringify({ data: { verifikasiList: dbState.verifikasiList } })).catch(() => {});
+    res.json({ success: true, verifikasi: newVerif });
+  });
+
+  app.put('/api/verifikasi/:id', (req, res) => {
+    const { id } = req.params;
+    const updateData = req.body;
+    const idx = dbState.verifikasiList.findIndex((v) => v.id === id);
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Permohonan tidak ditemukan' });
+    }
+
+    dbState.verifikasiList[idx] = { ...dbState.verifikasiList[idx], ...updateData };
+    saveDatabase(dbState);
+    callCpanelHttp('/cpanel-api.php?action=upload_all', 'POST', JSON.stringify({ data: { verifikasiList: dbState.verifikasiList } })).catch(() => {});
+    res.json({ success: true, verifikasi: dbState.verifikasiList[idx] });
+  });
 
   // Proxy endpoint to diagnose and connect cPanel without CORS / Mixed Content issues
   app.post('/api/cpanel/test', async (req, res) => {

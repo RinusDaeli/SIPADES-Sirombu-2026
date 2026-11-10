@@ -592,6 +592,12 @@ export const AsetManagementView: React.FC = () => {
       );
     }
 
+    // Auto expand accordion desa dan reset filter agar aset yang baru diinput langsung terlihat jelas di layar
+    setExpandedAdminDesas((prev) => ({ ...prev, [formData.desaId]: true }));
+    setFilterDesa('all');
+    setFilterTahun('all');
+    setSearchQuery('');
+
     setShowAddModal(false);
   };
 

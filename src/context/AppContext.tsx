@@ -568,9 +568,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (Array.isArray(cloudData.asets)) {
             const clean = deduplicateAsets(cloudData.asets);
             const { asets: normalized } = normalizeAsetRegisters(clean, desas);
-            setAsets(normalized);
-            safeLocalStorageSetItem(STORAGE_KEYS.ASETS, JSON.stringify(normalized));
-            saveAsetsToIndexedDB(normalized).catch(() => {});
+            setAsets((prev) => {
+              const map = new Map<string, Aset>();
+              normalized.forEach((a) => {
+                if (a && a.id && !deletedAssetIds.has(a.id)) {
+                  map.set(a.id, a);
+                }
+              });
+              // Never erase newly added or local items
+              prev.forEach((local) => {
+                if (local && local.id && !deletedAssetIds.has(local.id)) {
+                  if (!map.has(local.id)) {
+                    map.set(local.id, local);
+                  }
+                }
+              });
+              const finalMerged = deduplicateAsets(Array.from(map.values()), deletedAssetIds);
+              persistAsetsSafely(finalMerged);
+              return finalMerged;
+            });
           }
           if (Array.isArray(cloudData.desas) && cloudData.desas.length > 0) {
             setDesas(cloudData.desas);
@@ -722,9 +738,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!Array.isArray(incomingAsets)) return;
       const cleanCloud = deduplicateAsets(incomingAsets);
       const { asets: normalized } = normalizeAsetRegisters(cleanCloud, desas);
-      setAsets(normalized);
-      safeLocalStorageSetItem(STORAGE_KEYS.ASETS, JSON.stringify(normalized));
-      saveAsetsToIndexedDB(normalized).catch(() => {});
+      setAsets((prev) => {
+        const map = new Map<string, Aset>();
+        normalized.forEach((a) => {
+          if (a && a.id && !deletedAssetIds.has(a.id)) {
+            map.set(a.id, a);
+          }
+        });
+        prev.forEach((local) => {
+          if (local && local.id && !deletedAssetIds.has(local.id)) {
+            if (!map.has(local.id)) {
+              map.set(local.id, local);
+            }
+          }
+        });
+        const finalMerged = deduplicateAsets(Array.from(map.values()), deletedAssetIds);
+        persistAsetsSafely(finalMerged);
+        return finalMerged;
+      });
       setIsServerConnected(true);
       setLastSyncTime(new Date());
     };
@@ -1348,7 +1379,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     });
 
-    setAsets((prev) => [...newAsets, ...prev]);
+    setAsets((prev) => {
+      const merged = [...newAsets, ...prev];
+      persistAsetsSafely(merged);
+      return merged;
+    });
 
     // Push all to Google Cloud Firestore in parallel
     Promise.all(newAsets.map((item) => saveAsetToCloud(item))).catch((err) =>
