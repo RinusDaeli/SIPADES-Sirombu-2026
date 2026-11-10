@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { NiasBaratLogo } from './NiasBaratLogo';
 import { FirestoreQuotaModal } from './FirestoreQuotaModal';
 import { AnnouncementReaderModal } from './AnnouncementReaderModal';
+import { CPanelMigrationModal } from './CPanelMigrationModal';
 import {
   LayoutDashboard,
   Boxes,
@@ -14,6 +15,7 @@ import {
   Database,
   Bell,
   ShieldCheck,
+  Server,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -36,6 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
 
   const [showQuotaModal, setShowQuotaModal] = useState(false);
   const [showAnnounceReader, setShowAnnounceReader] = useState(false);
+  const [showCPanelModal, setShowCPanelModal] = useState(false);
 
   // Desa only sees badge for their own pending mutations
   const pendingVerifCount = verifikasiList.filter((v) => {
@@ -211,9 +214,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
           </nav>
         </div>
 
+        {/* Khusus Super Admin / Admin Kecamatan: Tombol Hosting cPanel */}
+        {isAdminOrSuper && (
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => setShowCPanelModal(true)}
+              className="w-full p-2.5 rounded-xl border border-indigo-500/60 bg-gradient-to-r from-indigo-950 via-purple-950/80 to-slate-900 hover:from-indigo-900 hover:to-purple-900 text-white flex items-center justify-between gap-2 text-xs font-bold transition-all cursor-pointer shadow-lg shadow-indigo-950/40"
+              title="Pengaturan Migrasi & Sinkronisasi Database Hosting cPanel (shodns.in)"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Server className="w-4 h-4 text-indigo-400 shrink-0" />
+                <span className="truncate">Hosting cPanel</span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/25 text-indigo-200 border border-indigo-400/40 font-bold shrink-0">
+                Bebas Kuota
+              </span>
+            </button>
+          </div>
+        )}
+
         {/* Khusus Super Admin: Tombol Cek Kuota Langsung Firebase */}
         {isSuperAdmin && (
-          <div className="pt-2">
+          <div className="pt-1.5">
             <button
               type="button"
               onClick={() => setShowQuotaModal(true)}
@@ -264,6 +287,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
           </div>
         </div>
       </aside>
+
+      {/* Modal Hosting cPanel */}
+      <CPanelMigrationModal
+        isOpen={showCPanelModal}
+        onClose={() => setShowCPanelModal(false)}
+      />
 
       {/* Modal Kuota Langsung Google Cloud Firestore (Khusus Super Admin) */}
       {isSuperAdmin && (

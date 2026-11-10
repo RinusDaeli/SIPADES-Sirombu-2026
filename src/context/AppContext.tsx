@@ -432,7 +432,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem(STORAGE_KEYS.ASETS);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed) && parsed.length >= INITIAL_ASETS.length) {
           const clean = deduplicateAsets(parsed).map((a) => ({
             ...a,
             statusVerifikasi: a.statusVerifikasi || 'sudah_diverifikasi',
@@ -731,10 +731,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Directly fetch live authoritative data from Google Cloud Firestore FIRST on boot
     fetchInitialFirestoreData().then((cloudData) => {
-      if (cloudData) {
-        if (Array.isArray(cloudData.asets)) {
-          applyAuthoritativeCloudAsets(cloudData.asets);
-        }
+      if (cloudData && Array.isArray(cloudData.asets) && cloudData.asets.length > 0) {
+        applyAuthoritativeCloudAsets(cloudData.asets);
         if (Array.isArray(cloudData.desas) && cloudData.desas.length > 0) {
           setDesas(cloudData.desas);
           safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(cloudData.desas));
@@ -757,9 +755,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         setIsServerConnected(true);
         setLastSyncTime(new Date());
+      } else {
+        // Fallback to local server /api/data (cPanel/Node storage with 315 assets)
+        fetch('/api/data')
+          .then((r) => r.json())
+          .then((srv) => {
+            if (srv && Array.isArray(srv.asets) && srv.asets.length > 0) {
+              const clean = deduplicateAsets(srv.asets);
+              const { asets: normalized } = normalizeAsetRegisters(clean, desas);
+              setAsets(normalized);
+              safeLocalStorageSetItem(STORAGE_KEYS.ASETS, JSON.stringify(normalized));
+              saveAsetsToIndexedDB(normalized).catch(() => {});
+              setIsServerConnected(true);
+              setLastSyncTime(new Date());
+            }
+          })
+          .catch(() => {});
       }
     }).catch((e) => {
       console.warn('[Firestore] Initial direct fetch note:', e);
+      fetch('/api/data')
+        .then((r) => r.json())
+        .then((srv) => {
+          if (srv && Array.isArray(srv.asets) && srv.asets.length > 0) {
+            const clean = deduplicateAsets(srv.asets);
+            const { asets: normalized } = normalizeAsetRegisters(clean, desas);
+            setAsets(normalized);
+            safeLocalStorageSetItem(STORAGE_KEYS.ASETS, JSON.stringify(normalized));
+            saveAsetsToIndexedDB(normalized).catch(() => {});
+            setIsServerConnected(true);
+            setLastSyncTime(new Date());
+          }
+        })
+        .catch(() => {});
     });
 
     const unsubAsets = subscribeAsets((cloudAsets) => {
@@ -1115,13 +1143,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (res.ok) {
           const cType = res.headers.get('content-type');
           if (cType && cType.includes('application/json')) {
-            setIsServerConnected(true);
-            setLastSyncTime(new Date());
+            return res.json();
           }
+        }
+        return null;
+      })
+      .then((serverData) => {
+        if (serverData && Array.isArray(serverData.asets) && serverData.asets.length > 0) {
+          setAsets((current) => {
+            // If current is stuck at 100 or less, immediately upgrade to server's 315!
+            if (current.length < serverData.asets.length || current.length <= 100) {
+              const clean = deduplicateAsets(serverData.asets);
+              const { asets: normalized } = normalizeAsetRegisters(clean, desas);
+              safeLocalStorageSetItem(STORAGE_KEYS.ASETS, JSON.stringify(normalized));
+              saveAsetsToIndexedDB(normalized).catch(() => {});
+              return normalized;
+            }
+            return current;
+          });
+          setIsServerConnected(true);
+          setLastSyncTime(new Date());
         }
       })
       .catch(() => {});
-  }, []);
+  }, [desas]);
 
   // Local storage persistence fallbacks with safe storage protection against QuotaExceededError
   useEffect(() => {

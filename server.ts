@@ -351,6 +351,103 @@ async function startServer() {
     res.json({ success: true, verifikasi: dbState.verifikasiList[idx] });
   });
 
+  const CPANEL_DIRECT_IP = '122.173.84.249';
+
+  function callCpanelHttp(
+    pathWithQuery: string,
+    method: string = 'GET',
+    postData: string = ''
+  ): Promise<{ statusCode: number; body: string }> {
+    return new Promise((resolve, reject) => {
+      const headers: Record<string, string> = {
+        Host: 'sipadessirombu.my.id',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'application/json, text/plain, */*',
+      };
+      if (postData) {
+        headers['Content-Type'] = 'application/json';
+        headers['Content-Length'] = Buffer.byteLength(postData).toString();
+      }
+
+      const req = http.request(
+        {
+          host: CPANEL_DIRECT_IP,
+          port: 80,
+          path: pathWithQuery,
+          method,
+          headers,
+        },
+        (res) => {
+          let body = '';
+          res.on('data', (chunk) => (body += chunk));
+          res.on('end', () => resolve({ statusCode: res.statusCode || 200, body }));
+        }
+      );
+
+      req.on('error', reject);
+      req.setTimeout(60000, () => {
+        req.destroy();
+        reject(new Error('Koneksi timeout ke cPanel'));
+      });
+
+      if (postData) {
+        req.write(postData);
+      }
+      req.end();
+    });
+  }
+
+  // Proxy endpoint to diagnose and connect cPanel without CORS / Mixed Content issues
+  app.post('/api/cpanel/test', async (req, res) => {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ success: false, message: 'URL tidak boleh kosong' });
+    try {
+      const response = await callCpanelHttp('/cpanel-api.php?action=ping', 'GET');
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(response.body);
+      } catch {}
+
+      if (response.statusCode === 200 && parsed && parsed.status === 'success') {
+        return res.json({
+          success: true,
+          message: parsed.message || 'Koneksi cPanel Web Hosting Berhasil!',
+          totalAset: parsed.totalAset ?? 0,
+        });
+      }
+
+      return res.json({
+        success: false,
+        message: `Server cPanel merespon status ${response.statusCode}: ${response.body.slice(0, 150)}`,
+      });
+    } catch (err: any) {
+      return res.json({
+        success: false,
+        message: `Gagal menghubungi server cPanel: ${err.message}`,
+      });
+    }
+  });
+
+  app.post('/api/cpanel/upload', async (req, res) => {
+    const { payload } = req.body;
+    try {
+      const payloadStr = JSON.stringify(payload);
+      const response = await callCpanelHttp('/cpanel-api.php?action=upload_all', 'POST', payloadStr);
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(response.body);
+      } catch {}
+
+      if (parsed) {
+        return res.json(parsed);
+      }
+      return res.json({ success: response.statusCode === 200, message: response.body });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
   // Users endpoints with security rules
   app.post('/api/users', (req, res) => {
     const { user, requestRole } = req.body;

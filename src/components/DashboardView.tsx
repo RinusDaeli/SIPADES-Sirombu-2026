@@ -6,6 +6,7 @@ import { ThreeDPieChart, PieChartItem } from './ThreeDPieChart';
 import { AnnouncementReaderModal } from './AnnouncementReaderModal';
 import { AsetDetailModal } from './AsetDetailModal';
 import { BarcodeModal } from './BarcodeModal';
+import { CPanelMigrationModal } from './CPanelMigrationModal';
 import { Aset } from '../types';
 import {
   getAsetVerificationStatus,
@@ -32,6 +33,7 @@ import {
   ShieldCheck,
   Camera,
   X,
+  Server,
 } from 'lucide-react';
 
 export const DashboardView: React.FC = () => {
@@ -52,6 +54,7 @@ export const DashboardView: React.FC = () => {
   } = useApp();
 
   const [showAnnounceModal, setShowAnnounceModal] = useState(false);
+  const [showCPanelModal, setShowCPanelModal] = useState(false);
   const [verifFeedback, setVerifFeedback] = useState<string | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [isVerifyingAll, setIsVerifyingAll] = useState<boolean>(false);
@@ -368,6 +371,22 @@ export const DashboardView: React.FC = () => {
                 ))}
               </select>
             </div>
+          )}
+
+          {/* Tombol Hosting cPanel */}
+          {isAdminOrSuper && (
+            <button
+              type="button"
+              onClick={() => setShowCPanelModal(true)}
+              className="p-2 sm:px-3 sm:py-2 rounded-xl border border-indigo-500/60 bg-gradient-to-r from-indigo-950 via-purple-950/90 to-slate-900 hover:from-indigo-900 hover:to-purple-900 text-white flex items-center gap-2 text-xs font-bold transition-all cursor-pointer shadow-lg shadow-indigo-950/40"
+              title="Pengaturan Migrasi & Sinkronisasi Database ke Hosting cPanel (shodns.in)"
+            >
+              <Server className="w-4 h-4 text-indigo-400" />
+              <span className="hidden sm:inline">Hosting cPanel</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/50 font-bold hidden md:inline">
+                Bebas Kuota
+              </span>
+            </button>
           )}
         </div>
       </div>
@@ -1136,6 +1155,11 @@ export const DashboardView: React.FC = () => {
           </button>
         </div>
       )}
+      {/* Modal Hosting cPanel */}
+      <CPanelMigrationModal
+        isOpen={showCPanelModal}
+        onClose={() => setShowCPanelModal(false)}
+      />
     </div>
   );
 };

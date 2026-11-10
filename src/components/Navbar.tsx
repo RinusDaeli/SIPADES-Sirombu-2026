@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { NiasBaratLogo } from './NiasBaratLogo';
 import { BackupRestoreModal } from './BackupRestoreModal';
 import { FirestoreQuotaModal } from './FirestoreQuotaModal';
+import { CPanelMigrationModal } from './CPanelMigrationModal';
 import {
   Bell,
   ShieldCheck,
@@ -15,6 +16,7 @@ import {
   Sparkles,
   Users,
   Database,
+  Server,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -37,6 +39,7 @@ export const Navbar: React.FC = () => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [showQuotaModal, setShowQuotaModal] = useState(false);
+  const [showCPanelModal, setShowCPanelModal] = useState(false);
 
   const isDesa = currentUser?.role === 'admin_desa';
   const isSuperAdmin = currentUser?.role === 'super_admin';
@@ -129,6 +132,19 @@ export const Navbar: React.FC = () => {
               <span className="sm:hidden">
                 {firestoreQuotaStatus === 'EXHAUSTED' ? '⚠️ Kuota' : 'Kuota'}
               </span>
+            </button>
+          )}
+
+          {/* Tombol Migrasi Hosting cPanel (Bebas Batasan Kuota) */}
+          {isAdminOrSuper && (
+            <button
+              onClick={() => setShowCPanelModal(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-950/70 hover:bg-blue-900 border border-blue-500/40 text-[11px] font-semibold text-blue-200 hover:text-white transition-all cursor-pointer shadow-sm"
+              title="Pindahkan Database ke Hosting cPanel Pribadi (Bebas Kuota Firebase)"
+            >
+              <Server className="w-3.5 h-3.5 text-blue-400" />
+              <span className="hidden sm:inline">Hosting cPanel</span>
+              <span className="sm:hidden">cPanel</span>
             </button>
           )}
 
@@ -403,6 +419,12 @@ export const Navbar: React.FC = () => {
           onClose={() => setShowQuotaModal(false)}
         />
       )}
+
+      {/* CPanel Migration & Hosting Modal */}
+      <CPanelMigrationModal
+        isOpen={showCPanelModal}
+        onClose={() => setShowCPanelModal(false)}
+      />
     </header>
   );
 };

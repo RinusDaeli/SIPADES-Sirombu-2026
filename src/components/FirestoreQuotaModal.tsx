@@ -18,6 +18,7 @@ import {
   Server,
   Zap,
 } from 'lucide-react';
+import { CPanelMigrationModal } from './CPanelMigrationModal';
 
 interface FirestoreQuotaModalProps {
   isOpen: boolean;
@@ -38,6 +39,7 @@ export const FirestoreQuotaModal: React.FC<FirestoreQuotaModalProps> = ({ isOpen
   const [lastCheckResult, setLastCheckResult] = useState<{ status: string; detail: string; time: string } | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
+  const [showCPanelModal, setShowCPanelModal] = useState(false);
 
   // Form State for Announcement
   const [annTitle, setAnnTitle] = useState('Pemberitahuan Batas Kuota Harian Firebase');
@@ -263,6 +265,30 @@ export const FirestoreQuotaModal: React.FC<FirestoreQuotaModalProps> = ({ isOpen
                       <span className="font-mono font-bold text-amber-400">20.000 / hari</span>
                     </div>
                   </div>
+                </div>
+
+                {/* cPanel Hosting Migration Card */}
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-950/70 via-purple-950/40 to-slate-900 border border-indigo-500/50 shadow-xl space-y-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                      <Server className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-white">Solusi Hosting Mandiri (cPanel)</h5>
+                      <p className="text-[11px] text-indigo-300">Bebas kuota limit & kendali 100% milik Anda</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Anda telah memiliki hosting cPanel di <strong>shodns.in</strong>. Gunakan jembatan API cPanel untuk menyimpan 315 data aset tanpa batas kuota harian.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowCPanelModal(true)}
+                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-950/50 transition-all cursor-pointer"
+                  >
+                    <Server className="w-4 h-4" />
+                    <span>Buka Panduan & Pengaturan cPanel</span>
+                  </button>
                 </div>
 
               </div>
@@ -503,6 +529,13 @@ export const FirestoreQuotaModal: React.FC<FirestoreQuotaModalProps> = ({ isOpen
 
         </div>
       </div>
+
+      {showCPanelModal && (
+        <CPanelMigrationModal
+          isOpen={showCPanelModal}
+          onClose={() => setShowCPanelModal(false)}
+        />
+      )}
     </div>,
     document.body
   );
