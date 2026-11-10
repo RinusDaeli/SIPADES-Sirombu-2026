@@ -207,7 +207,7 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
             </div>
             <ul className="text-[11px] text-slate-300 space-y-1 list-disc list-inside">
               <li><strong className="text-emerald-300">Tanpa batasan kuota</strong> baca/tulis harian</li>
-              <li>Seluruh 315 data aset tersimpan aman di server Anda</li>
+              <li>Seluruh data aset tersimpan aman di server Anda</li>
               <li>Akses cepat dan kendali penuh database Anda</li>
             </ul>
           </div>
