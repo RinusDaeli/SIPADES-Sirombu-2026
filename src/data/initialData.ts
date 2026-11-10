@@ -653,6 +653,35 @@ export const INITIAL_USERS: User[] = [
 
 export const INITIAL_ASETS: Aset[] = [
   {
+    "id": "ast-1794306508890-0-hnh2h",
+    "desaId": "desa-19",
+    "desaName": "DESA FADORO",
+    "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
+    "namaAset": "Perangkat Internet Starlink",
+    "kodeAset": "02.01.01.19.2025.0002",
+    "nomorRegister": "0002",
+    "bukti": {
+      "jenis": "Kwitansi / BAST",
+      "nomor": "00080/KWT/02.2019/2025",
+      "tanggal": "6 Desember 2025"
+    },
+    "tahunPerolehan": 2025,
+    "nilaiPerolehan": 0,
+    "kondisi": "Baik",
+    "sumberDana": "DDS",
+    "volume": "1 Unit",
+    "lokasi": "Kantor Desa Fadoro",
+    "merk": "Starlink",
+    "tipe": "Standard Actuated Kit",
+    "nomorSeri": "KIT00192847",
+    "keterangan": "Pengadaan Internet Desa",
+    "fotoAset": [],
+    "status": "aktif",
+    "statusVerifikasi": "sedang_diproses",
+    "createdAt": "2026-11-10T10:45:42.901Z",
+    "updatedAt": "2026-11-10T10:45:42.902Z"
+  },
+  {
     "nomorRegister": "0005",
     "nomorSeri": "WF 1856 LX6053FH24802748",
     "keterangan": "",
@@ -9991,7 +10020,6 @@ export const INITIAL_ASETS: Aset[] = [
     "volume": "1 Unit"
   }
 ];
-
 
 export const INITIAL_VERIFIKASI: PermohonanVerifikasi[] = [];
 
