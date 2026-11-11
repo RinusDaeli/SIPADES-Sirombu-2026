@@ -1,0 +1,25 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # 1. Direct API Rewrites to cPanel PHP Bridge
+  RewriteRule ^api/data/?$ cpanel-api.php?action=data [QSA,L]
+  RewriteRule ^api/asets/batch/?$ cpanel-api.php?action=upload_all [QSA,L]
+  RewriteRule ^api/asets/?$ cpanel-api.php?action=save_aset [QSA,L]
+  RewriteRule ^api/asets/(.*)$ cpanel-api.php?action=save_aset&id=$1 [QSA,L]
+
+  # 2. Serve existing files directly
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # 3. SPA Fallback for React Router / Single Page App navigation
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# Security & CORS Headers
+<IfModule mod_headers.c>
+  Header set Access-Control-Allow-Origin "*"
+  Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+  Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+</IfModule>

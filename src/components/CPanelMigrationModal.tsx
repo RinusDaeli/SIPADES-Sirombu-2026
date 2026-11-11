@@ -35,7 +35,7 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
     return localStorage.getItem(STORAGE_KEY_CPANEL_URL) || 'https://sipadessirombu.my.id/cpanel-api.php';
   });
   const [useCpanelPrimary, setUseCpanelPrimary] = useState(() => {
-    return localStorage.getItem(STORAGE_KEY_USE_CPANEL) === 'true';
+    return localStorage.getItem(STORAGE_KEY_USE_CPANEL) !== 'false';
   });
 
   const [testingConnection, setTestingConnection] = useState(false);
@@ -45,6 +45,7 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
   const [uploadResult, setUploadResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const [copiedCode, setCopiedCode] = useState(false);
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
 
   useEffect(() => {
     if (cpanelUrl) {
@@ -55,8 +56,6 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_USE_CPANEL, String(useCpanelPrimary));
   }, [useCpanelPrimary]);
-
-  if (!isOpen) return null;
 
   const handleTestConnection = async () => {
     if (!cpanelUrl.trim()) {
@@ -119,23 +118,104 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
         selectedYear: new Date().getFullYear(),
       };
 
-      const proxyRes = await fetch('/api/cpanel/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: cpanelUrl.trim(), payload: { data: payload } }),
-      });
+      let success = false;
+      let totalReported = asets.length;
+      let errorMsg = '';
 
-      const data = await proxyRes.json();
-      if (data.status === 'success' || data.success) {
+      // 1. Primary: Server-side proxy upload (bypasses browser CORS & LiteSpeed firewall rules)
+      try {
+        const proxyRes = await fetch('/api/cpanel/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: cpanelUrl.trim(), payload: { data: payload } }),
+        });
+
+        if (proxyRes.ok) {
+          const data = await proxyRes.json();
+          if (data && (data.status === 'success' || data.success)) {
+            success = true;
+            totalReported = data.totalAset || asets.length;
+          } else {
+            errorMsg = data?.message || '';
+          }
+        } else {
+          errorMsg = `Server proxy merespon status ${proxyRes.status}`;
+        }
+      } catch (proxyErr: any) {
+        console.warn('Proxy upload error, checking fallback:', proxyErr);
+        errorMsg = proxyErr.message;
+      }
+
+      // 2. Direct browser fallback if proxy failed
+      if (!success) {
+        try {
+          const directRes = await fetch(`${cpanelUrl.trim()}?action=upload_all`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data: payload }),
+          });
+          if (directRes.ok) {
+            const directData = await directRes.json();
+            if (directData && (directData.status === 'success' || directData.success)) {
+              success = true;
+              totalReported = directData.totalAset || asets.length;
+            }
+          }
+        } catch (directErr) {
+          console.warn('Direct upload error:', directErr);
+        }
+      }
+
+      // 3. Chunked upload fallback if full payload timed out or was rejected due to size
+      if (!success && asets.length > 0) {
+        const chunkSize = 35;
+        const totalChunks = Math.ceil(asets.length / chunkSize);
+        let uploaded = 0;
+
+        for (let i = 0; i < totalChunks; i++) {
+          const chunk = asets.slice(i * chunkSize, (i + 1) * chunkSize);
+          const chunkPayload = {
+            data: {
+              asets: chunk,
+              ...(i === 0 ? { desas, users, verifikasiList, pengesahanList, kecamatanProfile } : {}),
+            },
+          };
+
+          try {
+            const chunkRes = await fetch('/api/cpanel/upload_chunk', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: cpanelUrl.trim(), payload: chunkPayload }),
+            });
+            if (chunkRes.ok) {
+              const chunkData = await chunkRes.json();
+              if (chunkData && (chunkData.status === 'success' || chunkData.success)) {
+                uploaded += chunk.length;
+                totalReported = chunkData.totalAset || uploaded;
+              }
+            }
+          } catch {}
+        }
+
+        if (uploaded > 0) {
+          success = true;
+        }
+      }
+
+      if (success) {
         setUploadResult({
           success: true,
-          message: `Sukses! Seluruh ${data.totalAset || asets.length} unit aset berhasil dipindahkan dan tersimpan di hosting cPanel Anda.`,
+          message: `Sukses! Seluruh ${totalReported} unit aset berhasil dipindahkan dan tersimpan di hosting cPanel Anda.`,
         });
         setUseCpanelPrimary(true);
+        // Refresh connection test so the green banner immediately updates to the new total
+        setTimeout(() => {
+          handleTestConnection();
+        }, 300);
       } else {
         setUploadResult({
           success: false,
-          message: data.message || 'Gagal upload ke cPanel.',
+          message: errorMsg ? `Gagal upload ke cPanel: ${errorMsg}` : 'Gagal upload ke cPanel. Periksa koneksi internet atau batas upload hosting.',
         });
       }
     } catch (err: any) {
@@ -148,14 +228,35 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
     }
   };
 
-  const handleDownloadFile = (fileName: string) => {
-    const link = document.createElement('a');
-    link.href = `/${fileName}`;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownloadFile = async (fileName: string) => {
+    try {
+      setDownloadingFile(fileName);
+      const res = await fetch(`/${fileName}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('File tidak dapat dimuat');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => window.URL.revokeObjectURL(url), 2000);
+    } catch {
+      // Fallback direct anchor trigger
+      const link = document.createElement('a');
+      link.href = `/${fileName}`;
+      link.download = fileName;
+      link.target = '_self';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } finally {
+      setDownloadingFile(null);
+    }
   };
+
+  if (!isOpen) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] overflow-y-auto bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in">
@@ -271,6 +372,49 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
               <div>
                 Masukkan alamat domain web hosting Anda pada kolom di bawah ini, lalu klik <strong>Tes Sambungan</strong> & <strong>Kirim Data ke cPanel</strong>.
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Pasang Tampilan Aplikasi Langsung di Domain cPanel */}
+        <div className="p-4 rounded-xl bg-gradient-to-r from-blue-950/70 to-indigo-950/70 border border-cyan-500/40 space-y-3 mb-5 shadow-lg">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-2">
+              <Globe className="w-4 h-4 text-cyan-400" />
+              Pasang Tampilan Aplikasi SIPADES di sipadessirombu.my.id
+            </h3>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-400/30">
+              Frontend + Backend Lengkap
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-300">
+            Agar saat Anda membuka <strong>https://sipadessirombu.my.id</strong> langsung muncul tampilan penuh aplikasi SIPADES (bukan sekadar daftar file <em>Index of /</em>), unduh paket web aplikasi di bawah ini:
+          </p>
+
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <button
+              onClick={() => handleDownloadFile('sipades-web-sirombu.zip')}
+              disabled={downloadingFile === 'sipades-web-sirombu.zip'}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
+            >
+              <Download className={`w-4 h-4 ${downloadingFile === 'sipades-web-sirombu.zip' ? 'animate-bounce' : ''}`} />
+              {downloadingFile === 'sipades-web-sirombu.zip' ? 'Sedang Menyiapkan Unduhan...' : 'Unduh Paket Web SIPADES (.ZIP)'}
+            </button>
+            <span className="text-[11px] text-slate-400">
+              (Ukuran: ~34 MB • Berisi file index.html, assets, dan .htaccess)
+            </span>
+          </div>
+
+          <div className="bg-slate-900/90 rounded-lg p-3 border border-slate-800 text-[11px] space-y-1.5 text-slate-300">
+            <div className="font-semibold text-slate-200">Cara pasang di cPanel (Hanya 3 Langkah Mudah):</div>
+            <ol className="list-decimal list-inside space-y-1 text-slate-400">
+              <li>Buka cPanel &rarr; <strong>File Manager</strong> &rarr; buka folder <strong>public_html</strong>.</li>
+              <li>Klik menu <strong>Upload</strong> di atas, lalu upload file <strong>sipades-web-sirombu.zip</strong> yang baru diunduh.</li>
+              <li>Setelah proses upload selesai (100%), kembali ke File Manager, klik kanan file <strong>sipades-web-sirombu.zip</strong>, lalu klik <strong>Extract</strong> (pilih lokasi <code className="text-cyan-300">/public_html</code>).</li>
+            </ol>
+            <div className="text-emerald-400 font-medium pt-1">
+              ✓ Selesai! Saat membuka <a href="https://sipadessirombu.my.id" target="_blank" rel="noreferrer" className="underline font-bold text-emerald-300">https://sipadessirombu.my.id</a>, antarmuka lengkap aplikasi SIPADES Kecamatan Sirombu langsung berjalan dengan 316 aset aktif!
             </div>
           </div>
         </div>

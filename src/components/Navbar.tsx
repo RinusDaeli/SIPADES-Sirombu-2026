@@ -108,43 +108,23 @@ export const Navbar: React.FC = () => {
             title="Sinkronisasi Terpusat Cloud Firebase & Server Real-time (Data otomatis sinkron antar laptop / perangkat)"
           >
             <span className={`w-2 h-2 rounded-full ${isServerConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-            <span className="text-slate-300 font-semibold">{isServerConnected ? 'Firebase & Server Aktif' : 'Offline'}</span>
+            <span className={`w-2 h-2 rounded-full ${isServerConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+            <span className="text-slate-300 font-semibold">{isServerConnected ? 'cPanel Server Aktif' : 'Offline'}</span>
             <RefreshCw className="w-3 h-3 text-slate-400" />
           </button>
 
-          {/* Khusus Super Admin: Indikator & Kontrol Kuota Firestore */}
-          {isSuperAdmin && (
-            <button
-              onClick={() => setShowQuotaModal(true)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer shadow-sm ${
-                firestoreQuotaStatus === 'EXHAUSTED'
-                  ? 'bg-amber-950/80 border-amber-500/70 text-amber-200 animate-pulse hover:bg-amber-900/80'
-                  : firestoreQuotaStatus === 'CHECKING'
-                  ? 'bg-blue-950/80 border-blue-500/50 text-blue-200'
-                  : 'bg-slate-900/90 hover:bg-slate-800 border-emerald-500/40 text-emerald-300'
-              }`}
-              title="Panel Monitoring Kuota Google Cloud Firestore (Khusus Super Admin)"
-            >
-              <Database className={`w-3.5 h-3.5 ${firestoreQuotaStatus === 'EXHAUSTED' ? 'text-amber-400' : 'text-emerald-400'}`} />
-              <span className="hidden sm:inline">
-                {firestoreQuotaStatus === 'EXHAUSTED' ? '⚠️ Kuota Habis (Reset 14:00)' : 'Kuota Cloud: Aman'}
-              </span>
-              <span className="sm:hidden">
-                {firestoreQuotaStatus === 'EXHAUSTED' ? '⚠️ Kuota' : 'Kuota'}
-              </span>
-            </button>
-          )}
-
-          {/* Tombol Migrasi Hosting cPanel (Bebas Batasan Kuota) */}
+          {/* Tombol Hosting cPanel (Bebas Batasan Kuota) */}
           {isAdminOrSuper && (
             <button
               onClick={() => setShowCPanelModal(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-950/70 hover:bg-blue-900 border border-blue-500/40 text-[11px] font-semibold text-blue-200 hover:text-white transition-all cursor-pointer shadow-sm"
-              title="Pindahkan Database ke Hosting cPanel Pribadi (Bebas Kuota Firebase)"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gradient-to-r from-blue-950/80 to-indigo-950/80 hover:from-blue-900 hover:to-indigo-900 border border-indigo-500/50 text-[11px] font-semibold text-indigo-200 hover:text-white transition-all cursor-pointer shadow-sm"
+              title="Status Server Hosting cPanel Sirombu (Bebas Kuota / Unlimited Storage)"
             >
-              <Server className="w-3.5 h-3.5 text-blue-400" />
+              <Server className="w-3.5 h-3.5 text-indigo-400" />
               <span className="hidden sm:inline">Hosting cPanel</span>
-              <span className="sm:hidden">cPanel</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
+                Bebas Kuota
+              </span>
             </button>
           )}
 

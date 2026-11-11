@@ -14,6 +14,7 @@ import { AsetDetailModal } from './AsetDetailModal';
 import { SyncDevicesModal } from './SyncDevicesModal';
 import { BackupRestoreModal } from './BackupRestoreModal';
 import { FirestoreQuotaModal } from './FirestoreQuotaModal';
+import { CPanelMigrationModal } from './CPanelMigrationModal';
 import { AnnouncementReaderModal } from './AnnouncementReaderModal';
 import { IndonesianDatePicker } from './IndonesianDatePicker';
 import { syncManager } from '../utils/cloudSyncService';
@@ -56,6 +57,7 @@ import {
   Bell,
   Loader2,
   ShieldCheck,
+  Server,
 } from 'lucide-react';
 
 export const AsetManagementView: React.FC = () => {
@@ -87,6 +89,7 @@ export const AsetManagementView: React.FC = () => {
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [showQuotaModal, setShowQuotaModal] = useState(false);
+  const [showCPanelModal, setShowCPanelModal] = useState(false);
   const [showAnnounceModal, setShowAnnounceModal] = useState(false);
   const [peerCount, setPeerCount] = useState<number>(() => syncManager.getConnectedCount());
 
@@ -621,6 +624,10 @@ export const AsetManagementView: React.FC = () => {
 
     const validPhotos = formData.fotoAset.filter((p) => p && p.trim().length > 0);
     const desa = desas.find((d) => d.id === formData.desaId);
+    const rawVal = String(formData.nilaiPerolehan ?? '0').replace(/[^0-9]/g, '');
+    const nilaiClean = parseInt(rawVal, 10) || 0;
+    const tahunClean = Number(formData.tahunPerolehan) || new Date().getFullYear();
+
     updateAset(selectedAset.id, {
       desaId: formData.desaId,
       desaName: desa?.name || selectedAset.desaName,
@@ -632,8 +639,8 @@ export const AsetManagementView: React.FC = () => {
         nomor: formData.buktiNomor,
         tanggal: formData.buktiTanggal,
       },
-      tahunPerolehan: Number(formData.tahunPerolehan),
-      nilaiPerolehan: Number(formData.nilaiPerolehan),
+      tahunPerolehan: tahunClean,
+      nilaiPerolehan: nilaiClean,
       kondisi: formData.kondisi,
       sumberDana: formData.sumberDana,
       volume: formData.volume,
@@ -645,6 +652,7 @@ export const AsetManagementView: React.FC = () => {
       fotoAset: validPhotos.length > 0 ? validPhotos : selectedAset.fotoAset,
       fotoBast: formData.fotoBast || selectedAset.fotoBast,
     });
+    showToast('Data aset berhasil diperbarui!');
     setShowEditModal(false);
   };
 
@@ -841,24 +849,18 @@ export const AsetManagementView: React.FC = () => {
             </button>
           )}
 
-          {/* Tombol Cek Kuota Langsung Firebase (Khusus Super Admin) */}
+          {/* Tombol Hosting cPanel (Bebas Batasan Kuota) */}
           {currentUser?.role === 'super_admin' && (
             <button
               type="button"
-              onClick={() => setShowQuotaModal(true)}
-              className={`p-2 sm:px-3 sm:py-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 shadow-md transition-all cursor-pointer shrink-0 ${
-                firestoreQuotaStatus === 'EXHAUSTED'
-                  ? 'bg-amber-950/80 border-amber-500/70 text-amber-200 animate-pulse hover:bg-amber-900/80'
-                  : 'bg-slate-900/90 hover:bg-slate-800 border-amber-500/40 hover:border-amber-400 text-amber-300 hover:text-white'
-              }`}
-              title="Cek Kuota Langsung Google Cloud Firestore & Jadwal Reset (Khusus Super Admin)"
+              onClick={() => setShowCPanelModal(true)}
+              className="p-2 sm:px-3 sm:py-2.5 rounded-xl border border-indigo-500/50 bg-gradient-to-r from-blue-950/80 to-indigo-950/80 hover:from-blue-900 hover:to-indigo-900 text-xs font-bold flex items-center gap-2 shadow-md transition-all cursor-pointer shrink-0 text-indigo-200 hover:text-white"
+              title="Status Server Hosting cPanel Sirombu (Bebas Batasan Kuota / Unlimited Storage)"
             >
-              <Database className="w-4 h-4 text-amber-400 shrink-0" />
-              <span className="hidden sm:inline">
-                {firestoreQuotaStatus === 'EXHAUSTED' ? '⚠️ Kuota Habis (Reset 14:00)' : 'Cek Kuota Firebase'}
-              </span>
-              <span className="sm:hidden">
-                {firestoreQuotaStatus === 'EXHAUSTED' ? '⚠️ Kuota' : 'Kuota'}
+              <Server className="w-4 h-4 text-indigo-400 shrink-0" />
+              <span className="hidden sm:inline">Hosting cPanel</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
+                Bebas Kuota
               </span>
             </button>
           )}
@@ -2135,8 +2137,12 @@ export const AsetManagementView: React.FC = () => {
                     type="number"
                     required
                     min="0"
-                    value={formData.nilaiPerolehan}
-                    onChange={(e) => setFormData({ ...formData, nilaiPerolehan: Number(e.target.value) })}
+                    value={formData.nilaiPerolehan === 0 ? '' : formData.nilaiPerolehan}
+                    placeholder="0"
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? 0 : Number(e.target.value);
+                      setFormData({ ...formData, nilaiPerolehan: val });
+                    }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono font-bold"
                   />
                   <div className="text-[10px] mt-1 space-y-0.5">
@@ -2641,8 +2647,12 @@ export const AsetManagementView: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    value={formData.nilaiPerolehan}
-                    onChange={(e) => setFormData({ ...formData, nilaiPerolehan: Number(e.target.value) })}
+                    value={formData.nilaiPerolehan === 0 ? '' : formData.nilaiPerolehan}
+                    placeholder="0"
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? 0 : Number(e.target.value);
+                      setFormData({ ...formData, nilaiPerolehan: val });
+                    }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono font-bold"
                   />
                   <span className="text-[10px] text-emerald-400 mt-1 block">
@@ -3186,6 +3196,12 @@ export const AsetManagementView: React.FC = () => {
           onClose={() => setShowBackupModal(false)}
         />
       )}
+
+      {/* MODAL: Hosting cPanel (Bebas Batasan Kuota) */}
+      <CPanelMigrationModal
+        isOpen={showCPanelModal}
+        onClose={() => setShowCPanelModal(false)}
+      />
 
       {/* MODAL: Status & Cek Kuota Langsung Firestore (Khusus Super Admin) */}
       {currentUser?.role === 'super_admin' && (

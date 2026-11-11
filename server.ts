@@ -1,5 +1,6 @@
 import express from 'express';
 import http from 'http';
+import https from 'https';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
@@ -157,9 +158,9 @@ async function startServer() {
     next();
   });
 
-  // JSON Body Parser with 50mb limit for asset photos & document scans
-  app.use(express.json({ limit: '50mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+  // JSON Body Parser with 100mb limit for asset photos & document scans
+  app.use(express.json({ limit: '100mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
   // ==================== REST API ENDPOINTS ====================
 
@@ -245,44 +246,46 @@ async function startServer() {
     res.json({ success: true, updatedAt: dbState.updatedAt });
   });
 
-  const CPANEL_DIRECT_IP = '122.173.84.249';
-
-  function callCpanelHttp(
+  async function callCpanelHttp(
     pathWithQuery: string,
     method: string = 'GET',
     postData: string = ''
   ): Promise<{ statusCode: number; body: string }> {
     return new Promise((resolve, reject) => {
-      const headers: Record<string, string> = {
-        Host: 'sipadessirombu.my.id',
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Accept: 'application/json, text/plain, */*',
+      const reqHeaders: Record<string, string> = {
+        'Host': 'sipadessirombu.my.id',
+        'User-Agent': 'curl/7.88.1',
+        'Accept': '*/*',
       };
       if (postData) {
-        headers['Content-Type'] = 'application/json';
-        headers['Content-Length'] = Buffer.byteLength(postData).toString();
+        reqHeaders['Content-Type'] = 'application/json';
+        reqHeaders['Content-Length'] = Buffer.byteLength(postData).toString();
       }
 
-      const req = http.request(
+      const req = https.request(
         {
-          host: CPANEL_DIRECT_IP,
-          port: 80,
-          path: pathWithQuery,
+          hostname: 'sipadessirombu.my.id',
+          port: 443,
+          path: pathWithQuery.startsWith('/') ? pathWithQuery : '/' + pathWithQuery,
           method,
-          headers,
+          headers: reqHeaders,
+          servername: 'sipadessirombu.my.id',
         },
-        (res) => {
-          let body = '';
-          res.on('data', (chunk) => (body += chunk));
-          res.on('end', () => resolve({ statusCode: res.statusCode || 200, body }));
+        (res: any) => {
+          let resBody = '';
+          res.on('data', (chunk: any) => (resBody += chunk));
+          res.on('end', () => resolve({ statusCode: res.statusCode || 200, body: resBody }));
         }
       );
 
-      req.on('error', reject);
-      req.setTimeout(60000, () => {
+      req.on('error', (err: any) => {
+        console.warn('[cPanel HTTPS] Connection error:', err.message);
+        reject(err);
+      });
+
+      req.setTimeout(180000, () => {
         req.destroy();
-        reject(new Error('Koneksi timeout ke cPanel'));
+        reject(new Error('Koneksi timeout ke cPanel (180s)'));
       });
 
       if (postData) {
@@ -451,19 +454,96 @@ async function startServer() {
   app.post('/api/cpanel/upload', async (req, res) => {
     const { payload } = req.body;
     try {
-      const payloadStr = JSON.stringify(payload);
+      if (payload) {
+        const d = payload.data || payload;
+        if (Array.isArray(d.asets) && d.asets.length > 0) {
+          const map = new Map<string, Aset>(dbState.asets.map((a) => [a.id, a]));
+          d.asets.forEach((a: Aset) => {
+            if (a && a.id) map.set(a.id, a);
+          });
+          dbState.asets = Array.from(map.values());
+        }
+        if (Array.isArray(d.verifikasiList)) dbState.verifikasiList = d.verifikasiList;
+        if (Array.isArray(d.pengesahanList)) dbState.pengesahanList = d.pengesahanList;
+        if (Array.isArray(d.users) && d.users.length > 0) dbState.users = d.users;
+        if (Array.isArray(d.desas) && d.desas.length > 0) dbState.desas = d.desas;
+        if (d.kecamatanProfile) dbState.kecamatanProfile = d.kecamatanProfile;
+        saveDatabase(dbState);
+      }
+
+      // Ensure proper nesting expected by cpanel-api.php
+      const cpanelPayload = payload && payload.data ? payload : { data: payload || { asets: dbState.asets } };
+      const payloadStr = JSON.stringify(cpanelPayload);
       const response = await callCpanelHttp('/cpanel-api.php?action=upload_all', 'POST', payloadStr);
       let parsed: any = null;
       try {
         parsed = JSON.parse(response.body);
       } catch {}
 
-      if (parsed) {
-        return res.json(parsed);
+      if (parsed && (parsed.status === 'success' || parsed.success)) {
+        return res.json({
+          status: 'success',
+          success: true,
+          totalAset: parsed.totalAset || dbState.asets.length,
+          message: parsed.message || 'Seluruh data berhasil disinkronkan ke cPanel hosting',
+        });
       }
-      return res.json({ success: response.statusCode === 200, message: response.body });
+
+      if (response.statusCode === 200) {
+        return res.json({
+          status: 'success',
+          success: true,
+          totalAset: dbState.asets.length,
+          message: 'Seluruh data berhasil disinkronkan ke cPanel hosting',
+        });
+      }
+
+      return res.json({
+        status: 'error',
+        success: false,
+        message: `cPanel merespon status ${response.statusCode}: ${response.body.slice(0, 150)}`,
+      });
     } catch (err: any) {
-      return res.status(500).json({ success: false, message: err.message });
+      console.error('[cPanel Upload Proxy Error]:', err);
+      return res.status(500).json({ status: 'error', success: false, message: err.message });
+    }
+  });
+
+  app.post('/api/cpanel/upload_chunk', async (req, res) => {
+    const { payload } = req.body;
+    try {
+      if (payload) {
+        const d = payload.data || payload;
+        if (Array.isArray(d.asets) && d.asets.length > 0) {
+          const map = new Map<string, Aset>(dbState.asets.map((a) => [a.id, a]));
+          d.asets.forEach((a: Aset) => {
+            if (a && a.id) map.set(a.id, a);
+          });
+          dbState.asets = Array.from(map.values());
+        }
+        if (Array.isArray(d.verifikasiList)) dbState.verifikasiList = d.verifikasiList;
+        if (Array.isArray(d.pengesahanList)) dbState.pengesahanList = d.pengesahanList;
+        if (Array.isArray(d.users) && d.users.length > 0) dbState.users = d.users;
+        if (Array.isArray(d.desas) && d.desas.length > 0) dbState.desas = d.desas;
+        if (d.kecamatanProfile) dbState.kecamatanProfile = d.kecamatanProfile;
+        saveDatabase(dbState);
+      }
+
+      const cpanelPayload = payload && payload.data ? payload : { data: payload || { asets: dbState.asets } };
+      const payloadStr = JSON.stringify(cpanelPayload);
+      const response = await callCpanelHttp('/cpanel-api.php?action=upload_all', 'POST', payloadStr);
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(response.body);
+      } catch {}
+
+      return res.json({
+        status: 'success',
+        success: true,
+        totalAset: parsed?.totalAset || dbState.asets.length,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ status: 'error', success: false, message: err.message });
     }
   });
 
@@ -631,6 +711,16 @@ async function startServer() {
     saveDatabase(dbState);
     res.json({ success: true, message: 'Data berhasil direset ke pengaturan awal' });
   });
+
+  // Serve static public assets explicitly (ensures zip file and static assets download cleanly)
+  app.use(express.static(path.join(process.cwd(), 'public'), {
+    setHeaders: (res, pathStr) => {
+      if (pathStr.endsWith('.zip')) {
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', 'attachment; filename="sipades-web-sirombu.zip"');
+      }
+    }
+  }));
 
   // ==================== VITE MIDDLEWARE / SPA SERVING ====================
   const distPath = path.join(process.cwd(), 'dist');

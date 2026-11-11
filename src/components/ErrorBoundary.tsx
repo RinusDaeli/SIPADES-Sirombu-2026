@@ -144,7 +144,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
 
             <p className="text-[11px] text-slate-400">
-              Data tersimpan aman di Google Cloud Firestore.
+              Data tersimpan aman di Hosting cPanel Server Sirombu (Bebas Kuota).
             </p>
           </div>
         </div>

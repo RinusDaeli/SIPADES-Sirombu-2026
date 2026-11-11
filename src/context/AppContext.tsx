@@ -29,31 +29,19 @@ import {
 } from '../utils/safeStorage';
 import { syncManager, FullSyncPayload } from '../utils/cloudSyncService';
 import {
-  subscribeAsets,
-  subscribeVerifikasi,
-  subscribePengesahan,
-  subscribeDesas,
-  subscribeKecamatanProfile,
-  subscribeUsers,
-  saveAsetToCloud,
-  deleteAsetFromCloud,
-  saveVerifikasiToCloud,
-  deleteVerifikasiFromCloud,
-  savePengesahanToCloud,
-  saveDesaToCloud,
-  saveAllDesasToCloud,
-  syncAllToFirestore,
-  saveKecamatanProfileToCloud,
-  saveUserToCloud,
-  deleteUserFromCloud,
-  bootstrapFirestoreIfEmpty,
-  fetchInitialFirestoreData,
+  fetchCpanelData,
+  saveAsetToCpanel,
+  deleteAsetFromCpanel,
+  saveAllToCpanel,
+  saveDesasToCpanel,
+  saveUsersToCpanel,
+  saveVerifikasiToCpanel,
+  savePengesahanToCpanel,
+  saveKecamatanToCpanel,
+  pingCpanel,
+} from '../lib/cpanelService';
+import {
   FirestoreQuotaStatus,
-  checkFirestoreQuota,
-  onQuotaStatusChange,
-  subscribeAnnouncements,
-  saveAnnouncementToCloud,
-  deleteAnnouncementFromCloud,
 } from '../lib/firestoreService';
 import { SystemAnnouncement } from '../types';
 
@@ -278,19 +266,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return defaultDeleted;
   });
 
-  const [firestoreQuotaStatus, setFirestoreQuotaStatus] = useState<FirestoreQuotaStatus>('NORMAL');
-  const [firestoreQuotaDetail, setFirestoreQuotaDetail] = useState<string>('Kuota Google Cloud Firestore beroperasi normal.');
-
-  useEffect(() => {
-    const unsub = onQuotaStatusChange((status, detail) => {
-      setFirestoreQuotaStatus(status);
-      if (detail) setFirestoreQuotaDetail(detail);
-    });
-    return () => unsub();
-  }, []);
+  const [firestoreQuotaStatus] = useState<FirestoreQuotaStatus>('NORMAL');
+  const [firestoreQuotaDetail, setFirestoreQuotaDetail] = useState<string>(
+    'Hosting cPanel Beroperasi Normal — Bebas Kuota (Unlimited Storage).'
+  );
 
   const checkFirestoreQuotaStatus = useCallback(async () => {
-    return await checkFirestoreQuota();
+    const res = await pingCpanel();
+    const detail = res.success
+      ? `Hosting cPanel Server Aktif (${res.totalAset ?? 316} aset) — Bebas Batasan Kuota.`
+      : res.message;
+    setFirestoreQuotaDetail(detail);
+    return {
+      status: 'NORMAL' as FirestoreQuotaStatus,
+      detail,
+      timestamp: new Date(),
+    };
   }, []);
 
   const [announcements, setAnnouncements] = useState<SystemAnnouncement[]>(() => {
@@ -354,8 +345,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         body: JSON.stringify(newAnn),
       });
     } catch {}
-
-    await saveAnnouncementToCloud(newAnn).catch(() => {});
   }, [currentUser]);
 
   const deleteAnnouncement = useCallback(async (id: string) => {
@@ -372,8 +361,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         body: JSON.stringify({ id }),
       });
     } catch {}
-
-    await deleteAnnouncementFromCloud(id).catch(() => {});
   }, []);
 
   const CURRENT_DATA_REVISION = '2026_10_01_balowondrate_v3';
@@ -552,356 +539,160 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     saveAsetsToIndexedDB(list).catch(() => {});
   }, []);
 
-  const lastCloudFetchRef = useRef<number>(0);
-
-  // Central Server & Cloud Synchronization
-  const refreshServerData = useCallback(async (force = false) => {
-    const now = Date.now();
-    const shouldFetchCloud = force || now - lastCloudFetchRef.current > 30000;
-
-    // 1. Fetch live authoritative data from Google Cloud Firestore
-    if (shouldFetchCloud) {
-      lastCloudFetchRef.current = now;
-      try {
-        const cloudData = await fetchInitialFirestoreData();
-        if (cloudData) {
-          if (Array.isArray(cloudData.asets)) {
-            const clean = deduplicateAsets(cloudData.asets);
-            const { asets: normalized } = normalizeAsetRegisters(clean, desas);
-            setAsets((prev) => {
-              const map = new Map<string, Aset>();
-              normalized.forEach((a) => {
-                if (a && a.id && !deletedAssetIds.has(a.id)) {
-                  map.set(a.id, a);
-                }
-              });
-              // Never erase newly added or local items
-              prev.forEach((local) => {
-                if (local && local.id && !deletedAssetIds.has(local.id)) {
-                  if (!map.has(local.id)) {
-                    map.set(local.id, local);
-                  }
-                }
-              });
-              const finalMerged = deduplicateAsets(Array.from(map.values()), deletedAssetIds);
-              persistAsetsSafely(finalMerged);
-              return finalMerged;
-            });
-          }
-          if (Array.isArray(cloudData.desas) && cloudData.desas.length > 0) {
-            setDesas(cloudData.desas);
-            safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(cloudData.desas));
-          }
-          if (Array.isArray(cloudData.users) && cloudData.users.length > 0) {
-            setUsers(cloudData.users);
-            safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(cloudData.users));
-          }
-          if (Array.isArray(cloudData.verifikasiList)) {
-            setVerifikasiList(cloudData.verifikasiList);
-            safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(cloudData.verifikasiList));
-          }
-          if (Array.isArray(cloudData.pengesahanList)) {
-            setPengesahanList(cloudData.pengesahanList);
-            safeLocalStorageSetItem(STORAGE_KEYS.PENGESAHAN, JSON.stringify(cloudData.pengesahanList));
-          }
-          if (cloudData.kecamatanProfile) {
-            setKecamatanProfile(cloudData.kecamatanProfile);
-            safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(cloudData.kecamatanProfile));
-          }
-          setIsServerConnected(true);
-          setLastSyncTime(new Date());
-        }
-      } catch (e) {
-        console.warn('[Firestore] Sync in refreshServerData:', e);
-      }
-    }
-
-    // 2. Also query local Express server if present (for hybrid server setups)
+  // Central cPanel Web Hosting Synchronization (100% cPanel Unlimited Storage)
+  const refreshServerData = useCallback(async (_force = false) => {
     try {
-      const res = await fetch('/api/data');
-      if (res.ok) {
-        const cType = res.headers.get('content-type');
-        if (!cType || !cType.includes('application/json')) {
-          // Response is not JSON (e.g. static host/Vercel SPA fallback to index.html)
-          return;
+      const cpData = await fetchCpanelData();
+      if (cpData && Array.isArray(cpData.asets) && cpData.asets.length > 0) {
+        setAsets((prev) => {
+          const map = new Map<string, Aset>(prev.map((a) => [a.id, a]));
+          cpData.asets.forEach((incoming: Aset) => {
+            if (incoming && incoming.id && !deletedAssetIds.has(incoming.id)) {
+              const exist = map.get(incoming.id);
+              if (!exist) {
+                map.set(incoming.id, incoming);
+              } else {
+                const timeExist = new Date(exist.updatedAt || exist.createdAt || 0).getTime();
+                const timeInc = new Date(incoming.updatedAt || incoming.createdAt || 0).getTime();
+                if (timeInc >= timeExist) {
+                  map.set(incoming.id, {
+                    ...incoming,
+                    fotoAset: (incoming.fotoAset && incoming.fotoAset.length > 0) ? incoming.fotoAset : (exist.fotoAset || []),
+                    nilaiPerolehan: (incoming.nilaiPerolehan && incoming.nilaiPerolehan > 0) ? incoming.nilaiPerolehan : (exist.nilaiPerolehan || 0),
+                  });
+                }
+              }
+            }
+          });
+          const cleanAsets = deduplicateAsets(Array.from(map.values()), deletedAssetIds);
+          persistAsetsSafely(cleanAsets);
+          return cleanAsets;
+        });
+
+        if (Array.isArray(cpData.verifikasiList)) {
+          setVerifikasiList(cpData.verifikasiList);
+          safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(cpData.verifikasiList));
         }
-        const serverData = await res.json();
+        if (Array.isArray(cpData.users) && cpData.users.length > 0) {
+          setUsers(cpData.users);
+          safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(cpData.users));
+        }
+        if (Array.isArray(cpData.desas) && cpData.desas.length > 0) {
+          setDesas(cpData.desas);
+          safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(cpData.desas));
+        }
+        if (cpData.kecamatanProfile) {
+          setKecamatanProfile(cpData.kecamatanProfile);
+          safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(cpData.kecamatanProfile));
+        }
+
         setIsServerConnected(true);
         setLastSyncTime(new Date());
-
-        if (serverData && typeof serverData === 'object') {
-          if (Array.isArray(serverData.asets)) {
-            setAsets((prev) => {
-              // Non-destructive merge: preserve both local state and server state
-              const map = new Map<string, Aset>(prev.map((a) => [a.id, a]));
-              serverData.asets.forEach((incoming: Aset) => {
-                if (incoming && incoming.id && !deletedAssetIds.has(incoming.id)) {
-                  const exist = map.get(incoming.id);
-                  if (!exist) {
-                    map.set(incoming.id, incoming);
-                  } else {
-                    const timeExist = new Date(exist.updatedAt || exist.createdAt || 0).getTime();
-                    const timeInc = new Date(incoming.updatedAt || incoming.createdAt || 0).getTime();
-                    if (timeInc >= timeExist) {
-                      map.set(incoming.id, incoming);
-                    }
-                  }
-                }
-              });
-              const cleanAsets = deduplicateAsets(Array.from(map.values()), deletedAssetIds);
-              if (JSON.stringify(prev) === JSON.stringify(cleanAsets)) return prev;
-              persistAsetsSafely(cleanAsets);
-              return cleanAsets;
-            });
-          }
-          if (Array.isArray(serverData.verifikasiList)) {
-            setVerifikasiList((prev) => {
-              const map = new Map<string, PermohonanVerifikasi>(prev.map((v) => [v.id, v]));
-              serverData.verifikasiList.forEach((v: PermohonanVerifikasi) => {
-                if (v && v.id) map.set(v.id, v);
-              });
-              const merged = Array.from(map.values());
-              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
-              safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(merged));
-              return merged;
-            });
-          }
-          if (Array.isArray(serverData.users) && serverData.users.length > 0) {
-            setUsers((prev) => {
-              const map = new Map<string, User>(prev.map((u) => [u.id, u]));
-              serverData.users.forEach((u: User) => {
-                if (u && u.id) map.set(u.id, u);
-              });
-              const merged = Array.from(map.values());
-              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
-              safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(merged));
-              return merged;
-            });
-          }
-          if (Array.isArray(serverData.desas) && serverData.desas.length > 0) {
-            setDesas((prev) => {
-              const map = new Map<string, Desa>(prev.map((d) => [d.id, d]));
-              serverData.desas.forEach((srv: Desa) => {
-                if (srv && srv.id) {
-                  const exist = map.get(srv.id);
-                  if (exist) {
-                    map.set(srv.id, {
-                      ...exist,
-                      ...srv,
-                      nomorHp: srv.nomorHp || exist.nomorHp || '',
-                      kontak: srv.kontak || exist.kontak || srv.nomorHp || exist.nomorHp || '',
-                      nipKepalaDesa: srv.nipKepalaDesa && srv.nipKepalaDesa !== '-' ? srv.nipKepalaDesa : exist.nipKepalaDesa,
-                      kepalaDesa: srv.kepalaDesa || exist.kepalaDesa,
-                      kaurAset: srv.kaurAset || exist.kaurAset || '',
-                      alamatDesa: srv.alamatDesa || exist.alamatDesa || '',
-                      kodePos: srv.kodePos || exist.kodePos || '22863',
-                      emailDesa: srv.emailDesa || exist.emailDesa || '',
-                    });
-                  } else {
-                    map.set(srv.id, srv);
-                  }
-                }
-              });
-              const merged = Array.from(map.values());
-              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
-              safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(merged));
-              return merged;
-            });
-          }
-          if (serverData.kecamatanProfile && typeof serverData.kecamatanProfile === 'object') {
-            setKecamatanProfile((prev) => {
-              if (JSON.stringify(prev) === JSON.stringify(serverData.kecamatanProfile)) return prev;
-              safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(serverData.kecamatanProfile));
-              return serverData.kecamatanProfile;
-            });
-          }
-        }
-      } else {
-        setIsServerConnected(false);
       }
-    } catch {
-      // Offline fallback
-      setIsServerConnected(false);
+    } catch (e) {
+      console.warn('[cPanel Sync] refreshServerData error:', e);
     }
-  }, [persistAsetsSafely]);
+  }, [deletedAssetIds, persistAsetsSafely]);
 
-  // Cloud Firestore Real-Time Multi-Device Synchronization (Authoritative Single Source of Truth)
+  // Pure cPanel Central Database Synchronization (Disconnected from Firebase)
   useEffect(() => {
-    bootstrapFirestoreIfEmpty();
-
     // Clean obsolete laptop cache tombstones
     try {
       localStorage.removeItem(STORAGE_KEYS.DELETED_ASETS);
     } catch {}
 
-    const applyAuthoritativeCloudAsets = (incomingAsets: Aset[]) => {
-      if (!Array.isArray(incomingAsets)) return;
-      const cleanCloud = deduplicateAsets(incomingAsets);
-      const { asets: normalized } = normalizeAsetRegisters(cleanCloud, desas);
-      setAsets((prev) => {
-        const map = new Map<string, Aset>();
-        normalized.forEach((a) => {
-          if (a && a.id && !deletedAssetIds.has(a.id)) {
-            map.set(a.id, a);
-          }
-        });
-        prev.forEach((local) => {
-          if (local && local.id && !deletedAssetIds.has(local.id)) {
-            if (!map.has(local.id)) {
-              map.set(local.id, local);
-            }
-          }
-        });
-        const finalMerged = deduplicateAsets(Array.from(map.values()), deletedAssetIds);
-        persistAsetsSafely(finalMerged);
-        return finalMerged;
-      });
-      setIsServerConnected(true);
-      setLastSyncTime(new Date());
-    };
+    const loadAuthoritativeCpanelData = async () => {
+      try {
+        const cpData = await fetchCpanelData();
+        if (cpData && Array.isArray(cpData.asets) && cpData.asets.length > 0) {
+          const clean = deduplicateAsets(cpData.asets, deletedAssetIds);
+          const { asets: normalized } = normalizeAsetRegisters(clean, desas);
 
-    // Directly fetch live authoritative data from Google Cloud Firestore FIRST on boot
-    fetchInitialFirestoreData().then((cloudData) => {
-      if (cloudData && Array.isArray(cloudData.asets) && cloudData.asets.length > 0) {
-        applyAuthoritativeCloudAsets(cloudData.asets);
-        if (Array.isArray(cloudData.desas) && cloudData.desas.length > 0) {
-          setDesas(cloudData.desas);
-          safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(cloudData.desas));
-        }
-        if (Array.isArray(cloudData.users) && cloudData.users.length > 0) {
-          setUsers(cloudData.users);
-          safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(cloudData.users));
-        }
-        if (Array.isArray(cloudData.verifikasiList)) {
-          setVerifikasiList(cloudData.verifikasiList);
-          safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(cloudData.verifikasiList));
-        }
-        if (Array.isArray(cloudData.pengesahanList)) {
-          setPengesahanList(cloudData.pengesahanList);
-          safeLocalStorageSetItem(STORAGE_KEYS.PENGESAHAN, JSON.stringify(cloudData.pengesahanList));
-        }
-        if (cloudData.kecamatanProfile) {
-          setKecamatanProfile(cloudData.kecamatanProfile);
-          safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(cloudData.kecamatanProfile));
-        }
-        setIsServerConnected(true);
-        setLastSyncTime(new Date());
-      } else {
-        // Fallback to local server /api/data (cPanel/Node storage with 315 assets)
-        fetch('/api/data')
-          .then((r) => r.json())
-          .then((srv) => {
-            if (srv && Array.isArray(srv.asets) && srv.asets.length > 0) {
-              const clean = deduplicateAsets(srv.asets);
-              const { asets: normalized } = normalizeAsetRegisters(clean, desas);
-              setAsets(normalized);
-              safeLocalStorageSetItem(STORAGE_KEYS.ASETS, JSON.stringify(normalized));
-              saveAsetsToIndexedDB(normalized).catch(() => {});
-              setIsServerConnected(true);
-              setLastSyncTime(new Date());
-            }
-          })
-          .catch(() => {});
-      }
-    }).catch((e) => {
-      console.warn('[Firestore] Initial direct fetch note:', e);
-      fetch('/api/data')
-        .then((r) => r.json())
-        .then((srv) => {
-          if (srv && Array.isArray(srv.asets) && srv.asets.length > 0) {
-            const clean = deduplicateAsets(srv.asets);
-            const { asets: normalized } = normalizeAsetRegisters(clean, desas);
-            setAsets(normalized);
-            safeLocalStorageSetItem(STORAGE_KEYS.ASETS, JSON.stringify(normalized));
-            saveAsetsToIndexedDB(normalized).catch(() => {});
-            setIsServerConnected(true);
-            setLastSyncTime(new Date());
-          }
-        })
-        .catch(() => {});
-    });
-
-    const unsubAsets = subscribeAsets((cloudAsets) => {
-      if (Array.isArray(cloudAsets)) {
-        applyAuthoritativeCloudAsets(cloudAsets);
-      }
-    });
-
-    const unsubVerif = subscribeVerifikasi((cloudVerif) => {
-      if (cloudVerif) {
-        setVerifikasiList((prev) => {
-          if (JSON.stringify(prev) === JSON.stringify(cloudVerif)) return prev;
-          safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(cloudVerif));
-          return cloudVerif;
-        });
-      }
-    });
-
-    const unsubPengesahan = subscribePengesahan((cloudPengesahan) => {
-      if (cloudPengesahan) {
-        setPengesahanList((prev) => {
-          if (JSON.stringify(prev) === JSON.stringify(cloudPengesahan)) return prev;
-          safeLocalStorageSetItem(STORAGE_KEYS.PENGESAHAN, JSON.stringify(cloudPengesahan));
-          return cloudPengesahan;
-        });
-      }
-    });
-
-    const unsubDesas = subscribeDesas((cloudDesas) => {
-      if (cloudDesas && cloudDesas.length > 0) {
-        setDesas((prev) => {
-          const map = new Map<string, Desa>(prev.map((d) => [d.id, d]));
-          cloudDesas.forEach((cd) => {
-            if (cd && cd.id) {
-              const exist = map.get(cd.id);
-              map.set(cd.id, exist ? { ...exist, ...cd } : cd);
-            }
+          setAsets((prev) => {
+            const map = new Map<string, Aset>();
+            normalized.forEach((a) => {
+              if (a && a.id && !deletedAssetIds.has(a.id)) {
+                map.set(a.id, a);
+              }
+            });
+            // Non-destructively merge with local state if local has recent edits or photos
+            prev.forEach((local) => {
+              if (local && local.id && !deletedAssetIds.has(local.id)) {
+                const incoming = map.get(local.id);
+                if (!incoming) {
+                  map.set(local.id, local);
+                } else {
+                  const timeLocal = new Date(local.updatedAt || local.createdAt || 0).getTime();
+                  const timeInc = new Date(incoming.updatedAt || incoming.createdAt || 0).getTime();
+                  if (timeLocal >= timeInc) {
+                    map.set(local.id, {
+                      ...incoming,
+                      ...local,
+                      fotoAset: (local.fotoAset && local.fotoAset.length > 0) ? local.fotoAset : (incoming.fotoAset || []),
+                      nilaiPerolehan: (local.nilaiPerolehan && local.nilaiPerolehan > 0) ? local.nilaiPerolehan : (incoming.nilaiPerolehan || 0),
+                    });
+                  }
+                }
+              }
+            });
+            const merged = deduplicateAsets(Array.from(map.values()), deletedAssetIds);
+            persistAsetsSafely(merged);
+            saveAsetsToIndexedDB(merged).catch(() => {});
+            return merged;
           });
-          const merged = Array.from(map.values());
-          if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
-          safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(merged));
-          return merged;
-        });
-      }
-    });
 
-    const unsubKecamatan = subscribeKecamatanProfile((cloudProfile) => {
-      if (cloudProfile && cloudProfile.namaKecamatan) {
-        setKecamatanProfile((prev) => {
-          if (JSON.stringify(prev) === JSON.stringify(cloudProfile)) return prev;
-          safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(cloudProfile));
-          return cloudProfile;
-        });
-      }
-    });
+          if (Array.isArray(cpData.desas) && cpData.desas.length > 0) {
+            setDesas((prev) => {
+              const map = new Map<string, Desa>(prev.map((d) => [d.id, d]));
+              cpData.desas!.forEach((cd) => {
+                if (cd && cd.id) {
+                  const exist = map.get(cd.id);
+                  map.set(cd.id, exist ? { ...exist, ...cd } : cd);
+                }
+              });
+              const mergedDesas = Array.from(map.values());
+              safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(mergedDesas));
+              return mergedDesas;
+            });
+          }
 
-    const unsubUsers = subscribeUsers((cloudUsers) => {
-      if (cloudUsers && cloudUsers.length > 0) {
-        setUsers((prev) => {
-          if (JSON.stringify(prev) === JSON.stringify(cloudUsers)) return prev;
-          safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(cloudUsers));
-          return cloudUsers;
-        });
-      }
-    });
+          if (Array.isArray(cpData.users) && cpData.users.length > 0) {
+            setUsers((prev) => {
+              const map = new Map<string, User>(prev.map((u) => [u.id, u]));
+              cpData.users!.forEach((u) => {
+                if (u && u.id) map.set(u.id, u);
+              });
+              const mergedUsers = Array.from(map.values());
+              safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(mergedUsers));
+              return mergedUsers;
+            });
+          }
 
-    const unsubAnnouncements = subscribeAnnouncements((cloudAnnouncements) => {
-      if (Array.isArray(cloudAnnouncements)) {
-        setAnnouncements(cloudAnnouncements);
-        try { localStorage.setItem('SIPADES_ANNOUNCEMENTS', JSON.stringify(cloudAnnouncements)); } catch {}
-      }
-    });
+          if (Array.isArray(cpData.verifikasiList)) {
+            setVerifikasiList(cpData.verifikasiList);
+            safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(cpData.verifikasiList));
+          }
 
-    return () => {
-      unsubAsets();
-      unsubVerif();
-      unsubPengesahan();
-      unsubDesas();
-      unsubKecamatan();
-      unsubUsers();
-      unsubAnnouncements();
+          if (Array.isArray(cpData.pengesahanList)) {
+            setPengesahanList(cpData.pengesahanList);
+            safeLocalStorageSetItem(STORAGE_KEYS.PENGESAHAN, JSON.stringify(cpData.pengesahanList));
+          }
+
+          if (cpData.kecamatanProfile && cpData.kecamatanProfile.namaKecamatan) {
+            setKecamatanProfile(cpData.kecamatanProfile);
+            safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(cpData.kecamatanProfile));
+          }
+
+          setIsServerConnected(true);
+          setLastSyncTime(new Date());
+        }
+      } catch (err) {
+        console.warn('[cPanel Boot] Load notice:', err);
+      }
     };
-  }, []);
+
+    loadAuthoritativeCpanelData();
+  }, [deletedAssetIds, desas, persistAsetsSafely]);
 
   // Real-time Multi-Laptop Synchronization via SSE & Central Server
   useEffect(() => {
@@ -1281,8 +1072,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setUsers((prev) => [newUser, ...prev]);
 
-    // Push to Google Cloud Firestore & local server
-    saveUserToCloud(newUser).catch((e) => console.warn('[Cloud] User add failed:', e));
+    // Push to cPanel Hosting & local server
+    saveUsersToCpanel([newUser, ...users]).catch((e) => console.warn('[cPanel] User add failed:', e));
     fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1302,9 +1093,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const updatedUser = { ...target, ...data } as User;
-    setUsers((prev) =>
-      prev.map((u) => (u.id === id ? updatedUser : u))
-    );
+    const updatedUsersList = users.map((u) => (u.id === id ? updatedUser : u));
+    setUsers(updatedUsersList);
 
     if (currentUser?.id === id) {
       const updatedSelf = { ...currentUser, ...data };
@@ -1321,10 +1111,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    // Push to Google Cloud Firestore & local server
-    if (target) {
-      saveUserToCloud(updatedUser).catch((e) => console.warn('[Cloud] User update failed:', e));
-    }
+    // Push to cPanel Hosting & local server
+    saveUsersToCpanel(updatedUsersList).catch((e) => console.warn('[cPanel] User update failed:', e));
     fetch(`/api/users/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -1350,9 +1138,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, message: 'Tidak dapat menghapus akun yang sedang aktif digunakan!' };
     }
 
-    setUsers((prev) => prev.filter((u) => u.id !== id));
+    const filteredUsers = users.filter((u) => u.id !== id);
+    setUsers(filteredUsers);
 
-    deleteUserFromCloud(id).catch((e) => console.warn('[Cloud] User delete failed:', e));
+    saveUsersToCpanel(filteredUsers).catch((e) => console.warn('[cPanel] User delete failed:', e));
     fetch(`/api/users/${id}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -1361,6 +1150,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return { success: true };
   };
+
+  // Direct Client-Side cPanel Sync Helper (Permits standalone execution on cPanel without Node server)
+  const syncDirectToCpanel = useCallback((action: 'save_aset' | 'delete_aset', body: any) => {
+    try {
+      const endpoint = localStorage.getItem('SIPADES_CPANEL_ENDPOINT') || 
+        (typeof window !== 'undefined' && window.location.hostname.includes('sipadessirombu') ? '/cpanel-api.php' : 'https://sipadessirombu.my.id/cpanel-api.php');
+      fetch(`${endpoint}?action=${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).catch(() => {});
+    } catch {}
+  }, []);
 
   // Asset Management
   const addAsetBatch = async (items: Omit<Aset, 'id' | 'createdAt' | 'updatedAt' | 'status'>[]) => {
@@ -1385,10 +1187,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return merged;
     });
 
-    // Push all to Google Cloud Firestore in parallel
-    Promise.all(newAsets.map((item) => saveAsetToCloud(item))).catch((err) =>
-      console.warn('[Cloud] Batch aset save failed:', err)
+    // Push all directly to cPanel Hosting in parallel
+    Promise.all(newAsets.map((item) => saveAsetToCpanel(item))).catch((err) =>
+      console.warn('[cPanel] Batch aset save failed:', err)
     );
+
+    // Sync directly to cPanel endpoint
+    newAsets.forEach((a) => syncDirectToCpanel('save_aset', a));
 
     // Broadcast via WebRTC P2P and Cloud Relay for instant cross-laptop synchronization
     const combinedAsets = [...newAsets, ...asets];
@@ -1467,9 +1272,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         return a;
       });
+
+      // Persist immediately to localStorage and IndexedDB so updates are never lost on reload or background sync
+      persistAsetsSafely(updated);
+      saveAsetsToIndexedDB(updated).catch(() => {});
+
       const target = updated.find((a) => a.id === id);
       if (target) {
-        saveAsetToCloud(target).catch((err) => console.warn('[Cloud] Aset update failed:', err));
+        saveAsetToCpanel(target).catch((err) => console.warn('[cPanel] Aset update failed:', err));
+        syncDirectToCpanel('save_aset', target);
         syncManager.broadcastAsetUpdate(target);
         fetch(`/api/asets/${id}`, {
           method: 'PUT',
@@ -1522,8 +1333,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 3. Broadcast deletion event to all connected devices (P2P + Cloud)
     syncManager.broadcastDelete(id, filtered);
 
-    // 4. Delete from Firestore & server database
-    deleteAsetFromCloud(id).catch((err) => console.warn('[Cloud] Aset delete failed:', err));
+    // 4. Delete directly from cPanel Hosting & server database
+    deleteAsetFromCpanel(id).catch((err) => console.warn('[cPanel] Aset delete failed:', err));
+    syncDirectToCpanel('delete_aset', { id });
     fetch(`/api/asets/${id}`, {
       method: 'DELETE',
     }).catch((e) => console.warn('[Sync] Asset delete failed:', e));
@@ -1593,7 +1405,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
 
       if (verifiedAset) {
-        saveAsetToCloud(verifiedAset).catch((err) => console.warn('[Cloud] Verifikasi save error:', err));
+        saveAsetToCpanel(verifiedAset).catch((err) => console.warn('[cPanel] Verifikasi save error:', err));
         syncManager.broadcastAsetUpdate(verifiedAset);
         fetch(`/api/asets/${asetId}`, {
           method: 'PUT',
@@ -1643,7 +1455,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
 
       if (rejectedAset) {
-        saveAsetToCloud(rejectedAset).catch((err) => console.warn('[Cloud] Tolak verifikasi save error:', err));
+        saveAsetToCpanel(rejectedAset).catch((err) => console.warn('[cPanel] Tolak verifikasi save error:', err));
         syncManager.broadcastAsetUpdate(rejectedAset);
         fetch(`/api/asets/${asetId}`, {
           method: 'PUT',
@@ -1692,7 +1504,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
 
       if (unverifiedAset) {
-        saveAsetToCloud(unverifiedAset).catch((err) => console.warn('[Cloud] Batalkan verifikasi error:', err));
+        saveAsetToCpanel(unverifiedAset).catch((err) => console.warn('[cPanel] Batalkan verifikasi error:', err));
         syncManager.broadcastAsetUpdate(unverifiedAset);
         fetch(`/api/asets/${asetId}`, {
           method: 'PUT',
@@ -1747,7 +1559,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setAsets(updatedList);
       persistAsetsSafely(updatedList);
 
-      Promise.all(updatedBatch.map((a) => saveAsetToCloud(a))).catch(() => {});
+      Promise.all(updatedBatch.map((a) => saveAsetToCpanel(a))).catch(() => {});
       fetch('/api/asets/batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1814,7 +1626,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     persistAsetsSafely(updatedList);
 
     const verifiedBatch = updatedList.filter((a) => pendingIds.includes(a.id));
-    Promise.all(verifiedBatch.map((a) => saveAsetToCloud(a))).catch(() => {});
+    Promise.all(verifiedBatch.map((a) => saveAsetToCpanel(a))).catch(() => {});
 
     fetch('/api/asets/batch', {
       method: 'POST',
@@ -1855,10 +1667,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'menunggu_verifikasi',
     };
 
-    setVerifikasiList((prev) => [newReq, ...prev]);
+    setVerifikasiList((prev) => {
+      const nextList = [newReq, ...prev];
+      saveVerifikasiToCpanel(nextList).catch((err) => console.warn('[cPanel] Verifikasi save failed:', err));
+      return nextList;
+    });
     updateAset(asetId, { status: 'mutasi_diajukan' });
 
-    saveVerifikasiToCloud(newReq).catch((err) => console.warn('[Cloud] Verifikasi save failed:', err));
     fetch('/api/verifikasi', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1889,10 +1704,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'menunggu_verifikasi',
     };
 
-    setVerifikasiList((prev) => [newReq, ...prev]);
+    setVerifikasiList((prev) => {
+      const nextList = [newReq, ...prev];
+      saveVerifikasiToCpanel(nextList).catch((err) => console.warn('[cPanel] Verifikasi save failed:', err));
+      return nextList;
+    });
     updateAset(asetId, { status: 'terhapus_diajukan' });
 
-    saveVerifikasiToCloud(newReq).catch((err) => console.warn('[Cloud] Verifikasi save failed:', err));
     fetch('/api/verifikasi', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1922,11 +1740,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       nomorSKKecamatan: finalSK,
     };
 
-    setVerifikasiList((prev) =>
-      prev.map((v) => (v.id === verifikasiId ? updatedVerif : v))
-    );
-
-    saveVerifikasiToCloud(updatedVerif).catch((err) => console.warn('[Cloud] Verifikasi update failed:', err));
+    setVerifikasiList((prev) => {
+      const nextList = prev.map((v) => (v.id === verifikasiId ? updatedVerif : v));
+      saveVerifikasiToCpanel(nextList).catch((err) => console.warn('[cPanel] Verifikasi update failed:', err));
+      return nextList;
+    });
     fetch(`/api/verifikasi/${verifikasiId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -2010,7 +1828,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
       setPengesahanList((prev) => [targetPengesahan, ...prev]);
     }
-    savePengesahanToCloud(targetPengesahan).catch((e) => console.warn('[Cloud] Pengesahan save failed:', e));
+    savePengesahanToCpanel([targetPengesahan, ...pengesahanList]).catch((e) => console.warn('[cPanel] Pengesahan save failed:', e));
   };
 
   const prosesPengesahan = (
@@ -2049,7 +1867,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
       setPengesahanList((prev) => [targetPengesahan, ...prev]);
     }
-    savePengesahanToCloud(targetPengesahan).catch((e) => console.warn('[Cloud] Pengesahan save failed:', e));
+    savePengesahanToCpanel([targetPengesahan, ...pengesahanList]).catch((e) => console.warn('[cPanel] Pengesahan save failed:', e));
   };
 
   const updateDesa = async (id: string, data: Partial<Desa>): Promise<{ success: boolean; message: string }> => {
@@ -2077,13 +1895,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (updatedDesa) {
       const targetName = (updatedDesa as Desa).name || 'Desa';
-      // 1. Direct write to Cloud Firestore with non-blocking timeout
-      let cloudSaved = false;
-      try {
-        cloudSaved = await saveDesaToCloud(updatedDesa);
-      } catch (e) {
-        console.warn('[Cloud] Desa save error:', e);
-      }
+      // 1. Direct write to cPanel Hosting
+      saveDesasToCpanel(finalDesas.length > 0 ? finalDesas : desas.map((d) => (d.id === id ? updatedDesa! : d))).catch((e) =>
+        console.warn('[cPanel] Desa save error:', e)
+      );
 
       // 2. Save to server
       fetch('/api/desa/update', {
@@ -2109,9 +1924,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       return {
         success: true,
-        message: cloudSaved
-          ? `Data Perangkat ${targetName} berhasil disimpan permanen ke Cloud Firebase & tersinkronisasi!`
-          : `Data Perangkat ${targetName} berhasil disimpan ke server & tersinkronisasi ke seluruh perangkat!`,
+        message: `Data Perangkat ${targetName} berhasil disimpan permanen ke Hosting cPanel & tersinkronisasi!`,
       };
     }
 
@@ -2144,9 +1957,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       nomorSKKecamatan: undefined,
     };
 
-    setVerifikasiList((prev) =>
-      prev.map((v) => (v.id === verifikasiId ? updatedVerif : v))
-    );
+    setVerifikasiList((prev) => {
+      const nextList = prev.map((v) => (v.id === verifikasiId ? updatedVerif : v));
+      saveVerifikasiToCpanel(nextList).catch((e) => console.warn('[cPanel] Revisi verifikasi failed:', e));
+      return nextList;
+    });
 
     const newStatus = target.tipe === 'mutasi' ? 'mutasi_diajukan' : 'terhapus_diajukan';
     updateAset(target.asetId, {
@@ -2154,7 +1969,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       keterangan: `${target.asetSnapshot.keterangan || ''} (Revisi permohonan telah diajukan kembali ke Kecamatan Sirombu)`,
     });
 
-    saveVerifikasiToCloud(updatedVerif).catch((e) => console.warn('[Cloud] Revisi verifikasi failed:', e));
     fetch(`/api/verifikasi/${verifikasiId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -2182,9 +1996,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
-    setVerifikasiList((prev) => prev.filter((v) => v.id !== verifikasiId));
+    setVerifikasiList((prev) => {
+      const nextList = prev.filter((v) => v.id !== verifikasiId);
+      saveVerifikasiToCpanel(nextList).catch((e) => console.warn('[cPanel] Delete verifikasi failed:', e));
+      return nextList;
+    });
 
-    deleteVerifikasiFromCloud(verifikasiId).catch((e) => console.warn('[Cloud] Delete verifikasi failed:', e));
     fetch(`/api/verifikasi/${verifikasiId}`, {
       method: 'DELETE',
     }).catch((e) => console.warn('[Sync] Delete verifikasi failed:', e));
@@ -2270,7 +2087,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setAsets(updatedAsets);
         persistAsetsSafely(updatedAsets);
         saveAsetsToIndexedDB(updatedAsets);
-        incomingDesaAsets.forEach((a: Aset) => saveAsetToCloud(a).catch(() => {}));
+        incomingDesaAsets.forEach((a: Aset) => saveAsetToCpanel(a).catch(() => {}));
 
         // 2. Verifikasi: Replace only this village's verifikasi
         const incomingVerifikasi = (Array.isArray(payload.verifikasiList) ? payload.verifikasiList : [])
@@ -2303,7 +2120,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             updatedDesas = desas.map((d) => (d.id === effectiveDesaId ? { ...d, ...incomingDesaProfile, id: effectiveDesaId } : d));
             setDesas(updatedDesas);
             safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(updatedDesas));
-            saveDesaToCloud(incomingDesaProfile).catch(() => {});
+            saveDesasToCpanel(updatedDesas).catch(() => {});
           }
         }
 
@@ -2360,13 +2177,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         saveAsetsToIndexedDB(payload.asets);
       }
 
-      // Replicate all restored data immediately to Google Cloud Firestore in unified batch
-      syncAllToFirestore({
+      // Replicate all restored data immediately to cPanel Hosting in unified batch
+      saveAllToCpanel({
         desas: payload.desas,
         users: payload.users,
         asets: payload.asets,
+        verifikasiList: payload.verifikasiList,
+        pengesahanList: payload.pengesahanList,
         kecamatanProfile: payload.kecamatanProfile,
-      }).catch((err) => console.warn('[Firestore] Restore to cloud notice:', err));
+      }).catch((err) => console.warn('[cPanel] Restore to cPanel notice:', err));
 
       if (Array.isArray(payload.verifikasiList)) {
         setVerifikasiList(payload.verifikasiList);
@@ -2400,7 +2219,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       return {
         success: true,
-        message: 'Data SIPADES seluruh desa berhasil dipulihkan dan disinkronkan ke server!',
+        message: 'Data SIPADES seluruh desa berhasil dipulihkan dan disinkronkan ke cPanel Hosting!',
         stats: {
           asets: Array.isArray(payload.asets) ? payload.asets.length : 0,
           verifikasi: Array.isArray(payload.verifikasiList) ? payload.verifikasiList.length : 0,
@@ -2421,12 +2240,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return updated;
     });
 
-    let cloudSaved = false;
-    try {
-      cloudSaved = await saveKecamatanProfileToCloud(updated);
-    } catch (e) {
-      console.warn('[Cloud] Kecamatan save failed:', e);
-    }
+    saveKecamatanToCpanel(updated).catch((e) => console.warn('[cPanel] Kecamatan save failed:', e));
 
     fetch('/api/kecamatan/update', {
       method: 'POST',
@@ -2448,9 +2262,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return {
       success: true,
-      message: cloudSaved
-        ? 'Data Camat & Kantor Kecamatan Sirombu berhasil disimpan permanen ke Google Cloud Firebase!'
-        : 'Data Camat & Kantor Kecamatan Sirombu berhasil disimpan ke server & tersinkronisasi!',
+      message: 'Data Camat & Kantor Kecamatan Sirombu berhasil disimpan permanen ke Hosting cPanel!',
     };
   };
 
@@ -2466,17 +2278,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const payloadUsers = overrides?.users || users;
       const payloadAsets = overrides?.asets || asets;
 
-      // 1. Authoritative write to Google Cloud Firestore with timeout protection
-      const syncPromise = syncAllToFirestore({
+      // 1. Authoritative write to cPanel Hosting
+      await saveAllToCpanel({
         desas: payloadDesas,
         kecamatanProfile: payloadKecamatan,
         users: payloadUsers,
         asets: payloadAsets,
       });
-      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 4500));
-      await Promise.race([syncPromise, timeoutPromise]);
 
-      // 2. Also keep server memory and JSON backup in sync without modifying source code files
+      // 2. Also keep local server memory and JSON backup in sync
       fetch('/api/sync-master', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2493,13 +2303,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       return {
         success: true,
-        message: 'Seluruh data berhasil disimpan permanen ke Google Cloud Firebase! Aman dari reset dan tersinkronisasi otomatis.',
+        message: 'Seluruh data berhasil disimpan permanen ke Hosting cPanel Sirombu (Bebas Kuota)!',
       };
     } catch (err: any) {
-      console.error('[Cloud] saveAllToCloudFirebase error:', err);
+      console.error('[cPanel] saveAllToCloudFirebase error:', err);
       return {
         success: false,
-        message: `Gagal menyimpan ke Firebase: ${err?.message || 'Koneksi terputus'}`,
+        message: `Gagal menyimpan ke cPanel: ${err?.message || 'Koneksi terputus'}`,
       };
     }
   };

@@ -234,27 +234,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
           </div>
         )}
 
-        {/* Khusus Super Admin: Tombol Cek Kuota Langsung Firebase */}
-        {isSuperAdmin && (
+        {/* Tombol Hosting cPanel (Bebas Batasan Kuota) */}
+        {isAdminOrSuper && (
           <div className="pt-1.5">
             <button
               type="button"
-              onClick={() => setShowQuotaModal(true)}
-              className={`w-full p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs font-bold transition-all cursor-pointer shadow-md ${
-                firestoreQuotaStatus === 'EXHAUSTED'
-                  ? 'bg-amber-950/80 border-amber-500/70 text-amber-200 animate-pulse hover:bg-amber-900/80'
-                  : 'bg-emerald-950/80 hover:bg-emerald-900 border-amber-500/50 hover:border-amber-400 text-amber-300'
-              }`}
-              title="Cek Kuota Langsung Google Cloud Firestore & Jadwal Reset (Khusus Super Admin)"
+              onClick={() => setShowCPanelModal(true)}
+              className="w-full p-2.5 rounded-xl border border-indigo-500/50 bg-gradient-to-r from-blue-950/80 to-indigo-950/80 hover:from-blue-900 hover:to-indigo-900 flex items-center justify-between gap-2 text-xs font-bold text-indigo-200 transition-all cursor-pointer shadow-md"
+              title="Status Server Hosting cPanel Sirombu (Bebas Batasan Kuota / Unlimited Storage)"
             >
               <div className="flex items-center gap-2 min-w-0">
-                <Database className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="truncate">
-                  {firestoreQuotaStatus === 'EXHAUSTED' ? '⚠️ Kuota Habis' : 'Cek Kuota Firebase'}
-                </span>
+                <Server className="w-4 h-4 text-indigo-400 shrink-0" />
+                <span className="truncate">Hosting cPanel</span>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold shrink-0">
-                {firestoreQuotaStatus === 'EXHAUSTED' ? '14:00' : 'Cek'}
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold shrink-0">
+                Bebas Kuota
               </span>
             </button>
           </div>

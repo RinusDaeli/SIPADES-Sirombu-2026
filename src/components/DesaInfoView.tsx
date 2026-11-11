@@ -312,7 +312,7 @@ export const DesaInfoView: React.FC = () => {
         <div className="flex items-center gap-2.5">
           <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>
-            <strong>Basis Data Firebase Aktif:</strong> Perubahan data Kepala Desa, NIP, Petugas Aset, Camat, dan Inventaris disimpan langsung dan permanen ke Google Cloud Firestore. Data aman tersinkronisasi di semua perangkat tanpa tergantung berkas GitHub.
+            <strong>Basis Data cPanel Aktif:</strong> Perubahan data Kepala Desa, NIP, Petugas Aset, Camat, dan Inventaris disimpan langsung dan permanen ke Hosting cPanel Sirombu. Data bebas dari batasan kuota harian.
           </span>
         </div>
       </div>

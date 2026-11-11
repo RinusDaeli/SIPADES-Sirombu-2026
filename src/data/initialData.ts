@@ -666,20 +666,20 @@ export const INITIAL_ASETS: Aset[] = [
       "tanggal": "6 Desember 2025"
     },
     "tahunPerolehan": 2025,
-    "nilaiPerolehan": 0,
+    "nilaiPerolehan": 10000000,
     "kondisi": "Baik",
     "sumberDana": "DDS",
     "volume": "1 Unit",
     "lokasi": "Kantor Desa Fadoro",
     "merk": "Starlink",
-    "tipe": "Standard Actuated Kit",
-    "nomorSeri": "KIT00192847",
-    "keterangan": "Pengadaan Internet Desa",
+    "tipe": "V3 Gen 4",
+    "nomorSeri": "KIT-00192847",
+    "keterangan": "Pengadaan Internet Desa, Admin : Robertus Hia",
     "fotoAset": [],
     "status": "aktif",
     "statusVerifikasi": "sedang_diproses",
     "createdAt": "2026-11-10T10:45:42.901Z",
-    "updatedAt": "2026-11-10T10:45:42.902Z"
+    "updatedAt": "2026-11-10T11:43:28.261Z"
   },
   {
     "nomorRegister": "0005",
