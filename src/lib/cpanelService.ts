@@ -26,7 +26,7 @@ export interface CpanelDatabase {
   updatedAt?: string;
 }
 
-export async function pingCpanel(): Promise<{ success: boolean; message: string; totalAset?: number }> {
+export async function pingCpanel(): Promise<{ success: boolean; message: string; totalAset?: number; updatedAt?: string }> {
   try {
     const ep = getCpanelEndpoint();
     const res = await fetch(`${ep}?action=ping`, { cache: 'no-store' });
@@ -36,6 +36,7 @@ export async function pingCpanel(): Promise<{ success: boolean; message: string;
       success: data.status === 'success',
       message: data.message || 'Koneksi cPanel berhasil',
       totalAset: data.totalAset,
+      updatedAt: data.updatedAt,
     };
   } catch (err: any) {
     return {
@@ -46,7 +47,7 @@ export async function pingCpanel(): Promise<{ success: boolean; message: string;
 }
 
 export async function fetchCpanelData(): Promise<CpanelDatabase | null> {
-  // 1. Direct from cPanel endpoint
+  // 1. Direct from cPanel endpoint (if on production domain or direct access succeeds)
   try {
     const ep = getCpanelEndpoint();
     const res = await fetch(`${ep}?action=data`, { cache: 'no-store' });
@@ -60,7 +61,20 @@ export async function fetchCpanelData(): Promise<CpanelDatabase | null> {
     console.warn('[cPanel Service] Direct fetch note:', err);
   }
 
-  // 2. Fallback via local Express proxy if available (during AI Studio preview)
+  // 2. Query cPanel live data via server-to-server proxy (bypasses browser CORS & LiteSpeed 406)
+  try {
+    const proxyRes = await fetch('/api/cpanel/data', { cache: 'no-store' });
+    if (proxyRes.ok) {
+      const data = await proxyRes.json();
+      if (data && Array.isArray(data.asets)) {
+        return data as CpanelDatabase;
+      }
+    }
+  } catch (err) {
+    console.warn('[cPanel Service] Server cPanel proxy note:', err);
+  }
+
+  // 3. Fallback to local server database
   try {
     const localRes = await fetch('/api/data', { cache: 'no-store' });
     if (localRes.ok) {

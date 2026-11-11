@@ -712,6 +712,69 @@ async function startServer() {
     res.json({ success: true, message: 'Data berhasil direset ke pengaturan awal' });
   });
 
+  // Fetch live database from cPanel hosting via server-to-server HTTPS (bypasses browser CORS & LiteSpeed 406)
+  app.get('/api/cpanel/data', async (req, res) => {
+    try {
+      const response = await callCpanelHttp('/cpanel-api.php?action=data', 'GET');
+      if (response.statusCode === 200 && response.body) {
+        try {
+          const parsed = JSON.parse(response.body);
+          if (parsed && Array.isArray(parsed.asets) && parsed.asets.length > 0) {
+            dbState.asets = parsed.asets;
+            if (Array.isArray(parsed.desas) && parsed.desas.length > 0) dbState.desas = parsed.desas;
+            if (Array.isArray(parsed.users) && parsed.users.length > 0) dbState.users = parsed.users;
+            if (parsed.kecamatanProfile) dbState.kecamatanProfile = parsed.kecamatanProfile;
+            saveDatabase(dbState);
+            return res.json(parsed);
+          }
+        } catch {
+          // If body is not json, fallback to dbState
+        }
+      }
+      return res.json(dbState);
+    } catch (err: any) {
+      console.warn('[cPanel Data Proxy Error]:', err.message);
+      return res.json(dbState);
+    }
+  });
+
+  // Dedicated ZIP package info and streaming endpoints (bypasses iframe cookie check)
+  app.get('/api/zip-info', (req, res) => {
+    const zipPath = path.join(process.cwd(), 'public/sipades-web-sirombu.zip');
+    if (!fs.existsSync(zipPath)) {
+      return res.status(404).json({ exists: false, error: 'Berkas ZIP belum dibuat' });
+    }
+    const stat = fs.statSync(zipPath);
+    res.json({
+      exists: true,
+      filename: 'sipades-web-sirombu.zip',
+      sizeBytes: stat.size,
+      sizeMB: (stat.size / (1024 * 1024)).toFixed(2),
+      modified: stat.mtime.toISOString(),
+      integrity: 'valid_info_zip',
+    });
+  });
+
+  app.get('/api/download-zip', (req, res) => {
+    const zipPath = path.join(process.cwd(), 'public/sipades-web-sirombu.zip');
+    if (!fs.existsSync(zipPath)) {
+      return res.status(404).json({ error: 'Berkas sipades-web-sirombu.zip tidak ditemukan di server' });
+    }
+    const stat = fs.statSync(zipPath);
+    res.writeHead(200, {
+      'Content-Type': 'application/zip',
+      'Content-Length': stat.size,
+      'Content-Disposition': 'attachment; filename="sipades-web-sirombu.zip"',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Expose-Headers': 'Content-Length, Content-Disposition',
+    });
+    const fileStream = fs.createReadStream(zipPath);
+    fileStream.pipe(res);
+  });
+
   // Serve static public assets explicitly (ensures zip file and static assets download cleanly)
   app.use(express.static(path.join(process.cwd(), 'public'), {
     setHeaders: (res, pathStr) => {

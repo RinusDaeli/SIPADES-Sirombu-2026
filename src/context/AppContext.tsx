@@ -251,19 +251,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return null;
   });
 
-  // Track deleted asset IDs (Tombstones) so deleted assets NEVER reappear upon sync or reload
+  // Track deleted asset IDs (Tombstones) - initialized clean so stale laptop caches never suppress live cPanel assets
   const [deletedAssetIds, setDeletedAssetIds] = useState<Set<string>>(() => {
-    const defaultDeleted = new Set<string>(['ast-test-1']);
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.DELETED_ASETS);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          parsed.forEach((id: string) => defaultDeleted.add(id));
-        }
-      }
+      localStorage.removeItem(STORAGE_KEYS.DELETED_ASETS);
     } catch {}
-    return defaultDeleted;
+    return new Set<string>(['ast-test-1']);
   });
 
   const [firestoreQuotaStatus] = useState<FirestoreQuotaStatus>('NORMAL');
@@ -544,30 +537,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const cpData = await fetchCpanelData();
       if (cpData && Array.isArray(cpData.asets) && cpData.asets.length > 0) {
-        setAsets((prev) => {
-          const map = new Map<string, Aset>(prev.map((a) => [a.id, a]));
-          cpData.asets.forEach((incoming: Aset) => {
-            if (incoming && incoming.id && !deletedAssetIds.has(incoming.id)) {
-              const exist = map.get(incoming.id);
-              if (!exist) {
-                map.set(incoming.id, incoming);
-              } else {
-                const timeExist = new Date(exist.updatedAt || exist.createdAt || 0).getTime();
-                const timeInc = new Date(incoming.updatedAt || incoming.createdAt || 0).getTime();
-                if (timeInc >= timeExist) {
-                  map.set(incoming.id, {
-                    ...incoming,
-                    fotoAset: (incoming.fotoAset && incoming.fotoAset.length > 0) ? incoming.fotoAset : (exist.fotoAset || []),
-                    nilaiPerolehan: (incoming.nilaiPerolehan && incoming.nilaiPerolehan > 0) ? incoming.nilaiPerolehan : (exist.nilaiPerolehan || 0),
-                  });
-                }
-              }
-            }
-          });
-          const cleanAsets = deduplicateAsets(Array.from(map.values()), deletedAssetIds);
-          persistAsetsSafely(cleanAsets);
-          return cleanAsets;
-        });
+        const cleanAsets = deduplicateAsets(cpData.asets);
+        const { asets: normalized } = normalizeAsetRegisters(cleanAsets, desas);
+        setAsets(normalized);
+        persistAsetsSafely(normalized);
+        saveAsetsToIndexedDB(normalized).catch(() => {});
 
         if (Array.isArray(cpData.verifikasiList)) {
           setVerifikasiList(cpData.verifikasiList);
@@ -592,7 +566,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) {
       console.warn('[cPanel Sync] refreshServerData error:', e);
     }
-  }, [deletedAssetIds, persistAsetsSafely]);
+  }, [desas, persistAsetsSafely]);
 
   // Pure cPanel Central Database Synchronization (Disconnected from Firebase)
   useEffect(() => {
@@ -605,41 +579,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const cpData = await fetchCpanelData();
         if (cpData && Array.isArray(cpData.asets) && cpData.asets.length > 0) {
-          const clean = deduplicateAsets(cpData.asets, deletedAssetIds);
+          const clean = deduplicateAsets(cpData.asets);
           const { asets: normalized } = normalizeAsetRegisters(clean, desas);
 
-          setAsets((prev) => {
-            const map = new Map<string, Aset>();
-            normalized.forEach((a) => {
-              if (a && a.id && !deletedAssetIds.has(a.id)) {
-                map.set(a.id, a);
-              }
-            });
-            // Non-destructively merge with local state if local has recent edits or photos
-            prev.forEach((local) => {
-              if (local && local.id && !deletedAssetIds.has(local.id)) {
-                const incoming = map.get(local.id);
-                if (!incoming) {
-                  map.set(local.id, local);
-                } else {
-                  const timeLocal = new Date(local.updatedAt || local.createdAt || 0).getTime();
-                  const timeInc = new Date(incoming.updatedAt || incoming.createdAt || 0).getTime();
-                  if (timeLocal >= timeInc) {
-                    map.set(local.id, {
-                      ...incoming,
-                      ...local,
-                      fotoAset: (local.fotoAset && local.fotoAset.length > 0) ? local.fotoAset : (incoming.fotoAset || []),
-                      nilaiPerolehan: (local.nilaiPerolehan && local.nilaiPerolehan > 0) ? local.nilaiPerolehan : (incoming.nilaiPerolehan || 0),
-                    });
-                  }
-                }
-              }
-            });
-            const merged = deduplicateAsets(Array.from(map.values()), deletedAssetIds);
-            persistAsetsSafely(merged);
-            saveAsetsToIndexedDB(merged).catch(() => {});
-            return merged;
-          });
+          // Authoritative state directly from cPanel (ignoring stale laptop offline cache)
+          setAsets(normalized);
+          persistAsetsSafely(normalized);
+          saveAsetsToIndexedDB(normalized).catch(() => {});
 
           if (Array.isArray(cpData.desas) && cpData.desas.length > 0) {
             setDesas((prev) => {
@@ -692,7 +638,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     loadAuthoritativeCpanelData();
-  }, [deletedAssetIds, desas, persistAsetsSafely]);
+  }, [desas, persistAsetsSafely]);
 
   // Real-time Multi-Laptop Synchronization via SSE & Central Server
   useEffect(() => {
@@ -789,6 +735,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (eventSource) eventSource.close();
     };
   }, [persistAsetsSafely, deletedAssetIds]);
+
+  // Automatic Real-Time Pulse for cPanel Web Hosting (Always Realtime without manual pull)
+  const lastKnownCpanelCount = useRef<number>(asets.length);
+  const lastKnownCpanelUpdated = useRef<string>('');
+
+  useEffect(() => {
+    lastKnownCpanelCount.current = asets.length;
+  }, [asets.length]);
+
+  useEffect(() => {
+    let isChecking = false;
+
+    const checkCpanelPulse = async () => {
+      if (isChecking) return;
+      isChecking = true;
+      try {
+        const ping = await pingCpanel();
+        if (ping.success && typeof ping.totalAset === 'number') {
+          // Detect changes in cPanel database (total assets or update timestamp)
+          const countDiffers = ping.totalAset !== lastKnownCpanelCount.current;
+          const timeDiffers = Boolean(ping.updatedAt && lastKnownCpanelUpdated.current && ping.updatedAt !== lastKnownCpanelUpdated.current);
+
+          if (countDiffers || timeDiffers) {
+            lastKnownCpanelCount.current = ping.totalAset;
+            if (ping.updatedAt) lastKnownCpanelUpdated.current = ping.updatedAt;
+            await refreshServerData(true);
+          } else if (ping.updatedAt && !lastKnownCpanelUpdated.current) {
+            lastKnownCpanelUpdated.current = ping.updatedAt;
+          }
+        }
+      } catch {
+        // Silent fail on transient network error
+      } finally {
+        isChecking = false;
+      }
+    };
+
+    // Poll every 3 seconds for instant real-time synchronization across devices on cPanel
+    const pulseInterval = setInterval(checkCpanelPulse, 3000);
+
+    // Instant sync on tab focus or visibility change
+    const onFocus = () => { checkCpanelPulse(); };
+    window.addEventListener('focus', onFocus);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') checkCpanelPulse();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      clearInterval(pulseInterval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [refreshServerData]);
 
   // Multi-Device Synchronization Engine (Cross-Browser, Cross-Laptop, Vercel & P2P)
   const importSyncPayload = useCallback((payload: FullSyncPayload) => {
@@ -2203,7 +2203,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedYear(payload.selectedYear);
       }
 
-      // Sync restored data to central server
+      // Sync restored data to central server and cPanel Hosting
       fetch('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2216,6 +2216,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           selectedYear: payload.selectedYear,
         }),
       }).catch((e) => console.warn('[Sync] Restore sync failed:', e));
+
+      fetch('/api/cpanel/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payload: { data: payload } }),
+      }).catch((e) => console.warn('[cPanel Restore] Upload failed:', e));
 
       return {
         success: true,

@@ -88,6 +88,7 @@ switch ($action) {
             'message' => 'Koneksi cPanel Web Hosting SIPADES Berhasil!',
             'server' => $_SERVER['SERVER_NAME'],
             'totalAset' => $count,
+            'updatedAt' => $db['updatedAt'] ?? date('c'),
             'timestamp' => date('c')
         ]);
         break;

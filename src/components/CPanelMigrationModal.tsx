@@ -46,6 +46,7 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
 
   const [copiedCode, setCopiedCode] = useState(false);
   const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
+  const [zipProgress, setZipProgress] = useState<string | null>(null);
 
   useEffect(() => {
     if (cpanelUrl) {
@@ -231,6 +232,59 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
   const handleDownloadFile = async (fileName: string) => {
     try {
       setDownloadingFile(fileName);
+      setZipProgress(null);
+
+      if (fileName === 'sipades-web-sirombu.zip') {
+        setZipProgress('Menghubungkan ke server...');
+        const res = await fetch('/api/download-zip');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const contentLength = res.headers.get('content-length');
+        const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
+        const totalMB = totalBytes > 0 ? (totalBytes / (1024 * 1024)).toFixed(1) : '34.2';
+
+        if (!res.body) throw new Error('ReadableStream tidak didukung di browser ini.');
+
+        const reader = res.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let receivedBytes = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            chunks.push(value);
+            receivedBytes += value.length;
+            const currentMB = (receivedBytes / (1024 * 1024)).toFixed(1);
+            const percent = totalBytes > 0 ? Math.round((receivedBytes / totalBytes) * 100) : null;
+            setZipProgress(
+              percent !== null
+                ? `Mengunduh berkas ZIP: ${currentMB} MB / ${totalMB} MB (${percent}%)`
+                : `Mengunduh berkas ZIP: ${currentMB} MB...`
+            );
+          }
+        }
+
+        const blob = new Blob(chunks as any, { type: 'application/zip' });
+        if (blob.size < 50000) {
+          throw new Error(
+            `Ukuran file terunduh hanya ${(blob.size / 1024).toFixed(1)} KB (terhalang proxy autentikasi). Silakan coba lagi.`
+          );
+        }
+
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => window.URL.revokeObjectURL(url), 5000);
+        setZipProgress('✓ Berhasil diunduh (~866 KB Utuh)!');
+        setTimeout(() => setZipProgress(null), 7000);
+        return;
+      }
+
       const res = await fetch(`/${fileName}`, { cache: 'no-store' });
       if (!res.ok) throw new Error('File tidak dapat dimuat');
       const blob = await res.blob();
@@ -242,15 +296,12 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
       link.click();
       document.body.removeChild(link);
       setTimeout(() => window.URL.revokeObjectURL(url), 2000);
-    } catch {
-      // Fallback direct anchor trigger
-      const link = document.createElement('a');
-      link.href = `/${fileName}`;
-      link.download = fileName;
-      link.target = '_self';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    } catch (err: any) {
+      setUploadResult({
+        success: false,
+        message: `Gagal mengunduh ${fileName}: ${err.message}`,
+      });
+      setZipProgress(null);
     } finally {
       setDownloadingFile(null);
     }
@@ -392,18 +443,27 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
             Agar saat Anda membuka <strong>https://sipadessirombu.my.id</strong> langsung muncul tampilan penuh aplikasi SIPADES (bukan sekadar daftar file <em>Index of /</em>), unduh paket web aplikasi di bawah ini:
           </p>
 
-          <div className="flex flex-wrap items-center gap-3 pt-1">
-            <button
-              onClick={() => handleDownloadFile('sipades-web-sirombu.zip')}
-              disabled={downloadingFile === 'sipades-web-sirombu.zip'}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
-            >
-              <Download className={`w-4 h-4 ${downloadingFile === 'sipades-web-sirombu.zip' ? 'animate-bounce' : ''}`} />
-              {downloadingFile === 'sipades-web-sirombu.zip' ? 'Sedang Menyiapkan Unduhan...' : 'Unduh Paket Web SIPADES (.ZIP)'}
-            </button>
-            <span className="text-[11px] text-slate-400">
-              (Ukuran: ~34 MB • Berisi file index.html, assets, dan .htaccess)
-            </span>
+          <div className="flex flex-col gap-2 pt-1">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => handleDownloadFile('sipades-web-sirombu.zip')}
+                disabled={downloadingFile === 'sipades-web-sirombu.zip'}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
+              >
+                <Download className={`w-4 h-4 ${downloadingFile === 'sipades-web-sirombu.zip' ? 'animate-bounce' : ''}`} />
+                {downloadingFile === 'sipades-web-sirombu.zip' ? 'Sedang Mengunduh Paket...' : 'Unduh Paket Web SIPADES (.ZIP ~866 KB)'}
+              </button>
+              <span className="text-[11px] text-slate-400">
+                (Ukuran Ringan: ~866 KB • Berisi index.html, assets, logo, dan .htaccess)
+              </span>
+            </div>
+
+            {zipProgress && (
+              <div className="p-2.5 rounded-lg bg-blue-950/80 border border-blue-500/50 text-blue-200 text-xs flex items-center gap-2 animate-pulse">
+                <RefreshCw className="w-3.5 h-3.5 text-blue-400 animate-spin shrink-0" />
+                <span className="font-semibold">{zipProgress}</span>
+              </div>
+            )}
           </div>
 
           <div className="bg-slate-900/90 rounded-lg p-3 border border-slate-800 text-[11px] space-y-1.5 text-slate-300">

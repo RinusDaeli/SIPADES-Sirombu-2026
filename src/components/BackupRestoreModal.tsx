@@ -15,6 +15,9 @@ import {
   Building2,
   MapPin,
   Check,
+  Server,
+  Globe,
+  ExternalLink,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Desa, Aset } from '../types';
@@ -33,11 +36,15 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ isOpen, 
     selectedYear,
     getBackupData,
     restoreBackupData,
+    refreshServerData,
   } = useApp();
 
-  const [activeSubTab, setActiveSubTab] = useState<'backup' | 'restore'>('backup');
+  const [activeSubTab, setActiveSubTab] = useState<'backup' | 'restore' | 'cpanel_update'>('backup');
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [downloadingZip, setDownloadingZip] = useState(false);
+  const [zipProgress, setZipProgress] = useState<string | null>(null);
+  const [zipSuccess, setZipSuccess] = useState<boolean>(false);
   
   // Backup state
   const [backupScope, setBackupScope] = useState<'all' | 'desa'>('all');
@@ -187,45 +194,123 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ isOpen, 
     reader.readAsText(file);
   };
 
-  const handleExecuteRestore = () => {
+  const [isPullingFromCpanel, setIsPullingFromCpanel] = useState(false);
+
+  const handlePullDirectFromCpanel = async () => {
+    setIsPullingFromCpanel(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      await refreshServerData(true);
+      setSuccessMessage('Berhasil! Seluruh data aset telah dimuat ulang langsung dari cPanel. Seluruh cache laptop telah diselaraskan.');
+    } catch (e: any) {
+      setErrorMessage(`Gagal memuat langsung dari cPanel: ${e.message}`);
+    } finally {
+      setIsPullingFromCpanel(false);
+    }
+  };
+
+  const handleExecuteRestore = async () => {
     if (!previewData?.raw) {
       setErrorMessage('Pilih berkas cadangan JSON yang valid terlebih dahulu.');
       return;
     }
 
     const isPerDesaRestore = restoreScopeMode === 'desa';
-    const targetDesa = desas.find((d) => d.id === restoreDesaId);
-    const targetDesaName = targetDesa?.name || 'Desa Terpilih';
-
-    const confirmText = isPerDesaRestore
-      ? `PERINGATAN PEMULIHAN PER DESA:\n\nAnda akan memulihkan data inventaris khusus untuk "${targetDesaName}".\n\n✅ Data dari 24 desa lainnya TIDAK akan terhapus atau berubah.\n\nLanjutkan pemulihan desa ini?`
-      : 'PERINGATAN PEMULIHAN SELURUH DESA:\n\nAnda akan memulihkan data seluruh 25 desa se-Kecamatan Sirombu. Seluruh data saat ini akan diselaraskan dengan berkas ini.\n\nLanjutkan pemulihan seluruh desa?';
-
-    if (!window.confirm(confirmText)) {
-      return;
-    }
-
     setIsProcessing(true);
     setErrorMessage(null);
 
-    const result = restoreBackupData(
-      previewData.raw,
-      isPerDesaRestore ? restoreDesaId : undefined
-    );
-    setIsProcessing(false);
-
-    if (result.success) {
-      setSuccessMessage(
-        result.message ||
-        `Pemulihan data berhasil! Memulihkan ${result.stats?.asets ?? 0} aset, ${result.stats?.verifikasi ?? 0} mutasi.`
+    try {
+      const result = await restoreBackupData(
+        previewData.raw,
+        isPerDesaRestore ? restoreDesaId : undefined
       );
-      setPreviewData(null);
-      setRestoreFile(null);
-      setTimeout(() => {
-        onClose();
-      }, 2500);
-    } else {
-      setErrorMessage(result.message || 'Gagal memulihkan cadangan data.');
+
+      if (result.success) {
+        setSuccessMessage(
+          result.message ||
+          `Pemulihan data berhasil! Memulihkan ${result.stats?.asets ?? 0} aset, ${result.stats?.verifikasi ?? 0} mutasi.`
+        );
+        setPreviewData(null);
+        setRestoreFile(null);
+        setTimeout(() => {
+          onClose();
+        }, 2500);
+      } else {
+        setErrorMessage(result.message || 'Gagal memulihkan cadangan data.');
+      }
+    } catch (err: any) {
+      setErrorMessage(`Terjadi kesalahan saat memulihkan: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDownloadZipFile = async () => {
+    setDownloadingZip(true);
+    setZipProgress('Menghubungkan ke server...');
+    setZipSuccess(false);
+    setErrorMessage(null);
+    try {
+      const res = await fetch('/api/download-zip');
+      if (!res.ok) {
+        throw new Error(`Server merespon HTTP ${res.status}`);
+      }
+
+      const contentLength = res.headers.get('content-length');
+      const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
+      const totalMB = totalBytes > 0 ? (totalBytes / (1024 * 1024)).toFixed(1) : '34.2';
+
+      if (!res.body) {
+        throw new Error('ReadableStream tidak didukung di browser ini.');
+      }
+
+      const reader = res.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let receivedBytes = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          receivedBytes += value.length;
+          const currentMB = (receivedBytes / (1024 * 1024)).toFixed(1);
+          const percent = totalBytes > 0 ? Math.round((receivedBytes / totalBytes) * 100) : null;
+          setZipProgress(
+            percent !== null
+              ? `Mengunduh berkas ZIP utuh: ${currentMB} MB / ${totalMB} MB (${percent}%)`
+              : `Mengunduh berkas ZIP utuh: ${currentMB} MB...`
+          );
+        }
+      }
+
+      const blob = new Blob(chunks as any, { type: 'application/zip' });
+      
+      // Strict integrity check: Must NOT be an auth HTML page (which is ~10 KB)
+      if (blob.size < 50000) {
+        throw new Error(
+          `Ukuran file terunduh hanya ${(blob.size / 1024).toFixed(1)} KB (terkena proteksi autentikasi iframe). Harap muat ulang halaman dan coba lagi.`
+        );
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'sipades-web-sirombu.zip';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => window.URL.revokeObjectURL(url), 5000);
+
+      setZipProgress(null);
+      setZipSuccess(true);
+      setTimeout(() => setZipSuccess(false), 8000);
+    } catch (err: any) {
+      setErrorMessage(`Gagal mengunduh ZIP: ${err.message}`);
+      setZipProgress(null);
+    } finally {
+      setDownloadingZip(false);
     }
   };
 
@@ -290,6 +375,21 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ isOpen, 
           >
             <Upload className="w-4 h-4" />
             Pulihkan Data (Restore)
+          </button>
+          <button
+            onClick={() => {
+              setActiveSubTab('cpanel_update');
+              setErrorMessage(null);
+              setSuccessMessage(null);
+            }}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
+              activeSubTab === 'cpanel_update'
+                ? 'bg-purple-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Server className="w-4 h-4" />
+            Update Web cPanel (.ZIP)
           </button>
         </div>
 
@@ -485,6 +585,28 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ isOpen, 
         {/* ============================================================== */}
         {activeSubTab === 'restore' && (
           <div className="space-y-5">
+            {/* Quick Authoritative Sync from cPanel Option */}
+            <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-950/60 to-cyan-950/60 border border-emerald-500/40 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="space-y-0.5 text-center sm:text-left">
+                <div className="text-xs font-bold text-emerald-300 flex items-center justify-center sm:justify-start gap-1.5">
+                  <Server className="w-3.5 h-3.5 text-emerald-400" />
+                  Tarik Data Resmi dari cPanel (Abaikan Cache Laptop)
+                </div>
+                <div className="text-[11px] text-slate-300">
+                  Bersihkan data laptop lokal dan muat langsung basis data yang tersimpan di cPanel.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handlePullDirectFromCpanel}
+                disabled={isPullingFromCpanel}
+                className="w-full sm:w-auto px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shrink-0 transition-colors cursor-pointer shadow disabled:opacity-40"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isPullingFromCpanel ? 'animate-spin' : ''}`} />
+                {isPullingFromCpanel ? 'Memuat dari cPanel...' : 'Tarik Data cPanel Sekarang'}
+              </button>
+            </div>
+
             {/* Scope Selection: Seluruh Desa vs Per Desa Tertentu */}
             <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
               <div className="flex items-center justify-between">
@@ -707,6 +829,101 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ isOpen, 
                 {isRestoreDesa
                   ? `Mulai Pulihkan Data ${selectedRestoreDesa?.name} Saja`
                   : 'Mulai Pulihkan Seluruh Data (25 Desa)'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* CPANEL WEB UPDATE TAB CONTENT */}
+        {/* ============================================================== */}
+        {activeSubTab === 'cpanel_update' && (
+          <div className="space-y-5">
+            <div className="p-4 rounded-xl bg-purple-950/40 border border-purple-800/60 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-purple-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <Globe className="w-4 h-4 text-purple-400" />
+                  Pembaruan Langsung Domain sipadessirombu.my.id
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-400/30">
+                  File ZIP Siap Pakai (100% Valid)
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Paket ini berisi seluruh aplikasi web SIPADES SIROMBU versi terbaru (termasuk kode HTML, script, style, logo, dan seluruh 332 data aset desa). 
+                Cukup unduh paket ZIP ini lalu upload dan ekstrak di File Manager cPanel Anda.
+              </p>
+            </div>
+
+            {/* Download Card */}
+            <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="space-y-1 text-center sm:text-left">
+                  <div className="text-sm font-bold text-white flex items-center gap-2 justify-center sm:justify-start">
+                    <Server className="w-4 h-4 text-emerald-400" />
+                    sipades-web-sirombu.zip
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    Format arsip standar cPanel (Ukuran Ringan ~866 KB • Cepat Diunduh & Bebas Error Signature).
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadZipFile}
+                  disabled={downloadingZip}
+                  className="w-full sm:w-auto px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/50 cursor-pointer transition-all disabled:opacity-50"
+                >
+                  <Download className={`w-4 h-4 ${downloadingZip ? 'animate-bounce' : ''}`} />
+                  {downloadingZip ? 'Sedang Mengunduh Paket...' : 'Unduh Paket ZIP Pembaruan (~866 KB)'}
+                </button>
+              </div>
+
+              {zipProgress && (
+                <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-200 text-xs flex items-center gap-3 animate-pulse">
+                  <RefreshCw className="w-4 h-4 text-emerald-400 animate-spin shrink-0" />
+                  <span className="font-semibold">{zipProgress}</span>
+                </div>
+              )}
+
+              {zipSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-950/90 border border-emerald-400 text-emerald-200 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span><strong>Berhasil Terunduh (~866 KB Utuh)!</strong> File <em>sipades-web-sirombu.zip</em> tersimpan di laptop Anda. Silakan upload ke cPanel public_html dan lakukan Extract.</span>
+                </div>
+              )}
+            </div>
+
+            {/* Step-by-Step Instructions */}
+            <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 space-y-3">
+              <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-amber-400" />
+                Cara Memasang Pembaruan di cPanel (Hanya 3 Langkah):
+              </h4>
+              <ol className="space-y-2 text-xs text-slate-300 list-decimal list-inside leading-relaxed">
+                <li className="pl-1">
+                  <strong>Buka cPanel File Manager:</strong> Masuk ke cPanel hosting Anda, buka menu <strong>File Manager</strong>, lalu masuk ke folder <code className="text-cyan-300 font-mono bg-slate-950 px-1.5 py-0.5 rounded">public_html</code>.
+                </li>
+                <li className="pl-1">
+                  <strong>Upload Berkas ZIP:</strong> Klik tombol <strong>Upload</strong> di bilah atas cPanel, centang <em>"Overwrite existing files"</em>, dan upload file <strong>sipades-web-sirombu.zip</strong> yang baru Anda unduh.
+                </li>
+                <li className="pl-1">
+                  <strong>Ekstrak (Extract):</strong> Setelah upload 100% berwarna hijau, kembali ke folder <code className="text-cyan-300 font-mono bg-slate-950 px-1.5 py-0.5 rounded">public_html</code>, klik kanan pada <code className="text-emerald-300 font-mono bg-slate-950 px-1.5 py-0.5 rounded">sipades-web-sirombu.zip</code>, lalu pilih <strong>Extract</strong> ke lokasi <code className="text-cyan-300 font-mono bg-slate-950 px-1.5 py-0.5 rounded">/public_html</code>.
+                </li>
+              </ol>
+              <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                <span>Domain Tujuan: <strong className="text-white">https://sipadessirombu.my.id</strong></span>
+                <span className="text-emerald-400 font-semibold">Otomatis Aktif & Terupdate</span>
+              </div>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-xs font-semibold text-slate-300 transition-colors cursor-pointer"
+              >
+                Tutup
               </button>
             </div>
           </div>

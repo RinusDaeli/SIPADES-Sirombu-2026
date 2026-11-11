@@ -72,7 +72,7 @@ export interface Aset {
   tipe?: string; // Tipe/Model (e.g. Vario 125, L3110)
   nomorSeri?: string; // Nomor Seri / Pabrik / Rangka / Mesin
   keterangan: string;
-  fotoAset?: string[]; // Foto fisik aset (maksimal 5 foto, minimal 1 foto saat input)
+  fotoAset?: string[]; // Foto fisik aset
   fotoBast?: string; // Foto BAST Aset kepada pengguna / Berita Acara Serah Terima
   status: StatusAset;
   statusVerifikasi?: 'sudah_diverifikasi' | 'sedang_diproses' | 'belum_diverifikasi' | 'perlu_perbaikan';
