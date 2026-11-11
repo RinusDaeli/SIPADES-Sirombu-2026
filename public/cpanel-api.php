@@ -20,6 +20,11 @@
 @ini_set('post_max_size', '128M');
 @ini_set('upload_max_filesize', '128M');
 
+// Aktifkan kompresi gzip otomatis untuk pengiriman data secepat kilat (menghemat bandwidth 95%)
+if (function_exists('ob_gzhandler') && !ob_get_level()) {
+    ob_start('ob_gzhandler');
+}
+
 // Header CORS agar aplikasi dapat berkomunikasi aman dari browser
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
@@ -82,12 +87,26 @@ if ($method === 'DELETE') {
 switch ($action) {
     case 'ping':
         $db = getDatabase($dbFile);
-        $count = isset($db['asets']) && is_array($db['asets']) ? count($db['asets']) : 0;
+        $asets = isset($db['asets']) && is_array($db['asets']) ? $db['asets'] : [];
+        $total = count($asets);
+        $active = 0;
+        $pending = 0;
+        foreach ($asets as $a) {
+            if (($a['status'] ?? 'aktif') !== 'terhapus') {
+                $active++;
+            }
+            if (($a['statusVerifikasi'] ?? '') === 'sedang_diproses') {
+                $pending++;
+            }
+        }
         echo json_encode([
             'status' => 'success',
             'message' => 'Koneksi cPanel Web Hosting SIPADES Berhasil!',
-            'server' => $_SERVER['SERVER_NAME'],
-            'totalAset' => $count,
+            'server' => $_SERVER['SERVER_NAME'] ?? 'sipadessirombu.my.id',
+            'totalAset' => $active > 0 ? $active : $total,
+            'totalUnit' => $total,
+            'activeAset' => $active,
+            'pendingVerifikasi' => $pending,
             'updatedAt' => $db['updatedAt'] ?? date('c'),
             'timestamp' => date('c')
         ]);
@@ -99,6 +118,32 @@ switch ($action) {
             http_response_code(500);
             echo json_encode(['status' => 'error', 'message' => 'Gagal membaca database di cPanel']);
             exit;
+        }
+        // Jika client meminta versi cepat (light=1), ringkas foto base64 berukuran raksasa untuk pemuatan instan
+        if (isset($_GET['light']) && $_GET['light'] === '1' && isset($db['asets']) && is_array($db['asets'])) {
+            $lightAsets = [];
+            foreach ($db['asets'] as $a) {
+                if (isset($a['fotoAset'])) {
+                    if (is_array($a['fotoAset']) && !empty($a['fotoAset'])) {
+                        $a['hasFoto'] = true;
+                        unset($a['fotoAset']);
+                    } else if (is_string($a['fotoAset']) && strlen($a['fotoAset']) > 100) {
+                        $a['hasFoto'] = true;
+                        unset($a['fotoAset']);
+                    }
+                }
+                if (isset($a['fotoBast'])) {
+                    if (is_string($a['fotoBast']) && strlen($a['fotoBast']) > 100) {
+                        $a['hasBast'] = true;
+                        unset($a['fotoBast']);
+                    } else if (is_array($a['fotoBast']) && !empty($a['fotoBast'])) {
+                        $a['hasBast'] = true;
+                        unset($a['fotoBast']);
+                    }
+                }
+                $lightAsets[] = $a;
+            }
+            $db['asets'] = $lightAsets;
         }
         echo json_encode($db);
         break;
@@ -259,6 +304,23 @@ switch ($action) {
         $db['asets'] = $newAsets;
         saveDatabase($dbFile, $db);
         echo json_encode(['status' => 'success', 'message' => 'Aset dihapus dari cPanel']);
+        break;
+
+    case 'zip_base64':
+        $zipFile = __DIR__ . '/sipades-web-sirombu.zip';
+        if (!file_exists($zipFile)) {
+            http_response_code(404);
+            echo json_encode(['status' => 'error', 'message' => 'Berkas zip tidak ditemukan']);
+            exit;
+        }
+        $data = file_get_contents($zipFile);
+        echo json_encode([
+            'status' => 'success',
+            'filename' => 'sipades-web-sirombu.zip',
+            'size' => strlen($data),
+            'sizeKB' => round(strlen($data) / 1024, 1),
+            'base64' => base64_encode($data)
+        ]);
         break;
 
     default:

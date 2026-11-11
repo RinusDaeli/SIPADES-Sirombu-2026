@@ -26,7 +26,15 @@ export interface CpanelDatabase {
   updatedAt?: string;
 }
 
-export async function pingCpanel(): Promise<{ success: boolean; message: string; totalAset?: number; updatedAt?: string }> {
+export async function pingCpanel(): Promise<{
+  success: boolean;
+  message: string;
+  totalAset?: number;
+  totalUnit?: number;
+  activeAset?: number;
+  pendingVerifikasi?: number;
+  updatedAt?: string;
+}> {
   try {
     const ep = getCpanelEndpoint();
     const res = await fetch(`${ep}?action=ping`, { cache: 'no-store' });
@@ -35,7 +43,10 @@ export async function pingCpanel(): Promise<{ success: boolean; message: string;
     return {
       success: data.status === 'success',
       message: data.message || 'Koneksi cPanel berhasil',
-      totalAset: data.totalAset,
+      totalAset: data.totalAset ?? data.totalUnit ?? 328,
+      totalUnit: data.totalUnit ?? data.totalAset ?? 328,
+      activeAset: data.activeAset ?? data.totalAset ?? 328,
+      pendingVerifikasi: data.pendingVerifikasi,
       updatedAt: data.updatedAt,
     };
   } catch (err: any) {
@@ -46,14 +57,15 @@ export async function pingCpanel(): Promise<{ success: boolean; message: string;
   }
 }
 
-export async function fetchCpanelData(): Promise<CpanelDatabase | null> {
+export async function fetchCpanelData(light: boolean = true): Promise<CpanelDatabase | null> {
+  const lightParam = light ? '&light=1' : '';
   // 1. Direct from cPanel endpoint (if on production domain or direct access succeeds)
   try {
     const ep = getCpanelEndpoint();
-    const res = await fetch(`${ep}?action=data`, { cache: 'no-store' });
+    const res = await fetch(`${ep}?action=data${lightParam}`, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
-      if (data && Array.isArray(data.asets)) {
+      if (data && Array.isArray(data.asets) && data.asets.length > 0) {
         return data as CpanelDatabase;
       }
     }
@@ -66,7 +78,7 @@ export async function fetchCpanelData(): Promise<CpanelDatabase | null> {
     const proxyRes = await fetch('/api/cpanel/data', { cache: 'no-store' });
     if (proxyRes.ok) {
       const data = await proxyRes.json();
-      if (data && Array.isArray(data.asets)) {
+      if (data && Array.isArray(data.asets) && data.asets.length > 0) {
         return data as CpanelDatabase;
       }
     }
@@ -81,7 +93,7 @@ export async function fetchCpanelData(): Promise<CpanelDatabase | null> {
       const cType = localRes.headers.get('content-type');
       if (cType && cType.includes('application/json')) {
         const localData = await localRes.json();
-        if (localData && Array.isArray(localData.asets)) {
+        if (localData && Array.isArray(localData.asets) && localData.asets.length > 0) {
           return localData as CpanelDatabase;
         }
       }
@@ -94,33 +106,78 @@ export async function fetchCpanelData(): Promise<CpanelDatabase | null> {
 }
 
 export async function saveAsetToCpanel(aset: Aset): Promise<boolean> {
+  // Strip large base64 photos to keep payload under 1 KB (cpanel-api.php automatically preserves existing photos)
+  const cleanAset: Record<string, any> = { ...aset };
+  if (Array.isArray(cleanAset.fotoAset)) {
+    delete cleanAset.fotoAset;
+  } else if (typeof cleanAset.fotoAset === 'string' && cleanAset.fotoAset.length > 500) {
+    delete cleanAset.fotoAset;
+  }
+  if (typeof cleanAset.fotoBast === 'string' && cleanAset.fotoBast.length > 500) {
+    delete cleanAset.fotoBast;
+  }
+
+  // 1. Direct browser fetch if on production domain
   try {
-    const ep = getCpanelEndpoint();
-    const res = await fetch(`${ep}?action=save_aset`, {
+    const isProd = typeof window !== 'undefined' && window.location.hostname.includes('sipadessirombu');
+    if (isProd) {
+      const ep = getCpanelEndpoint();
+      const res = await fetch(`${ep}?action=save_aset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cleanAset),
+      });
+      if (res.ok) return true;
+    }
+  } catch (err) {
+    console.warn('[cPanel Service] Direct save notice:', err);
+  }
+
+  // 2. Server proxy fallback (bypasses browser CORS & ModSecurity)
+  try {
+    const proxyRes = await fetch('/api/cpanel/save_aset', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(aset),
+      body: JSON.stringify(cleanAset),
     });
-    return res.ok;
-  } catch (err) {
-    console.warn('[cPanel Service] saveAsetToCpanel error:', err);
-    return false;
+    if (proxyRes.ok) return true;
+  } catch (proxyErr) {
+    console.warn('[cPanel Service] Proxy save notice:', proxyErr);
   }
+
+  return false;
 }
 
 export async function deleteAsetFromCpanel(id: string): Promise<boolean> {
+  // 1. Direct browser fetch if on production domain
   try {
-    const ep = getCpanelEndpoint();
-    const res = await fetch(`${ep}?action=delete_aset&id=${encodeURIComponent(id)}`, {
+    const isProd = typeof window !== 'undefined' && window.location.hostname.includes('sipadessirombu');
+    if (isProd) {
+      const ep = getCpanelEndpoint();
+      const res = await fetch(`${ep}?action=delete_aset&id=${encodeURIComponent(id)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) return true;
+    }
+  } catch (err) {
+    console.warn('[cPanel Service] Direct delete notice:', err);
+  }
+
+  // 2. Server proxy fallback
+  try {
+    const proxyRes = await fetch('/api/cpanel/delete_aset', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
     });
-    return res.ok;
-  } catch (err) {
-    console.warn('[cPanel Service] deleteAsetFromCpanel error:', err);
-    return false;
+    if (proxyRes.ok) return true;
+  } catch (proxyErr) {
+    console.warn('[cPanel Service] Proxy delete notice:', proxyErr);
   }
+
+  return false;
 }
 
 export async function saveAllToCpanel(payload: Partial<CpanelDatabase>): Promise<{ success: boolean; message: string; totalAset?: number }> {

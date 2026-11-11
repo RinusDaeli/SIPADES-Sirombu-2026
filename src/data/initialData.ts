@@ -692,7 +692,10 @@ export const INITIAL_ASETS: Aset[] = [
     "tipe": "WF-1856",
     "sumberDana": "ADD",
     "status": "aktif",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      ""
+    ],
     "kondisi": "Baik",
     "namaAset": "Kipas Angin",
     "updatedAt": "2026-11-05T12:10:29.437Z",
@@ -731,7 +734,10 @@ export const INITIAL_ASETS: Aset[] = [
       "tanggal": "5 November 2026",
       "nomor": ""
     },
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      ""
+    ],
     "namaAset": "Kipas Angin",
     "fotoBast": "",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
@@ -743,7 +749,9 @@ export const INITIAL_ASETS: Aset[] = [
     "namaAset": "Infantometer",
     "nomorSeri": "-",
     "status": "aktif",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "sumberDana": "DDS",
     "kondisi": "Baik",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
@@ -792,7 +800,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorSeri": "-",
     "id": "ast-1793873594679-0-1t2rg",
     "createdAt": "2026-11-05T10:13:14.679Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Stadiometer",
     "sumberDana": "DDS",
     "status": "aktif"
@@ -820,7 +830,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorSeri": "-",
     "id": "ast-1793873444177-0-kc1qm",
     "lokasi": "Dusun II Desa Bawosaloo",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Tensimeter Digital",
     "createdAt": "2026-11-05T10:10:44.177Z",
     "kondisi": "Baik",
@@ -851,7 +863,13 @@ export const INITIAL_ASETS: Aset[] = [
     "volume": "1 Unit",
     "desaId": "desa-16",
     "sumberDana": "DDS",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
     "namaAset": "STARLINK"
   },
   {
@@ -862,7 +880,13 @@ export const INITIAL_ASETS: Aset[] = [
     "kondisi": "Baik",
     "status": "aktif",
     "createdAt": "2026-10-30T07:41:13.749Z",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
     "namaAset": "PRINTER",
     "lokasi": "Desa Tetehosi",
     "nomorSeri": "XAGKF35557",
@@ -893,7 +917,13 @@ export const INITIAL_ASETS: Aset[] = [
     "merk": "ORCHID",
     "keterangan": "Peralatan memasak Posyandu",
     "volume": "1 Unit",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
     "updatedAt": "2026-10-30T07:30:13.038Z",
     "namaAset": "Kuali/Panci & Spatula (sendok besar untuk memasak)",
     "tipe": "-",
@@ -919,7 +949,13 @@ export const INITIAL_ASETS: Aset[] = [
     "namaAset": "Rice Cooker",
     "tipe": "CRJ-3232",
     "createdAt": "2026-10-30T07:24:44.616Z",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
     "nilaiPerolehan": 716000,
     "bukti": {
       "jenis": "Kwitansi / BAST",
@@ -940,7 +976,13 @@ export const INITIAL_ASETS: Aset[] = [
   },
   {
     "namaAset": "Kompor Gas",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
     "volume": "1 Set",
     "nomorSeri": "NPB 1-168-27-25002393-5",
     "nilaiPerolehan": 1257500,
@@ -984,7 +1026,9 @@ export const INITIAL_ASETS: Aset[] = [
     "namaAset": "Kursi Plastik",
     "keterangan": "Sekretariat Desa",
     "tipe": "Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "lokasi": "Kantor Desa",
     "tahunPerolehan": 2026,
     "status": "aktif",
@@ -1001,7 +1045,9 @@ export const INITIAL_ASETS: Aset[] = [
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "sumberDana": "DDS",
     "kondisi": "Baik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "status": "aktif",
     "nomorSeri": "-",
     "namaAset": "Kursi Plastik",
@@ -1026,7 +1072,9 @@ export const INITIAL_ASETS: Aset[] = [
     "status": "aktif",
     "nomorSeri": "-",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tahunPerolehan": 2026,
     "keterangan": "Sekretariat Desa",
     "createdAt": "2026-10-27T04:17:57.078Z",
@@ -1070,7 +1118,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0012",
     "volume": "1 Unit",
     "updatedAt": "2026-10-27T04:17:57.078Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "nilaiPerolehan": 128625,
     "id": "ast-1793074677078-11-hnx4a",
@@ -1092,7 +1142,9 @@ export const INITIAL_ASETS: Aset[] = [
     "kodeAset": "02.01.01.18.2026.0013",
     "kondisi": "Baik",
     "createdAt": "2026-10-27T04:17:57.078Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tipe": "Plastik",
     "namaAset": "Kursi Plastik",
     "updatedAt": "2026-10-27T04:17:57.078Z",
@@ -1110,7 +1162,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorSeri": "-",
     "nomorRegister": "0014",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-27T04:17:57.078Z",
     "kondisi": "Baik",
     "desaId": "desa-18",
@@ -1147,7 +1201,9 @@ export const INITIAL_ASETS: Aset[] = [
     "volume": "1 Unit",
     "desaId": "desa-18",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "lokasi": "Kantor Desa",
     "sumberDana": "DDS",
     "nomorSeri": "-",
@@ -1185,7 +1241,9 @@ export const INITIAL_ASETS: Aset[] = [
     "id": "ast-1793074677078-15-yeh0r",
     "sumberDana": "DDS",
     "lokasi": "Kantor Desa",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-27T04:17:57.078Z",
     "namaAset": "Kursi Plastik",
     "kondisi": "Baik"
@@ -1204,7 +1262,9 @@ export const INITIAL_ASETS: Aset[] = [
     "desaId": "desa-18",
     "nomorSeri": "-",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "volume": "1 Unit",
     "tahunPerolehan": 2026,
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
@@ -1243,7 +1303,9 @@ export const INITIAL_ASETS: Aset[] = [
     "kondisi": "Baik",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "status": "aktif",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik"
   },
   {
@@ -1261,7 +1323,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0019",
     "namaAset": "Kursi Plastik",
     "desaId": "desa-18",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nilaiPerolehan": 128625,
     "volume": "1 Unit",
     "keterangan": "Sekretariat Desa",
@@ -1291,7 +1355,9 @@ export const INITIAL_ASETS: Aset[] = [
     "volume": "1 Unit",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "lokasi": "Kantor Desa",
     "keterangan": "Sekretariat Desa",
     "status": "aktif",
@@ -1307,7 +1373,9 @@ export const INITIAL_ASETS: Aset[] = [
     "createdAt": "2026-10-27T04:17:57.078Z",
     "sumberDana": "DDS",
     "volume": "1 Unit",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "tipe": "Plastik",
     "nomorSeri": "-",
@@ -1351,7 +1419,9 @@ export const INITIAL_ASETS: Aset[] = [
     },
     "kondisi": "Baik",
     "desaId": "desa-18",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-27T04:17:57.078Z",
     "namaAset": "Kursi Plastik",
     "volume": "1 Unit",
@@ -1369,7 +1439,9 @@ export const INITIAL_ASETS: Aset[] = [
     "lokasi": "Kantor Desa",
     "tahunPerolehan": 2026,
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-27T04:17:57.078Z",
     "merk": "Twinpan 1988",
     "volume": "1 Unit",
@@ -1398,7 +1470,9 @@ export const INITIAL_ASETS: Aset[] = [
       "nomor": "007/KWK"
     },
     "sumberDana": "DDS",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "tipe": "Plastik",
     "nomorRegister": "0023",
@@ -1419,7 +1493,9 @@ export const INITIAL_ASETS: Aset[] = [
     "updatedAt": "2026-10-27T04:17:57.078Z",
     "namaAset": "Kursi Plastik",
     "nomorRegister": "0024",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "desaId": "desa-18",
     "volume": "1 Unit",
     "id": "ast-1793074677078-23-rwllb",
@@ -1447,7 +1523,9 @@ export const INITIAL_ASETS: Aset[] = [
     "id": "ast-1793074677078-3-j2ac6",
     "merk": "Twinpan 1988",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "sumberDana": "DDS",
     "updatedAt": "2026-10-27T04:17:57.078Z",
     "bukti": {
@@ -1478,7 +1556,9 @@ export const INITIAL_ASETS: Aset[] = [
     "kondisi": "Baik",
     "status": "aktif",
     "createdAt": "2026-10-27T04:17:57.078Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "lokasi": "Kantor Desa",
     "nomorSeri": "-",
@@ -1512,7 +1592,9 @@ export const INITIAL_ASETS: Aset[] = [
       "nomor": "007/KWK"
     },
     "tahunPerolehan": 2026,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tipe": "Plastik",
     "namaAset": "Kursi Plastik",
     "updatedAt": "2026-10-27T04:17:57.078Z",
@@ -1547,7 +1629,9 @@ export const INITIAL_ASETS: Aset[] = [
       "nomor": "007/KWK",
       "tanggal": "5 Oktober 2026"
     },
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "status": "aktif",
     "createdAt": "2026-10-27T04:17:57.078Z",
@@ -1569,7 +1653,9 @@ export const INITIAL_ASETS: Aset[] = [
       "tanggal": "5 Oktober 2026",
       "jenis": "Kwitansi / BAST"
     },
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorSeri": "-",
     "lokasi": "Kantor Desa",
     "tahunPerolehan": 2026,
@@ -1603,7 +1689,9 @@ export const INITIAL_ASETS: Aset[] = [
       "nomor": "007/KWK",
       "tanggal": "5 Oktober 2026"
     },
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "createdAt": "2026-10-27T04:17:57.078Z",
     "id": "ast-1793074677078-8-rmtz5",
@@ -1611,7 +1699,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nilaiPerolehan": 128625
   },
   {
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "volume": "1 Unit",
     "nomorRegister": "0010",
     "namaAset": "Kursi Plastik",
@@ -1658,7 +1748,9 @@ export const INITIAL_ASETS: Aset[] = [
     "fotoBast": "",
     "desaId": "desa-19",
     "namaAset": "Sepeda Motor (R2)",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "bukti": {
       "jenis": "Kwitansi / BAST",
       "nomor": "00199/KWT/02.2019/2026",
@@ -1675,7 +1767,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0015",
     "keterangan": "Kursi Untuk Balai Desa Tugala",
     "nomorSeri": "-",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "bukti": {
@@ -1708,7 +1802,9 @@ export const INITIAL_ASETS: Aset[] = [
     "status": "aktif",
     "fotoBast": "",
     "kondisi": "Baik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "lokasi": "Dusun II",
     "namaAset": "Kursi Plastik",
     "updatedAt": "2026-10-24T13:24:59.630Z",
@@ -1730,7 +1826,9 @@ export const INITIAL_ASETS: Aset[] = [
     "status": "aktif",
     "nomorSeri": "-",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-24T13:17:06.629Z",
     "fotoBast": "",
     "lokasi": "Dusun II",
@@ -1777,7 +1875,9 @@ export const INITIAL_ASETS: Aset[] = [
     "desaId": "desa-23",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "merk": "Atari Quality",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "volume": "1 Unit",
     "updatedAt": "2026-10-24T13:26:54.206Z",
@@ -1797,7 +1897,9 @@ export const INITIAL_ASETS: Aset[] = [
     "namaAset": "Kursi Plastik",
     "status": "aktif",
     "tahunPerolehan": 2026,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "bukti": {
       "nomor": "400.10.2/118/TG/2026",
       "tanggal": "18 Juli 2026",
@@ -1814,7 +1916,9 @@ export const INITIAL_ASETS: Aset[] = [
   },
   {
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "volume": "1 Unit",
     "namaAset": "Kursi Plastik",
     "nilaiPerolehan": 166667,
@@ -1854,7 +1958,9 @@ export const INITIAL_ASETS: Aset[] = [
     "keterangan": "Kursi Untuk Balai Desa Tugala",
     "lokasi": "Dusun II",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-24T13:17:06.629Z",
     "desaId": "desa-23",
     "volume": "1 Unit",
@@ -1883,7 +1989,9 @@ export const INITIAL_ASETS: Aset[] = [
     "updatedAt": "2026-10-24T13:27:35.460Z",
     "kondisi": "Baik",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-24T13:17:06.629Z",
     "nilaiPerolehan": 166667,
     "sumberDana": "ADD",
@@ -1916,7 +2024,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tipe": "-",
     "nilaiPerolehan": 166667,
     "createdAt": "2026-10-24T13:17:06.629Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "status": "aktif",
@@ -1950,7 +2060,9 @@ export const INITIAL_ASETS: Aset[] = [
     "id": "ast-1792847826629-17-f7xqt",
     "nomorRegister": "0032",
     "fotoBast": "",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nilaiPerolehan": 166667,
     "namaAset": "Kursi Plastik",
     "lokasi": "Dusun II",
@@ -1984,7 +2096,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tahunPerolehan": 2026,
     "namaAset": "Kursi Plastik",
     "nomorRegister": "0033",
-    "fotoAset": []
+    "fotoAset": [
+      ""
+    ]
   },
   {
     "status": "aktif",
@@ -1999,7 +2113,9 @@ export const INITIAL_ASETS: Aset[] = [
     },
     "namaAset": "Kursi Plastik",
     "merk": "Atari Quality",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "lokasi": "Dusun II",
     "keterangan": "Kursi Untuk Balai Desa Tugala",
     "tahunPerolehan": 2026,
@@ -2026,7 +2142,9 @@ export const INITIAL_ASETS: Aset[] = [
     "sumberDana": "ADD",
     "fotoBast": "",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "id": "ast-1792847826629-2-dca34",
     "namaAset": "Kursi Plastik",
     "lokasi": "Dusun II",
@@ -2051,7 +2169,9 @@ export const INITIAL_ASETS: Aset[] = [
     "fotoBast": "",
     "tahunPerolehan": 2026,
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorRegister": "0035",
     "nilaiPerolehan": 166667,
     "keterangan": "Kursi Untuk Balai Desa Tugala",
@@ -2086,7 +2206,9 @@ export const INITIAL_ASETS: Aset[] = [
     "updatedAt": "2026-10-24T13:28:44.989Z",
     "kondisi": "Baik",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-24T13:17:06.629Z",
     "nilaiPerolehan": 166667,
     "sumberDana": "ADD",
@@ -2123,7 +2245,9 @@ export const INITIAL_ASETS: Aset[] = [
     "id": "ast-1792847826629-22-cnvjv",
     "namaAset": "Kursi Plastik",
     "nomorRegister": "0037",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "fotoBast": "",
     "desaId": "desa-23",
@@ -2151,7 +2275,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nilaiPerolehan": 166667,
     "sumberDana": "ADD",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorRegister": "0038",
     "tipe": "-",
     "merk": "Atari Quality",
@@ -2165,7 +2291,9 @@ export const INITIAL_ASETS: Aset[] = [
     "merk": "Atari Quality",
     "nilaiPerolehan": 166667,
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "fotoBast": "",
     "updatedAt": "2026-10-24T13:25:20.582Z",
     "bukti": {
@@ -2206,7 +2334,9 @@ export const INITIAL_ASETS: Aset[] = [
     "id": "ast-1792847826629-4-ttj6w",
     "nomorSeri": "-",
     "nilaiPerolehan": 166667,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "status": "aktif",
     "namaAset": "Kursi Plastik",
     "tipe": "-",
@@ -2225,7 +2355,9 @@ export const INITIAL_ASETS: Aset[] = [
     "fotoBast": "",
     "tahunPerolehan": 2026,
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorRegister": "0020",
     "nilaiPerolehan": 166667,
     "keterangan": "Kursi Untuk Balai Desa Tugala",
@@ -2252,7 +2384,9 @@ export const INITIAL_ASETS: Aset[] = [
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "volume": "1 Unit",
     "desaId": "desa-23",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "nilaiPerolehan": 166667,
     "tahunPerolehan": 2026,
@@ -2292,7 +2426,9 @@ export const INITIAL_ASETS: Aset[] = [
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "nilaiPerolehan": 166667,
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "sumberDana": "ADD",
     "tipe": "-",
     "id": "ast-1792847826629-7-i7ayf",
@@ -2322,7 +2458,9 @@ export const INITIAL_ASETS: Aset[] = [
     "sumberDana": "ADD",
     "status": "aktif",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-24T13:17:06.629Z",
     "nomorRegister": "0023",
     "nomorSeri": "-",
@@ -2336,7 +2474,9 @@ export const INITIAL_ASETS: Aset[] = [
   },
   {
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "updatedAt": "2026-10-24T13:26:35.274Z",
     "kondisi": "Baik",
@@ -2371,7 +2511,10 @@ export const INITIAL_ASETS: Aset[] = [
     "fotoBast": "",
     "nomorRegister": "0011",
     "sumberDana": "ADD",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      ""
+    ],
     "updatedAt": "2026-10-24T13:22:59.960Z",
     "namaAset": "Meja Biasa",
     "tipe": "-",
@@ -2403,7 +2546,10 @@ export const INITIAL_ASETS: Aset[] = [
     "merk": "-",
     "nomorSeri": "-",
     "tipe": "-",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      ""
+    ],
     "namaAset": "Meja Biasa",
     "nilaiPerolehan": 1500000,
     "keterangan": "Meja Untuk Balai Desa Tugala",
@@ -2423,7 +2569,10 @@ export const INITIAL_ASETS: Aset[] = [
   },
   {
     "namaAset": "Meja Biasa",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      ""
+    ],
     "tahunPerolehan": 2026,
     "volume": "1 Unit",
     "keterangan": "Meja Untuk Balai Desa Tugala",
@@ -2457,7 +2606,10 @@ export const INITIAL_ASETS: Aset[] = [
     "keterangan": "Meja Untuk Balai Desa Tugala",
     "tahunPerolehan": 2026,
     "nomorRegister": "0014",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      ""
+    ],
     "volume": "1 Unit",
     "createdAt": "2026-10-24T13:09:00.850Z",
     "bukti": {
@@ -2487,7 +2639,9 @@ export const INITIAL_ASETS: Aset[] = [
     "merk": "Cosmos",
     "nomorRegister": "0007",
     "sumberDana": "ADD",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "updatedAt": "2026-10-24T13:32:32.474Z",
     "namaAset": "Kipas Angin ",
     "kondisi": "Baik",
@@ -2512,7 +2666,9 @@ export const INITIAL_ASETS: Aset[] = [
     "namaAset": "Kipas Angin ",
     "merk": "Cosmos",
     "nilaiPerolehan": 1000000,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "lokasi": "Dusun II",
     "updatedAt": "2026-10-24T13:31:47.755Z",
     "status": "aktif",
@@ -2546,7 +2702,9 @@ export const INITIAL_ASETS: Aset[] = [
     "createdAt": "2026-10-24T13:04:25.121Z",
     "fotoBast": "",
     "kondisi": "Baik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kipas Angin ",
     "nomorSeri": "2676670060328",
     "sumberDana": "ADD",
@@ -2580,7 +2738,9 @@ export const INITIAL_ASETS: Aset[] = [
     "sumberDana": "ADD",
     "tipe": "16-WPC",
     "updatedAt": "2026-10-24T13:32:06.671Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "bukti": {
       "jenis": "BAST",
       "tanggal": "18 Juli 2026",
@@ -2601,7 +2761,9 @@ export const INITIAL_ASETS: Aset[] = [
     "lokasi": "",
     "namaAset": "Laptop ASUS A15",
     "nomorRegister": "0004",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "sumberDana": "DDS",
     "fotoBast": "",
     "status": "aktif",
@@ -2632,7 +2794,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0005",
     "keterangan": "",
     "nomorSeri": "TBNRCX00E675452",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Laptop ASUS A15",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "bukti": {
@@ -2657,7 +2821,9 @@ export const INITIAL_ASETS: Aset[] = [
     "lokasi": "",
     "sumberDana": "DDS",
     "createdAt": "2026-10-24T12:57:04.688Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "bukti": {
       "nomor": "400.10.2/89/TG/2026",
       "jenis": "BAST",
@@ -2704,7 +2870,9 @@ export const INITIAL_ASETS: Aset[] = [
     "id": "ast-1792845772252-0-x4ii5",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "nomorSeri": "-",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "merk": "-",
     "namaAset": "Meja Setengah Biro",
     "kondisi": "Baik",
@@ -2723,7 +2891,10 @@ export const INITIAL_ASETS: Aset[] = [
     "nilaiPerolehan": 23935000,
     "id": "ast-1792845461127-0-0jwp8",
     "namaAset": "Motor Dinas",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      ""
+    ],
     "merk": "Yamaha",
     "keterangan": "Motor Dimas Pemerintah Desa Tugala",
     "nomorSeri": "MH3SEL210TJ127373/E35AE-0195685",
@@ -2752,7 +2923,11 @@ export const INITIAL_ASETS: Aset[] = [
     "createdAt": "2026-10-24T12:22:04.168Z",
     "nomorRegister": "0001",
     "tahunPerolehan": 2026,
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      "",
+      ""
+    ],
     "namaAset": "Timbangan Digital",
     "bukti": {
       "tanggal": "15 Juli 2026",
@@ -2791,7 +2966,9 @@ export const INITIAL_ASETS: Aset[] = [
     "desaId": "desa-12",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "merk": "Atari",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "volume": "1 Unit",
     "nilaiPerolehan": 158333,
@@ -2807,7 +2984,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nilaiPerolehan": 158333,
     "namaAset": "Kursi Plastik",
     "nomorRegister": "0019",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-24T12:07:22.057Z",
     "tahunPerolehan": 2025,
     "keterangan": "Kegiatan Rapat",
@@ -2850,7 +3029,9 @@ export const INITIAL_ASETS: Aset[] = [
     "keterangan": "Kegiatan Rapat",
     "namaAset": "Kursi Plastik",
     "kondisi": "Baik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "lokasi": ""
   },
   {
@@ -2864,7 +3045,9 @@ export const INITIAL_ASETS: Aset[] = [
     },
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "nilaiPerolehan": 158333,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "tahunPerolehan": 2025,
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
@@ -2898,7 +3081,9 @@ export const INITIAL_ASETS: Aset[] = [
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "nilaiPerolehan": 158333,
     "tipe": "xxx",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "status": "aktif",
     "merk": "Atari",
@@ -2915,7 +3100,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tipe": "xxx",
     "desaId": "desa-12",
     "nomorRegister": "0115",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nilaiPerolehan": 158333,
     "volume": "1 Unit",
     "merk": "Atari",
@@ -2946,7 +3133,9 @@ export const INITIAL_ASETS: Aset[] = [
     "desaId": "desa-12",
     "namaAset": "Kursi Plastik",
     "createdAt": "2026-10-24T12:07:22.057Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "bukti": {
       "tanggal": "30 Desember 2025",
       "nomor": "00159/KWT/02.2012/2025",
@@ -2975,7 +3164,9 @@ export const INITIAL_ASETS: Aset[] = [
     "merk": "Atari",
     "desaId": "desa-12",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tahunPerolehan": 2025,
     "tipe": "xxx",
     "createdAt": "2026-10-24T12:07:22.057Z",
@@ -3003,7 +3194,9 @@ export const INITIAL_ASETS: Aset[] = [
     "keterangan": "Kegiatan Rapat",
     "nomorSeri": "000",
     "status": "aktif",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "bukti": {
       "nomor": "00159/KWT/02.2012/2025",
       "tanggal": "30 Desember 2025",
@@ -3035,7 +3228,9 @@ export const INITIAL_ASETS: Aset[] = [
       "tanggal": "30 Desember 2025"
     },
     "createdAt": "2026-10-24T12:07:22.057Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "tipe": "xxx",
     "nomorSeri": "000",
@@ -3073,7 +3268,9 @@ export const INITIAL_ASETS: Aset[] = [
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "tahunPerolehan": 2025,
     "lokasi": "",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "kondisi": "Baik"
   },
@@ -3094,7 +3291,9 @@ export const INITIAL_ASETS: Aset[] = [
     "lokasi": "",
     "namaAset": "Kursi Plastik",
     "nomorSeri": "000",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "desaId": "desa-12",
     "tipe": "xxx",
     "nilaiPerolehan": 158333,
@@ -3128,7 +3327,9 @@ export const INITIAL_ASETS: Aset[] = [
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "kondisi": "Baik",
     "id": "ast-1792843642058-109-phsaa",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "tahunPerolehan": 2025
@@ -3137,7 +3338,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorSeri": "000",
     "namaAset": "Kursi Plastik",
     "keterangan": "Kegiatan Rapat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "status": "aktif",
     "tipe": "xxx",
     "kondisi": "Baik",
@@ -3165,7 +3368,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorSeri": "000",
     "lokasi": "",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorRegister": "0123",
     "createdAt": "2026-10-24T12:07:22.057Z",
     "keterangan": "Kegiatan Rapat",
@@ -3206,7 +3411,9 @@ export const INITIAL_ASETS: Aset[] = [
     "createdAt": "2026-10-24T12:07:22.057Z",
     "merk": "Atari",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "keterangan": "Kegiatan Rapat",
     "tipe": "xxx",
     "nomorSeri": "000",
@@ -3240,7 +3447,9 @@ export const INITIAL_ASETS: Aset[] = [
     "id": "ast-1792843642058-112-bgnaz",
     "tahunPerolehan": 2025,
     "lokasi": "",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorSeri": "000",
     "namaAset": "Kursi Plastik",
     "kondisi": "Baik"
@@ -3257,7 +3466,9 @@ export const INITIAL_ASETS: Aset[] = [
     "createdAt": "2026-10-24T12:07:22.057Z",
     "namaAset": "Kursi Plastik",
     "status": "aktif",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tahunPerolehan": 2025,
     "bukti": {
       "nomor": "00159/KWT/02.2012/2025",
@@ -3295,7 +3506,9 @@ export const INITIAL_ASETS: Aset[] = [
     "createdAt": "2026-10-24T12:07:22.057Z",
     "tipe": "xxx",
     "kondisi": "Baik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "keterangan": "Kegiatan Rapat",
     "namaAset": "Kursi Plastik",
     "merk": "Atari",
@@ -3318,7 +3531,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorSeri": "000",
     "sumberDana": "DDS",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "id": "ast-1792843642058-115-u6yu0",
     "bukti": {
       "nomor": "00159/KWT/02.2012/2025",
@@ -3337,7 +3552,9 @@ export const INITIAL_ASETS: Aset[] = [
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "createdAt": "2026-10-24T12:07:22.057Z",
     "keterangan": "Kegiatan Rapat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "nomorSeri": "000",
     "tahunPerolehan": 2025,
@@ -3382,7 +3599,9 @@ export const INITIAL_ASETS: Aset[] = [
     "volume": "1 Unit",
     "kondisi": "Baik",
     "nilaiPerolehan": 158333,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik"
   },
   {
@@ -3397,7 +3616,9 @@ export const INITIAL_ASETS: Aset[] = [
       "jenis": "Kwitansi / BAST"
     },
     "sumberDana": "DDS",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "nomorSeri": "000",
     "id": "ast-1792843642058-118-sn1y8",
@@ -3421,7 +3642,9 @@ export const INITIAL_ASETS: Aset[] = [
       "jenis": "Kwitansi / BAST"
     },
     "id": "ast-1792843642058-119-ksjxi",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tahunPerolehan": 2025,
     "namaAset": "Kursi Plastik",
     "nilaiPerolehan": 158333,
@@ -3464,13 +3687,17 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0025",
     "desaId": "desa-12",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nilaiPerolehan": 158333,
     "tipe": "xxx",
     "updatedAt": "2026-10-24T12:07:22.057Z"
   },
   {
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "desaId": "desa-12",
     "tipe": "xxx",
@@ -3509,7 +3736,9 @@ export const INITIAL_ASETS: Aset[] = [
       "jenis": "Kwitansi / BAST"
     },
     "sumberDana": "DDS",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "id": "ast-1792843642058-14-daeu8",
     "nomorSeri": "000",
@@ -3526,7 +3755,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tahunPerolehan": 2025
   },
   {
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "desaId": "desa-12",
     "namaAset": "Kursi Plastik",
     "nilaiPerolehan": 158333,
@@ -3575,7 +3806,9 @@ export const INITIAL_ASETS: Aset[] = [
       "jenis": "Kwitansi / BAST"
     },
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "desaId": "desa-12",
     "volume": "1 Unit",
     "updatedAt": "2026-10-24T12:07:22.057Z",
@@ -3592,7 +3825,9 @@ export const INITIAL_ASETS: Aset[] = [
     "createdAt": "2026-10-24T12:07:22.057Z",
     "tipe": "xxx",
     "tahunPerolehan": 2025,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "volume": "1 Unit",
     "namaAset": "Kursi Plastik",
     "updatedAt": "2026-10-24T12:07:22.057Z",
@@ -3629,7 +3864,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0031",
     "status": "aktif",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "keterangan": "Kegiatan Rapat",
     "tipe": "xxx",
     "updatedAt": "2026-10-24T12:07:22.057Z",
@@ -3639,7 +3876,9 @@ export const INITIAL_ASETS: Aset[] = [
   },
   {
     "updatedAt": "2026-10-24T12:07:22.057Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tahunPerolehan": 2025,
     "namaAset": "Kursi Plastik",
     "volume": "1 Unit",
@@ -3675,7 +3914,9 @@ export const INITIAL_ASETS: Aset[] = [
     "merk": "Atari",
     "desaId": "desa-12",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tipe": "xxx",
     "sumberDana": "DDS",
     "nilaiPerolehan": 158333,
@@ -3697,7 +3938,9 @@ export const INITIAL_ASETS: Aset[] = [
     "desaId": "desa-12",
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "volume": "1 Unit",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "keterangan": "Kegiatan Rapat",
     "nomorRegister": "0033",
@@ -3722,7 +3965,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tahunPerolehan": 2025
   },
   {
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "keterangan": "Kegiatan Rapat",
     "bukti": {
@@ -3760,7 +4005,9 @@ export const INITIAL_ASETS: Aset[] = [
     "createdAt": "2026-10-24T12:07:22.057Z",
     "tipe": "xxx",
     "tahunPerolehan": 2025,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "volume": "1 Unit",
     "namaAset": "Kursi Plastik",
     "sumberDana": "DDS",
@@ -3786,7 +4033,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0036",
     "namaAset": "Kursi Plastik",
     "keterangan": "Kegiatan Rapat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "volume": "1 Unit",
     "desaId": "desa-12",
     "lokasi": "",
@@ -3811,7 +4060,9 @@ export const INITIAL_ASETS: Aset[] = [
     "desaId": "desa-12",
     "kondisi": "Baik",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "keterangan": "Kegiatan Rapat",
@@ -3836,7 +4087,9 @@ export const INITIAL_ASETS: Aset[] = [
   {
     "kondisi": "Baik",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "tahunPerolehan": 2025,
     "nilaiPerolehan": 158333,
@@ -3883,7 +4136,9 @@ export const INITIAL_ASETS: Aset[] = [
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "tahunPerolehan": 2025,
     "keterangan": "Kegiatan Rapat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "status": "aktif",
     "nomorRegister": "0039",
@@ -3897,7 +4152,9 @@ export const INITIAL_ASETS: Aset[] = [
     },
     "createdAt": "2026-10-24T12:07:22.057Z",
     "status": "aktif",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorSeri": "000",
     "keterangan": "Kegiatan Rapat",
     "id": "ast-1792843642058-27-zdkx2",
@@ -3940,7 +4197,9 @@ export const INITIAL_ASETS: Aset[] = [
     },
     "createdAt": "2026-10-24T12:07:22.057Z",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "sumberDana": "DDS",
     "status": "aktif",
     "namaAset": "Kursi Plastik"
@@ -3956,7 +4215,9 @@ export const INITIAL_ASETS: Aset[] = [
     "kondisi": "Baik",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "status": "aktif",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorSeri": "000",
     "keterangan": "Kegiatan Rapat",
     "namaAset": "Kursi Plastik",
@@ -3987,7 +4248,9 @@ export const INITIAL_ASETS: Aset[] = [
     "status": "aktif",
     "nomorRegister": "0021",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tipe": "xxx",
     "id": "ast-1792843642058-3-j4733",
     "keterangan": "Kegiatan Rapat",
@@ -4026,7 +4289,9 @@ export const INITIAL_ASETS: Aset[] = [
     "namaAset": "Kursi Plastik",
     "keterangan": "Kegiatan Rapat",
     "kondisi": "Baik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "lokasi": ""
   },
   {
@@ -4034,7 +4299,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nilaiPerolehan": 158333,
     "namaAset": "Kursi Plastik",
     "desaId": "desa-12",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "volume": "1 Unit",
     "kondisi": "Baik",
     "nomorRegister": "0044",
@@ -4081,7 +4348,9 @@ export const INITIAL_ASETS: Aset[] = [
     "kondisi": "Baik",
     "createdAt": "2026-10-24T12:07:22.057Z",
     "merk": "Atari",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nilaiPerolehan": 158333,
     "namaAset": "Kursi Plastik"
   },
@@ -4107,7 +4376,9 @@ export const INITIAL_ASETS: Aset[] = [
     "merk": "Atari",
     "nilaiPerolehan": 158333,
     "lokasi": "",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-24T12:07:22.057Z",
     "namaAset": "Kursi Plastik",
     "kondisi": "Baik",
@@ -4131,7 +4402,9 @@ export const INITIAL_ASETS: Aset[] = [
     "lokasi": "",
     "tahunPerolehan": 2025,
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-24T12:07:22.057Z",
     "desaId": "desa-12",
     "volume": "1 Unit",
@@ -4163,7 +4436,9 @@ export const INITIAL_ASETS: Aset[] = [
     "volume": "1 Unit",
     "desaId": "desa-12",
     "keterangan": "Kegiatan Rapat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "createdAt": "2026-10-24T12:07:22.057Z",
     "nomorRegister": "0048",
@@ -4171,7 +4446,9 @@ export const INITIAL_ASETS: Aset[] = [
   },
   {
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-24T12:07:22.057Z",
     "keterangan": "Kegiatan Rapat",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
@@ -4223,7 +4500,9 @@ export const INITIAL_ASETS: Aset[] = [
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "sumberDana": "DDS",
     "namaAset": "Kursi Plastik",
-    "fotoAset": []
+    "fotoAset": [
+      ""
+    ]
   },
   {
     "kodeAset": "02.01.01.12.2025.0051",
@@ -4242,7 +4521,9 @@ export const INITIAL_ASETS: Aset[] = [
       "jenis": "Kwitansi / BAST"
     },
     "nilaiPerolehan": 158333,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorSeri": "000",
     "nomorRegister": "0051",
     "namaAset": "Kursi Plastik",
@@ -4258,7 +4539,9 @@ export const INITIAL_ASETS: Aset[] = [
     "sumberDana": "DDS",
     "namaAset": "Kursi Plastik",
     "nilaiPerolehan": 158333,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "lokasi": "",
     "id": "ast-1792843642058-39-d6lpb",
@@ -4295,7 +4578,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nilaiPerolehan": 158333,
     "id": "ast-1792843642058-4-kb63e",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "kondisi": "Baik",
     "createdAt": "2026-10-24T12:07:22.057Z",
@@ -4332,13 +4617,17 @@ export const INITIAL_ASETS: Aset[] = [
     "tipe": "xxx",
     "volume": "1 Unit",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "merk": "Atari",
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "sumberDana": "DDS"
   },
   {
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nilaiPerolehan": 158333,
     "namaAset": "Kursi Plastik",
     "id": "ast-1792843642058-41-11u42",
@@ -4368,7 +4657,9 @@ export const INITIAL_ASETS: Aset[] = [
   {
     "namaAset": "Kursi Plastik",
     "id": "ast-1792843642058-42-apzdl",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "status": "aktif",
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "kondisi": "Baik",
@@ -4418,7 +4709,9 @@ export const INITIAL_ASETS: Aset[] = [
     "lokasi": "",
     "status": "aktif",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-24T12:07:22.057Z"
   },
   {
@@ -4428,7 +4721,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorSeri": "000",
     "nilaiPerolehan": 158333,
     "tahunPerolehan": 2025,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "createdAt": "2026-10-24T12:07:22.057Z",
     "kondisi": "Baik",
@@ -4470,7 +4765,9 @@ export const INITIAL_ASETS: Aset[] = [
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "nomorRegister": "0058",
     "volume": "1 Unit",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "desaId": "desa-12",
     "namaAset": "Kursi Plastik",
     "sumberDana": "DDS",
@@ -4481,7 +4778,9 @@ export const INITIAL_ASETS: Aset[] = [
     "kondisi": "Baik",
     "namaAset": "Kursi Plastik",
     "nilaiPerolehan": 158333,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "keterangan": "Kegiatan Rapat",
     "lokasi": "",
@@ -4522,7 +4821,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tipe": "xxx",
     "keterangan": "Kegiatan Rapat",
     "tahunPerolehan": 2025,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "createdAt": "2026-10-24T12:07:22.057Z",
     "status": "aktif",
@@ -4539,7 +4840,9 @@ export const INITIAL_ASETS: Aset[] = [
     "keterangan": "Kegiatan Rapat",
     "tipe": "xxx",
     "createdAt": "2026-10-24T12:07:22.057Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "lokasi": "",
     "merk": "Atari",
@@ -4566,7 +4869,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tahunPerolehan": 2025,
     "namaAset": "Kursi Plastik",
     "updatedAt": "2026-10-24T12:07:22.057Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "keterangan": "Kegiatan Rapat",
     "id": "ast-1792843642058-49-i5anz",
     "bukti": {
@@ -4595,7 +4900,9 @@ export const INITIAL_ASETS: Aset[] = [
     "namaAset": "Kursi Plastik",
     "desaId": "desa-12",
     "tipe": "xxx",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "volume": "1 Unit",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "merk": "Atari",
@@ -4622,7 +4929,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorSeri": "000",
     "status": "aktif",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-24T12:07:22.057Z",
     "lokasi": "",
     "id": "ast-1792843642058-51-rx56j",
@@ -4646,7 +4955,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tahunPerolehan": 2025
   },
   {
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "desaId": "desa-12",
     "namaAset": "Kursi Plastik",
     "volume": "1 Unit",
@@ -4697,7 +5008,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0066",
     "kondisi": "Baik",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorSeri": "000",
     "lokasi": ""
   },
@@ -4722,7 +5035,9 @@ export const INITIAL_ASETS: Aset[] = [
     "status": "aktif",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "id": "ast-1792843642058-54-pp935",
     "keterangan": "Kegiatan Rapat",
     "updatedAt": "2026-10-24T12:07:22.057Z",
@@ -4750,7 +5065,9 @@ export const INITIAL_ASETS: Aset[] = [
     "status": "aktif",
     "createdAt": "2026-10-24T12:07:22.057Z",
     "kondisi": "Baik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "lokasi": "",
     "sumberDana": "DDS",
@@ -4779,7 +5096,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tipe": "xxx",
     "merk": "Atari",
     "lokasi": "",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "kondisi": "Baik",
@@ -4802,7 +5121,9 @@ export const INITIAL_ASETS: Aset[] = [
     "namaAset": "Kursi Plastik",
     "nomorRegister": "0070",
     "id": "ast-1792843642058-57-bh0gh",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "bukti": {
       "jenis": "Kwitansi / BAST",
@@ -4816,7 +5137,9 @@ export const INITIAL_ASETS: Aset[] = [
   {
     "namaAset": "Kursi Plastik",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "kondisi": "Baik",
     "desaId": "desa-12",
@@ -4859,7 +5182,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorSeri": "000",
     "tahunPerolehan": 2025,
     "kondisi": "Baik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "lokasi": "",
     "nilaiPerolehan": 158333,
@@ -4890,7 +5215,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorSeri": "000",
     "kondisi": "Baik",
     "lokasi": "",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-24T12:07:22.057Z",
     "namaAset": "Kursi Plastik",
     "status": "aktif",
@@ -4913,7 +5240,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tipe": "xxx",
     "status": "aktif",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "kondisi": "Baik",
     "namaAset": "Kursi Plastik",
     "updatedAt": "2026-10-24T12:07:22.057Z",
@@ -4944,7 +5273,9 @@ export const INITIAL_ASETS: Aset[] = [
     "merk": "Atari",
     "namaAset": "Kursi Plastik",
     "nomorSeri": "000",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tahunPerolehan": 2025,
     "keterangan": "Kegiatan Rapat",
     "createdAt": "2026-10-24T12:07:22.057Z",
@@ -4978,7 +5309,9 @@ export const INITIAL_ASETS: Aset[] = [
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "namaAset": "Kursi Plastik",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "lokasi": ""
   },
   {
@@ -4998,7 +5331,9 @@ export const INITIAL_ASETS: Aset[] = [
     "volume": "1 Unit",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "merk": "Atari",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "createdAt": "2026-10-24T12:07:22.057Z",
     "lokasi": "",
@@ -5027,7 +5362,9 @@ export const INITIAL_ASETS: Aset[] = [
     "volume": "1 Unit",
     "desaId": "desa-12",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "nomorRegister": "0078",
     "sumberDana": "DDS",
@@ -5052,7 +5389,9 @@ export const INITIAL_ASETS: Aset[] = [
     "desaId": "desa-12",
     "volume": "1 Unit",
     "merk": "Atari",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "sumberDana": "DDS",
     "lokasi": "",
@@ -5073,7 +5412,9 @@ export const INITIAL_ASETS: Aset[] = [
     "kondisi": "Baik",
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tipe": "xxx",
     "lokasi": "",
     "bukti": {
@@ -5102,7 +5443,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0081",
     "nomorSeri": "000",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "lokasi": "",
     "nilaiPerolehan": 158333,
     "sumberDana": "DDS",
@@ -5143,14 +5486,18 @@ export const INITIAL_ASETS: Aset[] = [
     "namaAset": "Kursi Plastik",
     "tipe": "xxx",
     "createdAt": "2026-10-24T12:07:22.057Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "sumberDana": "DDS",
     "nomorSeri": "000",
     "merk": "Atari",
     "lokasi": ""
   },
   {
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "volume": "1 Unit",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "namaAset": "Kursi Plastik",
@@ -5201,7 +5548,9 @@ export const INITIAL_ASETS: Aset[] = [
       "tanggal": "30 Desember 2025"
     },
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "merk": "Atari",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat"
   },
@@ -5224,7 +5573,9 @@ export const INITIAL_ASETS: Aset[] = [
     "lokasi": "",
     "id": "ast-1792843642058-72-jqin4",
     "tipe": "xxx",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tahunPerolehan": 2025,
     "namaAset": "Kursi Plastik",
     "keterangan": "Kegiatan Rapat",
@@ -5245,7 +5596,9 @@ export const INITIAL_ASETS: Aset[] = [
     },
     "sumberDana": "DDS",
     "id": "ast-1792843642058-73-bqixk",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tipe": "xxx",
     "namaAset": "Kursi Plastik",
     "nomorRegister": "0086",
@@ -5266,7 +5619,9 @@ export const INITIAL_ASETS: Aset[] = [
     "kondisi": "Baik",
     "namaAset": "Kursi Plastik",
     "updatedAt": "2026-10-24T12:07:22.057Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "keterangan": "Kegiatan Rapat",
     "id": "ast-1792843642058-74-gyd6e",
     "bukti": {
@@ -5308,7 +5663,9 @@ export const INITIAL_ASETS: Aset[] = [
     },
     "volume": "1 Unit",
     "updatedAt": "2026-10-24T12:07:22.057Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "tahunPerolehan": 2025,
     "nomorRegister": "0088",
@@ -5323,7 +5680,9 @@ export const INITIAL_ASETS: Aset[] = [
     "sumberDana": "DDS",
     "merk": "Atari",
     "nomorRegister": "0089",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "tipe": "xxx",
     "status": "aktif",
@@ -5352,7 +5711,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0090",
     "keterangan": "Kegiatan Rapat",
     "tahunPerolehan": 2025,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "volume": "1 Unit",
     "nilaiPerolehan": 158333,
     "createdAt": "2026-10-24T12:07:22.057Z",
@@ -5387,7 +5748,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorSeri": "000",
     "tipe": "xxx",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "keterangan": "Kegiatan Rapat",
     "bukti": {
@@ -5419,7 +5782,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tipe": "xxx",
     "nomorRegister": "0092",
     "keterangan": "Kegiatan Rapat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "tahunPerolehan": 2025,
     "namaAset": "Kursi Plastik",
@@ -5452,7 +5817,9 @@ export const INITIAL_ASETS: Aset[] = [
     "status": "aktif",
     "lokasi": "",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "keterangan": "Kegiatan Rapat",
     "id": "ast-1792843642058-80-z3a7b"
@@ -5468,7 +5835,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nilaiPerolehan": 158333,
     "id": "ast-1792843642058-81-0sa8e",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "merk": "Atari",
     "keterangan": "Kegiatan Rapat",
     "nomorSeri": "000",
@@ -5489,7 +5858,9 @@ export const INITIAL_ASETS: Aset[] = [
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "keterangan": "Kegiatan Rapat",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "kondisi": "Baik",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "desaId": "desa-12",
@@ -5529,7 +5900,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tipe": "xxx",
     "status": "aktif",
     "nomorSeri": "000",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "kondisi": "Baik",
     "namaAset": "Kursi Plastik",
     "keterangan": "Kegiatan Rapat",
@@ -5561,7 +5934,9 @@ export const INITIAL_ASETS: Aset[] = [
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "desaId": "desa-12",
     "bukti": {
       "nomor": "00159/KWT/02.2012/2025",
@@ -5585,7 +5960,9 @@ export const INITIAL_ASETS: Aset[] = [
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "nomorRegister": "0098",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "kondisi": "Baik",
     "volume": "1 Unit",
     "tahunPerolehan": 2025,
@@ -5604,7 +5981,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0099",
     "merk": "Atari",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tipe": "xxx",
     "lokasi": "",
     "nilaiPerolehan": 158333,
@@ -5646,7 +6025,9 @@ export const INITIAL_ASETS: Aset[] = [
     "id": "ast-1792843642058-87-q82rl",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "nomorSeri": "000",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "merk": "Atari",
     "namaAset": "Kursi Plastik",
     "kondisi": "Baik",
@@ -5677,7 +6058,9 @@ export const INITIAL_ASETS: Aset[] = [
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "keterangan": "Kegiatan Rapat",
     "desaId": "desa-12",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "volume": "1 Unit",
     "namaAset": "Kursi Plastik"
   },
@@ -5694,7 +6077,9 @@ export const INITIAL_ASETS: Aset[] = [
     "createdAt": "2026-10-24T12:07:22.057Z",
     "merk": "Atari",
     "tahunPerolehan": 2025,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "nomorRegister": "0102",
     "bukti": {
@@ -5735,12 +6120,16 @@ export const INITIAL_ASETS: Aset[] = [
     "kondisi": "Baik",
     "namaAset": "Kursi Plastik",
     "tahunPerolehan": 2025,
-    "fotoAset": []
+    "fotoAset": [
+      ""
+    ]
   },
   {
     "sumberDana": "DDS",
     "tahunPerolehan": 2025,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "kondisi": "Baik",
     "namaAset": "Kursi Plastik",
     "createdAt": "2026-10-24T12:07:22.057Z",
@@ -5777,7 +6166,9 @@ export const INITIAL_ASETS: Aset[] = [
       "jenis": "Kwitansi / BAST"
     },
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "desaId": "desa-12",
     "merk": "Atari",
     "volume": "1 Unit",
@@ -5812,7 +6203,9 @@ export const INITIAL_ASETS: Aset[] = [
     "volume": "1 Unit",
     "sumberDana": "DDS",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tipe": "xxx",
     "lokasi": "",
     "status": "aktif",
@@ -5824,7 +6217,9 @@ export const INITIAL_ASETS: Aset[] = [
   {
     "kondisi": "Baik",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "tahunPerolehan": 2025,
     "nilaiPerolehan": 158333,
@@ -5850,7 +6245,9 @@ export const INITIAL_ASETS: Aset[] = [
     "merk": "Atari"
   },
   {
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-24T12:07:22.057Z",
     "kondisi": "Baik",
     "namaAset": "Kursi Plastik",
@@ -5882,7 +6279,9 @@ export const INITIAL_ASETS: Aset[] = [
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "nomorSeri": "000",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tahunPerolehan": 2025,
     "createdAt": "2026-10-24T12:07:22.057Z",
     "nilaiPerolehan": 158333,
@@ -5919,7 +6318,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nilaiPerolehan": 158333,
     "merk": "Atari",
     "nomorSeri": "000",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "lokasi": "",
     "namaAset": "Kursi Plastik",
     "bukti": {
@@ -5935,7 +6336,9 @@ export const INITIAL_ASETS: Aset[] = [
   },
   {
     "volume": "1 Unit",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "id": "ast-1792843642058-97-z2s02",
     "namaAset": "Kursi Plastik",
     "desaId": "desa-12",
@@ -5963,7 +6366,9 @@ export const INITIAL_ASETS: Aset[] = [
   },
   {
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "status": "aktif",
     "updatedAt": "2026-10-24T12:07:22.057Z",
     "keterangan": "Kegiatan Rapat",
@@ -6007,7 +6412,9 @@ export const INITIAL_ASETS: Aset[] = [
     "id": "ast-1792843642058-99-o4q6z",
     "volume": "1 Unit",
     "desaId": "desa-12",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "merk": "Atari",
     "namaAset": "Kursi Plastik",
@@ -6028,7 +6435,9 @@ export const INITIAL_ASETS: Aset[] = [
     "desaId": "desa-12",
     "tipe": "xxx",
     "namaAset": "Tali Jangkar",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nilaiPerolehan": 3000000,
     "sumberDana": "DDS",
     "bukti": {
@@ -6065,7 +6474,9 @@ export const INITIAL_ASETS: Aset[] = [
     "volume": "2 Unit",
     "desaId": "desa-12",
     "namaAset": "Jangkar Kapal",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "bukti": {
       "tanggal": "30 Desember 2025",
       "nomor": "00178/KWT/02.2012/2025",
@@ -6079,7 +6490,9 @@ export const INITIAL_ASETS: Aset[] = [
     "sumberDana": "DDS",
     "desaId": "desa-12",
     "tahunPerolehan": 2025,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "bukti": {
       "tanggal": "30 Desember 2025",
       "nomor": "00178/KWT/02.2012/2025",
@@ -6111,7 +6524,9 @@ export const INITIAL_ASETS: Aset[] = [
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "nilaiPerolehan": 3200000,
     "namaAset": "Kemudi Kapal",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorRegister": "0007",
     "createdAt": "2026-10-24T07:51:56.615Z",
     "bukti": {
@@ -6150,7 +6565,9 @@ export const INITIAL_ASETS: Aset[] = [
     "keterangan": "Diperuntukan untuk keperluan kelengkapan kapal desa",
     "namaAset": "Pompa Keong Kapal",
     "createdAt": "2026-10-24T07:47:19.529Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorRegister": "0006",
     "nomorSeri": "000",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
@@ -6180,7 +6597,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0005",
     "sumberDana": "DDS",
     "namaAset": "Tali Poli dan Gemu Mesin",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "merk": "Tali Poli dan Gemu Mesin",
     "id": "ast-1792827708171-0-t4g19",
     "lokasi": "Desa Balowondrate"
@@ -6190,7 +6609,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tahunPerolehan": 2025,
     "nomorSeri": "000",
     "nilaiPerolehan": 2500000,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Printer",
     "createdAt": "2026-10-24T07:34:49.854Z",
     "sumberDana": "DDS",
@@ -6233,7 +6654,9 @@ export const INITIAL_ASETS: Aset[] = [
       "tanggal": "30 Desember 2025"
     },
     "nomorSeri": "000",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "As, Sarung As dan Kipas Kapal",
     "status": "aktif",
     "id": "ast-1792826639665-0-hfin2",
@@ -6249,7 +6672,9 @@ export const INITIAL_ASETS: Aset[] = [
       "jenis": "Kwitansi / BAST"
     },
     "lokasi": "Desa Balowondrate",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Baut",
     "kondisi": "Baik",
     "keterangan": "Diperuntukan untuk keperluan kelengkapan kapal desa",
@@ -6277,7 +6702,9 @@ export const INITIAL_ASETS: Aset[] = [
     "createdAt": "2026-10-24T06:34:29.317Z",
     "volume": "1 Unit",
     "namaAset": "Printer",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nilaiPerolehan": 2500000,
     "bukti": {
       "tanggal": "30 Desember 2025",
@@ -6312,7 +6739,9 @@ export const INITIAL_ASETS: Aset[] = [
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "lokasi": "Desa Balowondrate",
     "namaAset": "Laptop ",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-24T06:27:42.427Z",
     "nomorRegister": "0001",
     "desaId": "desa-12",
@@ -6339,7 +6768,10 @@ export const INITIAL_ASETS: Aset[] = [
     "tahunPerolehan": 2026,
     "namaAset": "Timbangan Bayi",
     "status": "aktif",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      ""
+    ],
     "tipe": "RGZ-20A Baby Scale",
     "createdAt": "2026-10-20T12:17:02.111Z",
     "sumberDana": "DDS",
@@ -6369,7 +6801,13 @@ export const INITIAL_ASETS: Aset[] = [
     "desaId": "desa-16",
     "keterangan": "untuk mendukung kegiatan ",
     "lokasi": "Desa Tetehosi",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
     "tahunPerolehan": 2025,
     "kondisi": "Baik",
     "namaAset": "LAPTOP",
@@ -6392,7 +6830,10 @@ export const INITIAL_ASETS: Aset[] = [
     "updatedAt": "2026-10-23T11:43:11.716Z",
     "nilaiPerolehan": 15000000,
     "volume": "1 Unit",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      ""
+    ],
     "tipe": "Aspire Lite 14",
     "namaAset": "Laptop",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
@@ -6430,7 +6871,10 @@ export const INITIAL_ASETS: Aset[] = [
       "jenis": "Kwitansi / BAST",
       "tanggal": "5 September 2026"
     },
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      ""
+    ],
     "namaAset": "Laptop",
     "createdAt": "2026-10-19T04:25:58.499Z",
     "sumberDana": "DDS",
@@ -6458,7 +6902,13 @@ export const INITIAL_ASETS: Aset[] = [
       "jenis": "Kwitansi / BAST",
       "nomor": "00120/KWK/02.2016/2026"
     },
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
     "tahunPerolehan": 2026,
     "sumberDana": "DDS",
     "namaAset": "Timbangan Bayi Digital",
@@ -6486,7 +6936,13 @@ export const INITIAL_ASETS: Aset[] = [
       "tanggal": "13 Juli 2026"
     },
     "tipe": "OneHealth (Height & Weight Scale)",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
     "tahunPerolehan": 2026,
     "sumberDana": "DDS",
     "namaAset": "Alat Ukur Tinggi dan Berat Badan Dewasa Digital",
@@ -6515,7 +6971,13 @@ export const INITIAL_ASETS: Aset[] = [
     "tahunPerolehan": 2026,
     "nilaiPerolehan": 12000000,
     "lokasi": "Desa Tetehosi",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
     "nomorRegister": "0002",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "namaAset": "LAPTOP",
@@ -6546,7 +7008,13 @@ export const INITIAL_ASETS: Aset[] = [
     "tipe": "OneMed OD 235,",
     "namaAset": "Alat Ukur Lila dan Kepala ",
     "updatedAt": "2026-10-19T06:19:35.643Z",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
     "merk": "OneMed",
     "desaId": "desa-16",
     "tahunPerolehan": 2026,
@@ -6566,7 +7034,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tipe": "Nitro NL16-71G",
     "status": "aktif",
     "keterangan": "Diserahkan Kepada Robertus Hia (Bendahara)",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "kondisi": "Baik",
     "namaAset": "Laptop",
     "updatedAt": "2026-10-06T07:04:10.463Z",
@@ -6601,7 +7071,10 @@ export const INITIAL_ASETS: Aset[] = [
     "tipe": "Thermometer Ear Infrared, Timbangan Bayi, Timbangan Digital",
     "lokasi": "Balai Serbaguna",
     "nomorRegister": "0006",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      ""
+    ],
     "namaAset": "Alat Ukur dan Timbangan Digital, dll",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "keterangan": "Diserahkan Kepada KPM (Etti Memori Daeli)",
@@ -6632,7 +7105,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorSeri": "MAX15NBNT030101",
     "nomorRegister": "0005",
     "fotoBast": "",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-10-05T09:30:23.958Z",
     "namaAset": "Speaker",
     "keterangan": "Diserahkan Kepada Sibaris Hia",
@@ -6644,7 +7119,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tahunPerolehan": 2026,
     "nomorSeri": "T9NRCXUSR00T38A",
     "nilaiPerolehan": 17500000,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Laptop",
     "sumberDana": "DDS",
     "createdAt": "2026-10-05T09:22:33.656Z",
@@ -6693,7 +7170,9 @@ export const INITIAL_ASETS: Aset[] = [
     "updatedAt": "2026-10-06T05:25:36.887Z",
     "namaAset": "Laptop",
     "status": "aktif",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "keterangan": "Diserahkan Kepada Sibaris Hia"
   },
   {
@@ -6722,7 +7201,9 @@ export const INITIAL_ASETS: Aset[] = [
     "updatedAt": "2026-10-06T05:33:28.753Z",
     "status": "aktif",
     "namaAset": "Laptop",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "keterangan": "Diserahkan Kepada Taromalimo Z. Marunduri (Pj. Kades)"
   },
   {
@@ -6739,7 +7220,10 @@ export const INITIAL_ASETS: Aset[] = [
       "tanggal": "22 Juli 2026"
     },
     "nilaiPerolehan": 5350000,
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      ""
+    ],
     "desaId": "desa-19",
     "merk": "Epson",
     "volume": "1 Unit",
@@ -6779,7 +7263,9 @@ export const INITIAL_ASETS: Aset[] = [
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "nomorRegister": "0001",
     "namaAset": "Laptop",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "lokasi": "Kantor Desa Imana"
   },
   {
@@ -6796,7 +7282,9 @@ export const INITIAL_ASETS: Aset[] = [
     "sumberDana": "DDS",
     "lokasi": "",
     "namaAset": "Laptop Merk Acer Mate 14",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-09-30T17:06:14.377Z",
     "kondisi": "Baik",
     "status": "aktif",
@@ -6818,7 +7306,9 @@ export const INITIAL_ASETS: Aset[] = [
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "status": "aktif",
     "keterangan": "",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Perangkat Internet Starlink",
     "kondisi": "Baik",
     "updatedAt": "2026-09-30T17:04:49.985Z",
@@ -6833,7 +7323,9 @@ export const INITIAL_ASETS: Aset[] = [
     "id": "ast-1790787889985-0-utb7g"
   },
   {
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorRegister": "0002",
     "id": "ast-1790787807240-0-bnlyn",
     "namaAset": "Printer Merk Epson L3210",
@@ -6863,7 +7355,9 @@ export const INITIAL_ASETS: Aset[] = [
     "sumberDana": "DDS",
     "kondisi": "Baik",
     "nomorRegister": "0001",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Laptop Merk Acer Aspire Lite 14",
     "id": "ast-1790787742103-0-tso22",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
@@ -6887,7 +7381,9 @@ export const INITIAL_ASETS: Aset[] = [
     "id": "ast-1790772664777-0-ggkva",
     "sumberDana": "DDS",
     "namaAset": "As Perahu Viber",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-09-30T12:51:04.777Z",
     "lokasi": "",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
@@ -6921,7 +7417,9 @@ export const INITIAL_ASETS: Aset[] = [
     "sumberDana": "DDS",
     "lokasi": "",
     "namaAset": "Kipas Perahu Viber",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-09-30T12:51:04.777Z",
     "kondisi": "Baik",
     "status": "aktif",
@@ -6944,7 +7442,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nilaiPerolehan": 300000,
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "namaAset": "Langon Sadi",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "keterangan": "",
     "kodeAset": "02.01.01.09.2026.0065",
     "createdAt": "2026-09-30T12:51:04.777Z",
@@ -6962,7 +7462,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nilaiPerolehan": 250000,
     "namaAset": "Tali Nilon/Jangkar Perahu Viber",
     "desaId": "desa-09",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "volume": "1 Unit",
     "bukti": {
       "tanggal": "16 Juni 2026",
@@ -6998,7 +7500,9 @@ export const INITIAL_ASETS: Aset[] = [
     "keterangan": "",
     "status": "aktif",
     "tahunPerolehan": 2026,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Flen Perahu Viber",
     "sumberDana": "DDS",
     "desaId": "desa-09",
@@ -7008,7 +7512,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nilaiPerolehan": 300000
   },
   {
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Jangkar Perahu Viber",
     "bukti": {
       "tanggal": "16 Juni 2026",
@@ -7043,7 +7549,9 @@ export const INITIAL_ASETS: Aset[] = [
     "id": "ast-1790772134981-0-yp5dv",
     "tahunPerolehan": 2026,
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "bukti": {
       "nomor": "00045/KWT/02.2009/2026",
       "jenis": "Kwitansi / BAST",
@@ -7065,7 +7573,9 @@ export const INITIAL_ASETS: Aset[] = [
     "desaId": "desa-09",
     "tahunPerolehan": 2026,
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "volume": "1 Unit",
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "lokasi": "",
@@ -7096,7 +7606,9 @@ export const INITIAL_ASETS: Aset[] = [
       "tanggal": "16/06/2026",
       "nomor": "00045/KWT/02.2009/2026"
     },
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tahunPerolehan": 2026,
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "nomorRegister": "0013",
@@ -7122,7 +7634,9 @@ export const INITIAL_ASETS: Aset[] = [
     "createdAt": "2026-09-30T12:42:14.981Z",
     "id": "ast-1790772134981-11-p92cm",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorRegister": "0014",
     "bukti": {
       "nomor": "00045/KWT/02.2009/2026",
@@ -7153,7 +7667,9 @@ export const INITIAL_ASETS: Aset[] = [
     "desaId": "desa-09",
     "nomorRegister": "0015",
     "sumberDana": "DDS",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "createdAt": "2026-09-30T12:42:14.981Z"
   },
@@ -7174,7 +7690,9 @@ export const INITIAL_ASETS: Aset[] = [
     "id": "ast-1790772134981-13-70byu",
     "nilaiPerolehan": 165375,
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "kondisi": "Baik",
     "sumberDana": "DDS",
@@ -7187,7 +7705,9 @@ export const INITIAL_ASETS: Aset[] = [
     "namaAset": "Kursi Plastik",
     "keterangan": "",
     "tahunPerolehan": 2026,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-09-30T12:42:14.981Z",
     "status": "aktif",
     "nilaiPerolehan": 165375,
@@ -7214,7 +7734,9 @@ export const INITIAL_ASETS: Aset[] = [
     "kondisi": "Baik",
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nilaiPerolehan": 165375,
     "keterangan": "",
     "bukti": {
@@ -7250,7 +7772,9 @@ export const INITIAL_ASETS: Aset[] = [
       "nomor": "00045/KWT/02.2009/2026"
     },
     "nomorRegister": "0019",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "desaId": "desa-09",
@@ -7260,7 +7784,9 @@ export const INITIAL_ASETS: Aset[] = [
   {
     "namaAset": "Kursi Plastik",
     "tahunPerolehan": 2026,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorRegister": "0020",
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "keterangan": "",
@@ -7299,7 +7825,9 @@ export const INITIAL_ASETS: Aset[] = [
     "lokasi": "",
     "namaAset": "Kursi Plastik",
     "sumberDana": "DDS",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorRegister": "0021",
     "desaId": "desa-09",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
@@ -7313,7 +7841,9 @@ export const INITIAL_ASETS: Aset[] = [
     "sumberDana": "DDS",
     "namaAset": "Kursi Plastik",
     "lokasi": "",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "status": "aktif",
     "kondisi": "Baik",
     "bukti": {
@@ -7336,7 +7866,9 @@ export const INITIAL_ASETS: Aset[] = [
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "namaAset": "Kursi Plastik",
     "id": "ast-1790772134981-2-hrxqj",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "bukti": {
       "nomor": "00045/KWT/02.2009/2026",
       "tanggal": "16/06/2026",
@@ -7363,7 +7895,9 @@ export const INITIAL_ASETS: Aset[] = [
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "lokasi": "",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "status": "aktif",
     "bukti": {
       "jenis": "Kwitansi / BAST",
@@ -7388,7 +7922,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tahunPerolehan": 2026,
     "namaAset": "Kursi Plastik",
     "sumberDana": "DDS",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorRegister": "0024",
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "bukti": {
@@ -7410,7 +7946,9 @@ export const INITIAL_ASETS: Aset[] = [
   {
     "namaAset": "Kursi Plastik",
     "tahunPerolehan": 2026,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorRegister": "0025",
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "sumberDana": "DDS",
@@ -7434,7 +7972,9 @@ export const INITIAL_ASETS: Aset[] = [
   },
   {
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "kondisi": "Baik",
     "keterangan": "",
     "nomorRegister": "0026",
@@ -7467,7 +8007,9 @@ export const INITIAL_ASETS: Aset[] = [
     "status": "aktif",
     "id": "ast-1790772134981-24-jd5yg",
     "keterangan": "",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "lokasi": "",
     "desaId": "desa-09",
@@ -7503,7 +8045,9 @@ export const INITIAL_ASETS: Aset[] = [
     },
     "id": "ast-1790772134981-25-vzd6b",
     "keterangan": "",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorRegister": "0028",
     "namaAset": "Kursi Plastik"
   },
@@ -7530,7 +8074,9 @@ export const INITIAL_ASETS: Aset[] = [
     "kondisi": "Baik",
     "status": "aktif",
     "namaAset": "Kursi Plastik",
-    "fotoAset": []
+    "fotoAset": [
+      ""
+    ]
   },
   {
     "kodeAset": "02.01.01.09.2026.0030",
@@ -7543,7 +8089,9 @@ export const INITIAL_ASETS: Aset[] = [
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "keterangan": "",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tahunPerolehan": 2026,
     "bukti": {
       "jenis": "Kwitansi / BAST",
@@ -7559,7 +8107,9 @@ export const INITIAL_ASETS: Aset[] = [
   },
   {
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "sumberDana": "DDS",
     "id": "ast-1790772134981-28-fhlt7",
     "volume": "1 Unit",
@@ -7588,7 +8138,9 @@ export const INITIAL_ASETS: Aset[] = [
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "lokasi": "",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "status": "aktif",
     "bukti": {
       "tanggal": "16/06/2026",
@@ -7612,7 +8164,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tahunPerolehan": 2026,
     "namaAset": "Kursi Plastik",
     "updatedAt": "2026-09-30T12:42:14.981Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "lokasi": "",
     "id": "ast-1790772134981-3-sox4w",
     "status": "aktif",
@@ -7637,7 +8191,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tahunPerolehan": 2026,
     "kondisi": "Baik",
     "volume": "1 Unit",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "desaId": "desa-09",
     "namaAset": "Kursi Plastik",
     "nilaiPerolehan": 165375,
@@ -7661,7 +8217,9 @@ export const INITIAL_ASETS: Aset[] = [
     "keterangan": "",
     "tahunPerolehan": 2026,
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "lokasi": "",
     "id": "ast-1790772134981-31-ktwqr",
@@ -7691,7 +8249,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0035",
     "keterangan": "",
     "nilaiPerolehan": 165375,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "bukti": {
       "nomor": "00045/KWT/02.2009/2026",
       "jenis": "Kwitansi / BAST",
@@ -7728,7 +8288,9 @@ export const INITIAL_ASETS: Aset[] = [
     "keterangan": "",
     "status": "aktif",
     "lokasi": "",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "id": "ast-1790772134981-33-dwo6t"
   },
@@ -7752,7 +8314,9 @@ export const INITIAL_ASETS: Aset[] = [
     "volume": "1 Unit",
     "nomorRegister": "0037",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "id": "ast-1790772134981-34-cvplo",
     "tahunPerolehan": 2026,
     "keterangan": ""
@@ -7776,7 +8340,9 @@ export const INITIAL_ASETS: Aset[] = [
     "status": "aktif",
     "keterangan": "",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "id": "ast-1790772134981-35-1elj7",
@@ -7789,7 +8355,9 @@ export const INITIAL_ASETS: Aset[] = [
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "namaAset": "Kursi Plastik",
     "status": "aktif",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorRegister": "0039",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "sumberDana": "DDS",
@@ -7809,7 +8377,9 @@ export const INITIAL_ASETS: Aset[] = [
   },
   {
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "kondisi": "Baik",
     "desaId": "desa-09",
     "tahunPerolehan": 2026,
@@ -7844,7 +8414,9 @@ export const INITIAL_ASETS: Aset[] = [
     "id": "ast-1790772134981-38-l6ehd",
     "tahunPerolehan": 2026,
     "nilaiPerolehan": 165375,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "bukti": {
       "nomor": "00045/KWT/02.2009/2026",
@@ -7864,7 +8436,9 @@ export const INITIAL_ASETS: Aset[] = [
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "namaAset": "Kursi Plastik",
     "status": "aktif",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorRegister": "0042",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "sumberDana": "DDS",
@@ -7889,7 +8463,9 @@ export const INITIAL_ASETS: Aset[] = [
     "keterangan": "",
     "nomorRegister": "0007",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "kondisi": "Baik",
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "status": "aktif",
@@ -7908,7 +8484,9 @@ export const INITIAL_ASETS: Aset[] = [
     "desaName": "DESA LAHAWA"
   },
   {
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "desaId": "desa-09",
     "namaAset": "Kursi Plastik",
     "volume": "1 Unit",
@@ -7947,7 +8525,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0044",
     "status": "aktif",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "keterangan": "",
     "bukti": {
       "jenis": "Kwitansi / BAST",
@@ -7959,7 +8539,9 @@ export const INITIAL_ASETS: Aset[] = [
   },
   {
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "kondisi": "Baik",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "desaId": "desa-09",
@@ -7984,7 +8566,9 @@ export const INITIAL_ASETS: Aset[] = [
   },
   {
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "kondisi": "Baik",
     "desaId": "desa-09",
     "volume": "1 Unit",
@@ -8009,7 +8593,9 @@ export const INITIAL_ASETS: Aset[] = [
   },
   {
     "sumberDana": "DDS",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "createdAt": "2026-09-30T12:42:14.981Z",
     "bukti": {
@@ -8052,7 +8638,9 @@ export const INITIAL_ASETS: Aset[] = [
     "keterangan": "",
     "namaAset": "Kursi Plastik",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tahunPerolehan": 2026,
     "nilaiPerolehan": 165375,
     "lokasi": ""
@@ -8062,7 +8650,9 @@ export const INITIAL_ASETS: Aset[] = [
     "kondisi": "Baik",
     "createdAt": "2026-09-30T12:42:14.981Z",
     "nomorRegister": "0049",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "keterangan": "",
     "namaAset": "Kursi Plastik",
     "status": "aktif",
@@ -8085,7 +8675,9 @@ export const INITIAL_ASETS: Aset[] = [
   {
     "namaAset": "Kursi Plastik",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "status": "aktif",
     "nilaiPerolehan": 165375,
@@ -8109,7 +8701,9 @@ export const INITIAL_ASETS: Aset[] = [
   },
   {
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "volume": "1 Unit",
     "tahunPerolehan": 2026,
     "keterangan": "",
@@ -8151,7 +8745,9 @@ export const INITIAL_ASETS: Aset[] = [
       "tanggal": "16/06/2026"
     },
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "status": "aktif",
     "id": "ast-1790772134981-49-e75to",
@@ -8161,7 +8757,9 @@ export const INITIAL_ASETS: Aset[] = [
     "keterangan": "",
     "namaAset": "Kursi Plastik",
     "tahunPerolehan": 2026,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "lokasi": "",
     "id": "ast-1790772134981-5-tcz3n",
@@ -8200,7 +8798,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0053",
     "nilaiPerolehan": 165375,
     "updatedAt": "2026-09-30T12:42:14.981Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "status": "aktif",
     "namaAset": "Kursi Plastik",
     "tahunPerolehan": 2026,
@@ -8229,13 +8829,17 @@ export const INITIAL_ASETS: Aset[] = [
       "tanggal": "16/06/2026",
       "nomor": "00045/KWT/02.2009/2026"
     },
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "lokasi": ""
   },
   {
     "nomorRegister": "0055",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-09-30T12:42:14.981Z",
     "kondisi": "Baik",
     "desaId": "desa-09",
@@ -8277,7 +8881,9 @@ export const INITIAL_ASETS: Aset[] = [
     "keterangan": "",
     "namaAset": "Kursi Plastik",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tahunPerolehan": 2026,
     "nilaiPerolehan": 165375,
     "lokasi": ""
@@ -8294,7 +8900,9 @@ export const INITIAL_ASETS: Aset[] = [
     },
     "namaAset": "Kursi Plastik",
     "nilaiPerolehan": 165375,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "desaId": "desa-09",
     "volume": "1 Unit",
     "kondisi": "Baik",
@@ -8324,7 +8932,9 @@ export const INITIAL_ASETS: Aset[] = [
     },
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "keterangan": "",
     "kondisi": "Baik",
@@ -8333,7 +8943,9 @@ export const INITIAL_ASETS: Aset[] = [
     "desaId": "desa-09"
   },
   {
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "status": "aktif",
     "tahunPerolehan": 2026,
@@ -8367,7 +8979,9 @@ export const INITIAL_ASETS: Aset[] = [
       "nomor": "00045/KWT/02.2009/2026"
     },
     "kondisi": "Baik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "keterangan": "",
     "namaAset": "Kursi Plastik",
     "id": "ast-1790772134981-57-1893l",
@@ -8393,7 +9007,9 @@ export const INITIAL_ASETS: Aset[] = [
       "tanggal": "16/06/2026",
       "jenis": "Kwitansi / BAST"
     },
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nilaiPerolehan": 165375,
     "desaId": "desa-09",
     "volume": "1 Unit",
@@ -8417,7 +9033,9 @@ export const INITIAL_ASETS: Aset[] = [
     "kondisi": "Baik",
     "keterangan": "",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "tahunPerolehan": 2026,
     "nomorRegister": "0062",
     "nilaiPerolehan": 165375,
@@ -8453,7 +9071,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0009",
     "sumberDana": "DDS",
     "namaAset": "Kursi Plastik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "lokasi": "",
     "id": "ast-1790772134981-6-jw11j"
   },
@@ -8465,7 +9085,9 @@ export const INITIAL_ASETS: Aset[] = [
       "tanggal": "16/06/2026"
     },
     "status": "aktif",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kursi Plastik",
     "lokasi": "",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
@@ -8489,7 +9111,9 @@ export const INITIAL_ASETS: Aset[] = [
     "updatedAt": "2026-09-30T12:42:14.981Z",
     "namaAset": "Kursi Plastik",
     "tahunPerolehan": 2026,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "id": "ast-1790772134981-8-ipk7m",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "keterangan": "",
@@ -8515,7 +9139,9 @@ export const INITIAL_ASETS: Aset[] = [
     },
     "kondisi": "Baik",
     "status": "aktif",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "lokasi": "",
     "namaAset": "Kursi Plastik",
     "keterangan": "",
@@ -8540,7 +9166,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0002",
     "namaAset": "Laptop Merk Acer",
     "kondisi": "Baik",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "updatedAt": "2026-09-30T12:39:19.925Z",
     "tahunPerolehan": 2026,
     "status": "aktif",
@@ -8578,13 +9206,18 @@ export const INITIAL_ASETS: Aset[] = [
     "desaId": "desa-09",
     "sumberDana": "DDS",
     "nomorRegister": "0001",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Tenda Panggung Uk. 4 x 3 m",
     "createdAt": "2026-09-30T12:37:46.359Z"
   },
   {
     "sumberDana": "ADD",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      ""
+    ],
     "bukti": {
       "tanggal": "02/07/2026",
       "jenis": "Kwitansi / BAST",
@@ -8631,7 +9264,10 @@ export const INITIAL_ASETS: Aset[] = [
     "status": "aktif",
     "namaAset": "Laptop Merk Asus Vivobook",
     "sumberDana": "DDS",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      ""
+    ],
     "kondisi": "Baik",
     "tipe": "-",
     "lokasi": "Desa Togideu",
@@ -8652,7 +9288,11 @@ export const INITIAL_ASETS: Aset[] = [
     "lokasi": "Kantor Desa Togideu",
     "namaAset": "Timbangan dan Alat Ukur Tinggi Badan ZT120",
     "keterangan": "",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      "",
+      ""
+    ],
     "nomorRegister": "0001",
     "updatedAt": "2026-10-26T09:41:21.540Z",
     "desaId": "desa-22",
@@ -8690,7 +9330,13 @@ export const INITIAL_ASETS: Aset[] = [
     "keterangan": "",
     "status": "aktif",
     "lokasi": "Desa Togideu",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
     "namaAset": "Lanjutan Pembangunan Hall Soguna Bazato",
     "id": "ast-1790735136282-0-901bp"
   },
@@ -8709,7 +9355,10 @@ export const INITIAL_ASETS: Aset[] = [
     "kondisi": "Baik",
     "createdAt": "2026-09-30T02:23:43.107Z",
     "tipe": "-",
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      ""
+    ],
     "namaAset": "Kursi Kerja Pejabat",
     "updatedAt": "2026-10-26T09:23:47.627Z",
     "status": "aktif",
@@ -8737,7 +9386,9 @@ export const INITIAL_ASETS: Aset[] = [
     "keterangan": "",
     "nomorRegister": "0014",
     "createdAt": "2026-09-30T02:22:52.776Z",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Kipas Angin",
     "volume": "1 Unit",
     "desaId": "desa-22",
@@ -8761,7 +9412,9 @@ export const INITIAL_ASETS: Aset[] = [
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "sumberDana": "ADD",
     "namaAset": "Kipas Angin",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "id": "ast-1790734972776-1-wkksh",
     "bukti": {
       "jenis": "Kwitansi / BAST",
@@ -8778,7 +9431,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tahunPerolehan": 2025,
     "namaAset": "Sapu Lantai",
     "id": "ast-1790734928765-0-miund",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "sumberDana": "ADD",
     "createdAt": "2026-09-30T02:22:08.765Z",
     "lokasi": "",
@@ -8804,7 +9459,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tahunPerolehan": 2025,
     "updatedAt": "2026-09-30T02:22:08.765Z",
     "nilaiPerolehan": 67200,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "Sapu Lantai",
     "status": "aktif",
     "sumberDana": "ADD",
@@ -8828,7 +9485,9 @@ export const INITIAL_ASETS: Aset[] = [
     "status": "aktif",
     "namaAset": "Gambar Wakil Presiden",
     "tahunPerolehan": 2025,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-09-30T02:16:51.670Z",
     "keterangan": "",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
@@ -8848,7 +9507,9 @@ export const INITIAL_ASETS: Aset[] = [
     "volume": "1 Unit"
   },
   {
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "sumberDana": "ADD",
     "namaAset": "Gambar Presiden",
     "bukti": {
@@ -8879,7 +9540,10 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0009",
     "desaId": "desa-22",
     "nilaiPerolehan": 7700000,
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      ""
+    ],
     "volume": "1 Unit",
     "merk": "-",
     "tahunPerolehan": 2025,
@@ -8922,7 +9586,9 @@ export const INITIAL_ASETS: Aset[] = [
     "keterangan": "Penanggung jawab Herman Halawa",
     "createdAt": "2026-09-30T02:13:39.478Z",
     "namaAset": "Komputer Desktop All in One",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorSeri": "-",
     "volume": "1 Unit",
     "desaId": "desa-22",
@@ -8949,7 +9615,9 @@ export const INITIAL_ASETS: Aset[] = [
     "namaAset": "Komputer Desktop All in One",
     "lokasi": "Kantor Desa Togideu",
     "tipe": "-",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "status": "aktif",
     "updatedAt": "2026-10-26T09:45:05.227Z",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
@@ -8963,7 +9631,9 @@ export const INITIAL_ASETS: Aset[] = [
     "merk": "-",
     "nomorRegister": "0007",
     "sumberDana": "DDS",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "updatedAt": "2026-10-26T09:30:01.632Z",
     "namaAset": "Komputer Desktop All in One",
     "tipe": "-",
@@ -8992,7 +9662,9 @@ export const INITIAL_ASETS: Aset[] = [
     "volume": "1 Unit",
     "namaAset": "Laptop Merk Acer Aspire Lite 14 i7",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-09-30T02:10:21.307Z",
     "tahunPerolehan": 2025,
     "nomorRegister": "0004",
@@ -9028,7 +9700,10 @@ export const INITIAL_ASETS: Aset[] = [
       "jenis": "Kwitansi / BAST",
       "tanggal": "29/07/2025"
     },
-    "fotoAset": [],
+    "fotoAset": [
+      "",
+      ""
+    ],
     "nilaiPerolehan": 15764585,
     "id": "ast-1790734221307-1-8ngus",
     "nomorRegister": "0005",
@@ -9061,7 +9736,9 @@ export const INITIAL_ASETS: Aset[] = [
     "id": "ast-1790715220157-0-4ubx8",
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "nomorSeri": "-",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "merk": "-",
     "namaAset": "Printer Epson Merk 3250",
     "kondisi": "Baik",
@@ -9090,7 +9767,9 @@ export const INITIAL_ASETS: Aset[] = [
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "status": "aktif",
     "namaAset": "Printer Epson Merk 3250",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-09-29T20:53:40.157Z",
     "keterangan": "Penanggung jawab Herman Halawa",
     "nomorSeri": "-",
@@ -9115,7 +9794,9 @@ export const INITIAL_ASETS: Aset[] = [
       "jenis": "Kwitansi / BAST",
       "nomor": "00022/KWT/02.2022/ 2025"
     },
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "createdAt": "2026-09-29T20:38:19.897Z",
     "namaAset": "Infocus",
     "sumberDana": "DDS",
@@ -9125,7 +9806,9 @@ export const INITIAL_ASETS: Aset[] = [
     "nomorRegister": "0001"
   },
   {
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "bukti": {
       "jenis": "Kwitansi / BAST",
       "nomor": "00178/KWT/02.2012/2025",
@@ -9174,7 +9857,9 @@ export const INITIAL_ASETS: Aset[] = [
       "tanggal": "30 Desember 2025"
     },
     "sumberDana": "DDS",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nilaiPerolehan": 3000000,
     "namaAset": "Tali Jangkar",
     "status": "aktif",
@@ -9182,7 +9867,9 @@ export const INITIAL_ASETS: Aset[] = [
   },
   {
     "namaAset": "Knalpot Mesin Kapal",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "status": "aktif",
     "keterangan": "Diperuntukan untuk keperluan kelengkapan kapal desa",
     "updatedAt": "2026-10-24T09:09:41.738Z",
@@ -9229,7 +9916,9 @@ export const INITIAL_ASETS: Aset[] = [
     "sumberDana": "DDS",
     "nilaiPerolehan": 19750000,
     "namaAset": "Laptop",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nomorRegister": "0012",
     "bukti": {
       "jenis": "Kwitansi / BAST",
@@ -9250,7 +9939,9 @@ export const INITIAL_ASETS: Aset[] = [
     "tahunPerolehan": 2025,
     "namaAset": "Laptop",
     "volume": "1 Unit",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "updatedAt": "2026-11-11T01:37:24.510Z",
     "lokasi": "Kantor Desa",
     "kondisi": "Baik",
@@ -9288,7 +9979,9 @@ export const INITIAL_ASETS: Aset[] = [
       "tanggal": "26 September 2025",
       "jenis": "Kwitansi / BAST"
     },
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "merk": "Acer",
     "nomorRegister": "0014",
     "nilaiPerolehan": 19750000,
@@ -9316,7 +10009,9 @@ export const INITIAL_ASETS: Aset[] = [
     "klasifikasi": "Peralatan, Mesin, dan Alat Berat",
     "namaAset": "Laptop",
     "nilaiPerolehan": 19750000,
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "desaId": "desa-01",
     "volume": "1 Unit",
     "updatedAt": "2026-11-11T01:39:25.039Z",
@@ -9336,7 +10031,9 @@ export const INITIAL_ASETS: Aset[] = [
     "kondisi": "Baik",
     "createdAt": "2026-10-24T08:10:48.714Z",
     "namaAset": "Jangkar Kapal",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "nilaiPerolehan": 3500000,
     "lokasi": "Desa Balowondrate",
     "merk": "Jangkar Kapal",
@@ -9360,7 +10057,9 @@ export const INITIAL_ASETS: Aset[] = [
       "nomor": "00179/KWT/02.2012/2025"
     },
     "id": "ast-1792833765802-0-6gvtp",
-    "fotoAset": [],
+    "fotoAset": [
+      ""
+    ],
     "namaAset": "GPS",
     "volume": "1 Unit",
     "updatedAt": "2026-10-24T09:22:45.802Z",

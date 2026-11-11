@@ -356,7 +356,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
   }, []);
 
-  const CURRENT_DATA_REVISION = '2026_10_01_balowondrate_v3';
+  const CURRENT_DATA_REVISION = '2026_11_11_sirombu_v328_cpanel_authoritative';
   const [desas, setDesas] = useState<Desa[]>(() => {
     try {
       const storedRev = localStorage.getItem('SIPADES_DATA_REVISION');
@@ -406,25 +406,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return INITIAL_USERS;
   });
 
-  // Primary state: loads from verified saved storage to prevent flashing 100 on refresh, then synchronizes with Cloud Firestore
+  // Primary state: loads from authoritative initial data, ignoring stale offline laptop cache
   const [asets, setAsets] = useState<Aset[]>(() => {
     try {
+      const storedRev = localStorage.getItem('SIPADES_DATA_REVISION');
+      if (storedRev !== CURRENT_DATA_REVISION) {
+        localStorage.setItem('SIPADES_DATA_REVISION', CURRENT_DATA_REVISION);
+        localStorage.setItem(STORAGE_KEYS.ASETS, JSON.stringify(INITIAL_ASETS));
+        return deduplicateAsets(INITIAL_ASETS);
+      }
       const saved = localStorage.getItem(STORAGE_KEYS.ASETS);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length >= INITIAL_ASETS.length) {
-          const clean = deduplicateAsets(parsed).map((a) => ({
-            ...a,
-            statusVerifikasi: a.statusVerifikasi || 'sudah_diverifikasi',
-          }));
+          const clean = deduplicateAsets(parsed);
           return clean;
         }
       }
     } catch {}
-    return deduplicateAsets(INITIAL_ASETS).map((a) => ({
-      ...a,
-      statusVerifikasi: a.statusVerifikasi || 'sudah_diverifikasi',
-    }));
+    return deduplicateAsets(INITIAL_ASETS);
   });
 
   const [verifikasiList, setVerifikasiList] = useState<PermohonanVerifikasi[]>(() => {
@@ -539,9 +539,73 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (cpData && Array.isArray(cpData.asets) && cpData.asets.length > 0) {
         const cleanAsets = deduplicateAsets(cpData.asets);
         const { asets: normalized } = normalizeAsetRegisters(cleanAsets, desas);
-        setAsets(normalized);
-        persistAsetsSafely(normalized);
-        saveAsetsToIndexedDB(normalized).catch(() => {});
+        
+        setAsets((prev) => {
+          const map = new Map<string, Aset>(prev.map((a) => [a.id, a]));
+          let hasChanges = false;
+
+          for (const na of normalized) {
+            if (!na || !na.id) continue;
+            const current = map.get(na.id);
+            if (!current) {
+              map.set(na.id, na);
+              hasChanges = true;
+            } else {
+              // Preserve existing photos if incoming is stripped
+              let fotoAset = na.fotoAset;
+              if ((!fotoAset || fotoAset.length === 0) && current.fotoAset && current.fotoAset.length > 0) {
+                fotoAset = current.fotoAset;
+              }
+              let fotoBast = na.fotoBast || current.fotoBast || '';
+
+              // Protect local verification from being reverted
+              let statusVerifikasi = na.statusVerifikasi;
+              let diverifikasiOleh = na.diverifikasiOleh;
+              let tanggalVerifikasi = na.tanggalVerifikasi;
+              let catatanVerifikasi = na.catatanVerifikasi;
+              let nomorSKVerifikasi = na.nomorSKVerifikasi;
+
+              if (
+                current.statusVerifikasi === 'sudah_diverifikasi' &&
+                (na.statusVerifikasi === 'sedang_diproses' || na.statusVerifikasi === 'belum_diverifikasi' || !na.statusVerifikasi)
+              ) {
+                statusVerifikasi = 'sudah_diverifikasi';
+                diverifikasiOleh = current.diverifikasiOleh || na.diverifikasiOleh;
+                tanggalVerifikasi = current.tanggalVerifikasi || na.tanggalVerifikasi;
+                catatanVerifikasi = current.catatanVerifikasi || na.catatanVerifikasi;
+                nomorSKVerifikasi = current.nomorSKVerifikasi || na.nomorSKVerifikasi;
+              }
+
+              if (
+                current.statusVerifikasi !== statusVerifikasi ||
+                current.updatedAt !== na.updatedAt ||
+                (fotoAset && fotoAset.length !== (current.fotoAset || []).length)
+              ) {
+                hasChanges = true;
+              }
+
+              map.set(na.id, {
+                ...na,
+                fotoAset: fotoAset || [],
+                fotoBast,
+                statusVerifikasi,
+                diverifikasiOleh,
+                tanggalVerifikasi,
+                catatanVerifikasi,
+                nomorSKVerifikasi,
+              });
+            }
+          }
+
+          if (!hasChanges && map.size === prev.length) {
+            return prev; // Same object identity: eliminates photo flickering completely!
+          }
+
+          const merged = Array.from(map.values());
+          persistAsetsSafely(merged);
+          saveAsetsToIndexedDB(merged).catch(() => {});
+          return merged;
+        });
 
         if (Array.isArray(cpData.verifikasiList)) {
           setVerifikasiList(cpData.verifikasiList);
@@ -644,6 +708,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     let eventSource: EventSource | null = null;
     let reconnectTimeout: any = null;
+    let lastServerUpdatedAt = '';
 
     const connectSSE = () => {
       try {
@@ -654,9 +719,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (payload && payload.type === 'DATA_CHANGED' && payload.data) {
               const serverData = payload.data;
               if (Array.isArray(serverData.asets)) {
-                const cleanSSE = deduplicateAsets(serverData.asets, deletedAssetIds);
-                setAsets(cleanSSE);
-                persistAsetsSafely(cleanSSE);
+                setAsets((prev) => {
+                  if (
+                    prev.length === serverData.asets.length &&
+                    serverData.updatedAt &&
+                    serverData.updatedAt === lastServerUpdatedAt
+                  ) {
+                    return prev; // Same object identity: avoids photo reload/flicker!
+                  }
+                  lastServerUpdatedAt = serverData.updatedAt || '';
+                  const cleanSSE = deduplicateAsets(serverData.asets, deletedAssetIds);
+                  persistAsetsSafely(cleanSSE);
+                  return cleanSSE;
+                });
               }
               if (Array.isArray(serverData.verifikasiList)) {
                 setVerifikasiList(serverData.verifikasiList);
@@ -739,6 +814,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Automatic Real-Time Pulse for cPanel Web Hosting (Always Realtime without manual pull)
   const lastKnownCpanelCount = useRef<number>(asets.length);
   const lastKnownCpanelUpdated = useRef<string>('');
+  const pausePulseUntil = useRef<number>(0);
 
   useEffect(() => {
     lastKnownCpanelCount.current = asets.length;
@@ -749,15 +825,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const checkCpanelPulse = async () => {
       if (isChecking) return;
+      if (Date.now() < pausePulseUntil.current) return;
       isChecking = true;
       try {
         const ping = await pingCpanel();
         if (ping.success && typeof ping.totalAset === 'number') {
           // Detect changes in cPanel database (total assets or update timestamp)
-          const countDiffers = ping.totalAset !== lastKnownCpanelCount.current;
+          // If cPanel only has partial snapshot (< 50 units while local has > 300), do NOT trigger continuous re-render
+          const isCpanelPartial = ping.totalAset < 50 && asets.length > 300;
+          const countDiffers = !isCpanelPartial && ping.totalAset !== lastKnownCpanelCount.current;
           const timeDiffers = Boolean(ping.updatedAt && lastKnownCpanelUpdated.current && ping.updatedAt !== lastKnownCpanelUpdated.current);
 
-          if (countDiffers || timeDiffers) {
+          if ((countDiffers || timeDiffers) && !isCpanelPartial) {
             lastKnownCpanelCount.current = ping.totalAset;
             if (ping.updatedAt) lastKnownCpanelUpdated.current = ping.updatedAt;
             await refreshServerData(true);
@@ -772,8 +851,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
 
-    // Poll every 3 seconds for instant real-time synchronization across devices on cPanel
-    const pulseInterval = setInterval(checkCpanelPulse, 3000);
+    // Poll every 12 seconds for gentle real-time synchronization that respects shared hosting limits
+    const pulseInterval = setInterval(checkCpanelPulse, 12000);
 
     // Instant sync on tab focus or visibility change
     const onFocus = () => { checkCpanelPulse(); };
@@ -1382,6 +1461,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const now = new Date().toISOString();
       const verifierName = currentUser.name || 'Admin Kecamatan Sirombu';
+      pausePulseUntil.current = Date.now() + 15000;
 
       let verifiedAset: Aset | null = null;
       setAsets((prev) => {
@@ -1433,6 +1513,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const now = new Date().toISOString();
       const verifierName = currentUser.name || 'Admin Kecamatan Sirombu';
+      pausePulseUntil.current = Date.now() + 15000;
 
       let rejectedAset: Aset | null = null;
       setAsets((prev) => {
@@ -1482,6 +1563,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       const now = new Date().toISOString();
+      pausePulseUntil.current = Date.now() + 15000;
       let unverifiedAset: Aset | null = null;
       setAsets((prev) => {
         const next = prev.map((a) => {
@@ -1537,6 +1619,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const now = new Date().toISOString();
       const verifierName = currentUser.name || 'Admin Kecamatan Sirombu';
+      pausePulseUntil.current = Date.now() + 15000;
 
       const updatedBatch: Aset[] = [];
       const updatedList = asets.map((a) => {
@@ -1586,6 +1669,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const now = new Date().toISOString();
     const verifierName = currentUser.name || 'Admin Kecamatan Sirombu';
+    pausePulseUntil.current = Date.now() + 15000;
 
     const pendingIds = asets
       .filter(
@@ -2080,7 +2164,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
             return false;
           })
-          .map((a: Aset) => ({ ...a, desaId: effectiveDesaId, desaName: targetDesaName }));
+          .map((a: Aset) => {
+            const exist = asets.find((item) => item.id === a.id);
+            let fotoAset = a.fotoAset;
+            if ((!fotoAset || fotoAset.length === 0) && exist?.fotoAset && exist.fotoAset.length > 0) {
+              fotoAset = exist.fotoAset;
+            }
+            let fotoBast = a.fotoBast || exist?.fotoBast || '';
+            return {
+              ...a,
+              desaId: effectiveDesaId,
+              desaName: targetDesaName,
+              fotoAset: fotoAset || [],
+              fotoBast,
+            };
+          });
 
         const otherAsets = asets.filter((a) => a.desaId !== effectiveDesaId);
         const updatedAsets = [...otherAsets, ...incomingDesaAsets];
@@ -2172,9 +2270,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(payload.users));
       }
       if (Array.isArray(payload.asets)) {
-        setAsets(payload.asets);
-        persistAsetsSafely(payload.asets);
-        saveAsetsToIndexedDB(payload.asets);
+        const existingMap = new Map<string, Aset>(asets.map((a) => [a.id, a]));
+        const mergedAsets = payload.asets.map((incoming: Aset) => {
+          const exist = existingMap.get(incoming.id);
+          let fotoAset = incoming.fotoAset;
+          if ((!fotoAset || fotoAset.length === 0) && exist?.fotoAset && exist.fotoAset.length > 0) {
+            fotoAset = exist.fotoAset;
+          }
+          let fotoBast = incoming.fotoBast || exist?.fotoBast || '';
+          return {
+            ...incoming,
+            fotoAset: fotoAset || [],
+            fotoBast,
+          };
+        });
+
+        setAsets(mergedAsets);
+        persistAsetsSafely(mergedAsets);
+        saveAsetsToIndexedDB(mergedAsets);
       }
 
       // Replicate all restored data immediately to cPanel Hosting in unified batch

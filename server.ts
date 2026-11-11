@@ -51,13 +51,51 @@ function broadcastEvent(type: string, data: any) {
   }
 }
 
+function restoreMissingPhotos(asets: Aset[]): Aset[] {
+  try {
+    const backupFile = path.join(process.cwd(), 'public/assets/aistudio/BACKUP-SIPADES-KEC-SIROMBU-2026-11-09_315__94e5555e.json');
+    if (!fs.existsSync(backupFile)) return asets;
+    const json = JSON.parse(fs.readFileSync(backupFile, 'utf-8'));
+    const bAsets = (json.data && json.data.asets) || json.asets || [];
+    const mapById = new Map<string, any>();
+    const mapByKode = new Map<string, any>();
+    const mapByNameDesa = new Map<string, any>();
+
+    bAsets.forEach((a: any) => {
+      if (a.id) mapById.set(a.id, a);
+      if (a.kodeAset) mapByKode.set(a.kodeAset, a);
+      if (a.namaAset && a.desaId) mapByNameDesa.set((a.namaAset + '_' + a.desaId).toLowerCase(), a);
+    });
+
+    return asets.map((a) => {
+      const b = mapById.get(a.id) || mapByKode.get(a.kodeAset) || mapByNameDesa.get((a.namaAset + '_' + a.desaId).toLowerCase());
+      if (b) {
+        let fotoAset = a.fotoAset;
+        if (!fotoAset || (Array.isArray(fotoAset) && fotoAset.length === 0)) {
+          if (Array.isArray(b.fotoAset) && b.fotoAset.length > 0) fotoAset = b.fotoAset;
+          else if (typeof b.fotoAset === 'string' && b.fotoAset.length > 100) fotoAset = [b.fotoAset];
+        }
+        let fotoBast = a.fotoBast;
+        if (!fotoBast && b.fotoBast && b.fotoBast.length > 50) fotoBast = b.fotoBast;
+        return { ...a, fotoAset: fotoAset || [], fotoBast: fotoBast || '' };
+      }
+      return a;
+    });
+  } catch (err) {
+    return asets;
+  }
+}
+
 function loadDatabase(): DatabaseSchema {
   try {
     if (fs.existsSync(DB_FILE)) {
       const raw = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
+      const rawAsets = Array.isArray(parsed.asets) ? parsed.asets : INITIAL_ASETS;
+      const hydratedAsets = restoreMissingPhotos(rawAsets);
+
       return {
-        asets: Array.isArray(parsed.asets) ? parsed.asets : INITIAL_ASETS,
+        asets: hydratedAsets,
         verifikasiList: Array.isArray(parsed.verifikasiList) ? parsed.verifikasiList : INITIAL_VERIFIKASI,
         pengesahanList: Array.isArray(parsed.pengesahanList) ? parsed.pengesahanList : INITIAL_PENGESAHAN,
         users: Array.isArray(parsed.users) && parsed.users.length > 0 ? parsed.users : INITIAL_USERS,
@@ -73,7 +111,7 @@ function loadDatabase(): DatabaseSchema {
   }
 
   const defaultState: DatabaseSchema = {
-    asets: INITIAL_ASETS,
+    asets: restoreMissingPhotos(INITIAL_ASETS),
     verifikasiList: INITIAL_VERIFIKASI,
     pengesahanList: INITIAL_PENGESAHAN,
     users: INITIAL_USERS,
@@ -207,9 +245,17 @@ async function startServer() {
     if (Array.isArray(payload.asets)) {
       const map = new Map<string, Aset>(dbState.asets.map((a) => [a.id, a]));
       payload.asets.forEach((a: Aset) => {
-        if (a && a.id) map.set(a.id, a);
+        if (a && a.id) {
+          const exist = map.get(a.id);
+          let fotoAset = a.fotoAset;
+          if ((!fotoAset || fotoAset.length === 0) && exist?.fotoAset && exist.fotoAset.length > 0) {
+            fotoAset = exist.fotoAset;
+          }
+          let fotoBast = a.fotoBast || exist?.fotoBast || '';
+          map.set(a.id, { ...a, fotoAset: fotoAset || [], fotoBast });
+        }
       });
-      dbState.asets = Array.from(map.values());
+      dbState.asets = restoreMissingPhotos(Array.from(map.values()));
     }
     if (Array.isArray(payload.verifikasiList)) {
       const map = new Map<string, PermohonanVerifikasi>(dbState.verifikasiList.map((v) => [v.id, v]));
@@ -254,8 +300,8 @@ async function startServer() {
     return new Promise((resolve, reject) => {
       const reqHeaders: Record<string, string> = {
         'Host': 'sipadessirombu.my.id',
-        'User-Agent': 'curl/7.88.1',
-        'Accept': '*/*',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
       };
       if (postData) {
         reqHeaders['Content-Type'] = 'application/json';
@@ -369,8 +415,11 @@ async function startServer() {
 
     dbState.asets[idx] = { ...dbState.asets[idx], ...updated };
     saveDatabase(dbState);
-    // Automatic Real-time Sync to cPanel hosting (Updates are saved in cPanel)
-    callCpanelHttp('/cpanel-api.php?action=save_aset', 'POST', JSON.stringify(dbState.asets[idx])).catch((e) =>
+    // Automatic Real-time Sync to cPanel hosting with lightweight payload
+    const lightAset: Record<string, any> = { ...dbState.asets[idx] };
+    if (typeof lightAset.fotoAset === 'string' && lightAset.fotoAset.length > 500) delete lightAset.fotoAset;
+    if (typeof lightAset.fotoBast === 'string' && lightAset.fotoBast.length > 500) delete lightAset.fotoBast;
+    callCpanelHttp('/cpanel-api.php?action=save_aset', 'POST', JSON.stringify(lightAset)).catch((e) =>
       console.warn('[cPanel Sync] update error:', e.message)
     );
     res.json({ success: true, aset: dbState.asets[idx] });
@@ -547,6 +596,57 @@ async function startServer() {
     }
   });
 
+  // Proxy endpoint to save an individual asset to cPanel (instant, safe, immune to CORS and ModSecurity)
+  app.post('/api/cpanel/save_aset', async (req, res) => {
+    try {
+      const item = req.body;
+      if (!item || !item.id) {
+        return res.status(400).json({ error: 'Data aset tidak valid' });
+      }
+
+      // Update local dbState
+      const idx = dbState.asets.findIndex((a) => a.id === item.id);
+      if (idx >= 0) {
+        dbState.asets[idx] = { ...dbState.asets[idx], ...item };
+      } else {
+        dbState.asets.unshift(item);
+      }
+      saveDatabase(dbState);
+
+      // Lightweight copy for cPanel
+      const light: Record<string, any> = { ...item };
+      if (typeof light.fotoAset === 'string' && light.fotoAset.length > 500) delete light.fotoAset;
+      if (typeof light.fotoBast === 'string' && light.fotoBast.length > 500) delete light.fotoBast;
+
+      callCpanelHttp('/cpanel-api.php?action=save_aset', 'POST', JSON.stringify(light)).catch((e) =>
+        console.warn('[cPanel Proxy save_aset error]:', e.message)
+      );
+
+      return res.json({ success: true, aset: dbState.asets[idx >= 0 ? idx : 0] });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Proxy endpoint to delete an asset from cPanel
+  app.post('/api/cpanel/delete_aset', async (req, res) => {
+    try {
+      const { id } = req.body;
+      if (!id) return res.status(400).json({ error: 'ID tidak boleh kosong' });
+
+      dbState.asets = dbState.asets.filter((a) => a.id !== id);
+      saveDatabase(dbState);
+
+      callCpanelHttp('/cpanel-api.php?action=delete_aset', 'POST', JSON.stringify({ id })).catch((e) =>
+        console.warn('[cPanel Proxy delete_aset error]:', e.message)
+      );
+
+      return res.json({ success: true, total: dbState.asets.length });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   // Users endpoints with security rules
   app.post('/api/users', (req, res) => {
     const { user, requestRole } = req.body;
@@ -720,12 +820,53 @@ async function startServer() {
         try {
           const parsed = JSON.parse(response.body);
           if (parsed && Array.isArray(parsed.asets) && parsed.asets.length > 0) {
-            dbState.asets = parsed.asets;
-            if (Array.isArray(parsed.desas) && parsed.desas.length > 0) dbState.desas = parsed.desas;
-            if (Array.isArray(parsed.users) && parsed.users.length > 0) dbState.users = parsed.users;
-            if (parsed.kecamatanProfile) dbState.kecamatanProfile = parsed.kecamatanProfile;
-            saveDatabase(dbState);
-            return res.json(parsed);
+            // Read-only pass: Merge remote data with local photos WITHOUT calling saveDatabase or triggering SSE re-render loops
+            const map = new Map<string, Aset>(dbState.asets.map((a) => [a.id, a]));
+            const mergedAsets = parsed.asets.map((rAset: Aset) => {
+              if (!rAset || !rAset.id) return rAset;
+              const localAset = map.get(rAset.id);
+              if (!localAset) return rAset;
+
+              let fotoAset = rAset.fotoAset;
+              if ((!fotoAset || fotoAset.length === 0) && localAset.fotoAset && localAset.fotoAset.length > 0) {
+                fotoAset = localAset.fotoAset;
+              }
+              let fotoBast = rAset.fotoBast || localAset.fotoBast || '';
+
+              let statusVerifikasi = rAset.statusVerifikasi;
+              let diverifikasiOleh = rAset.diverifikasiOleh;
+              let tanggalVerifikasi = rAset.tanggalVerifikasi;
+              let catatanVerifikasi = rAset.catatanVerifikasi;
+              let nomorSKVerifikasi = rAset.nomorSKVerifikasi;
+
+              if (localAset.statusVerifikasi === 'sudah_diverifikasi') {
+                statusVerifikasi = 'sudah_diverifikasi';
+                diverifikasiOleh = localAset.diverifikasiOleh || rAset.diverifikasiOleh;
+                tanggalVerifikasi = localAset.tanggalVerifikasi || rAset.tanggalVerifikasi;
+                catatanVerifikasi = localAset.catatanVerifikasi || rAset.catatanVerifikasi;
+                nomorSKVerifikasi = localAset.nomorSKVerifikasi || rAset.nomorSKVerifikasi;
+              }
+
+              return {
+                ...localAset,
+                ...rAset,
+                fotoAset: fotoAset || [],
+                fotoBast,
+                statusVerifikasi,
+                diverifikasiOleh,
+                tanggalVerifikasi,
+                catatanVerifikasi,
+                nomorSKVerifikasi,
+              };
+            });
+
+            return res.json({
+              ...parsed,
+              asets: restoreMissingPhotos(mergedAsets),
+              desas: parsed.desas || dbState.desas,
+              users: parsed.users || dbState.users,
+              kecamatanProfile: parsed.kecamatanProfile || dbState.kecamatanProfile,
+            });
           }
         } catch {
           // If body is not json, fallback to dbState
@@ -773,6 +914,22 @@ async function startServer() {
     });
     const fileStream = fs.createReadStream(zipPath);
     fileStream.pipe(res);
+  });
+
+  // Base64 JSON download endpoint - Immune to iframe/proxy stream truncations
+  app.get('/api/zip-base64', (req, res) => {
+    const zipPath = path.join(process.cwd(), 'public/sipades-web-sirombu.zip');
+    if (!fs.existsSync(zipPath)) {
+      return res.status(404).json({ success: false, error: 'Berkas sipades-web-sirombu.zip tidak ditemukan' });
+    }
+    const buf = fs.readFileSync(zipPath);
+    res.json({
+      success: true,
+      filename: 'sipades-web-sirombu.zip',
+      size: buf.length,
+      sizeKB: (buf.length / 1024).toFixed(1),
+      base64: buf.toString('base64'),
+    });
   });
 
   // Serve static public assets explicitly (ensures zip file and static assets download cleanly)

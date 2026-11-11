@@ -15,11 +15,13 @@ import {
 interface AnnouncementReaderModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenBroadcast?: () => void;
 }
 
 export const AnnouncementReaderModal: React.FC<AnnouncementReaderModalProps> = ({
   isOpen,
   onClose,
+  onOpenBroadcast,
 }) => {
   const { announcements, markAnnouncementAsRead } = useApp();
 
@@ -171,17 +173,32 @@ export const AnnouncementReaderModal: React.FC<AnnouncementReaderModalProps> = (
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 sm:px-8 py-4 border-t border-slate-800 bg-[#070D1F] shrink-0">
+        <div className="flex items-center justify-between px-6 sm:px-8 py-4 border-t border-slate-800 bg-[#070D1F] shrink-0 gap-3">
           <span className="text-xs text-slate-400">
             Total {announcements.length} pengumuman aktif dari Super Admin
           </span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs transition-colors cursor-pointer"
-          >
-            Tutup Jendela
-          </button>
+          <div className="flex items-center gap-2.5">
+            {onOpenBroadcast && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenBroadcast();
+                }}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-emerald-950/40"
+              >
+                <Megaphone className="w-3.5 h-3.5" />
+                <span>Tulis Pesan Baru</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs transition-colors cursor-pointer"
+            >
+              Tutup Jendela
+            </button>
+          </div>
         </div>
       </div>
     </div>,

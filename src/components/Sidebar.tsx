@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { NiasBaratLogo } from './NiasBaratLogo';
 import { FirestoreQuotaModal } from './FirestoreQuotaModal';
 import { AnnouncementReaderModal } from './AnnouncementReaderModal';
+import { BroadcastMessageModal } from './BroadcastMessageModal';
 import {
   LayoutDashboard,
   Boxes,
@@ -14,6 +15,7 @@ import {
   Database,
   Bell,
   ShieldCheck,
+  Megaphone,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -36,6 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
 
   const [showQuotaModal, setShowQuotaModal] = useState(false);
   const [showAnnounceReader, setShowAnnounceReader] = useState(false);
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
 
   // Desa only sees badge for their own pending mutations
   const pendingVerifCount = verifikasiList.filter((v) => {
@@ -100,6 +103,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
     ...(isAdminOrSuper
       ? [
           {
+            id: 'broadcast_msg',
+            label: 'KIRIM PESAN SIARAN',
+            icon: Megaphone,
+            badge: 'Semua User',
+            badgeColor: 'emerald' as const,
+          },
+          {
             id: 'users',
             label: 'PENGGUNA',
             icon: Users,
@@ -110,6 +120,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
   ];
 
   const handleItemClick = (item: typeof menuItems[0]) => {
+    if (item.id === 'broadcast_msg') {
+      setShowBroadcastModal(true);
+      if (onClose) {
+        onClose();
+      }
+      return;
+    }
     setActiveTab(item.id);
     if (onClose) {
       onClose();
@@ -138,31 +155,45 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
               </div>
             </div>
 
-            {/* Notification Bell with Blinking Indicator */}
-            <button
-              type="button"
-              onClick={() => setShowAnnounceReader(true)}
-              className={`relative p-2 rounded-xl border transition-all cursor-pointer shrink-0 ${
-                unreadAnnouncementCount > 0
-                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 shadow-md shadow-amber-500/20 hover:bg-amber-500/30'
-                  : 'bg-emerald-900/40 text-emerald-300 border-emerald-700/40 hover:bg-emerald-800/50 hover:text-white'
-              }`}
-              title={
-                unreadAnnouncementCount > 0
-                  ? `Ada ${unreadAnnouncementCount} pengumuman baru dari Super Admin (Klik untuk baca)`
-                  : 'Pemberitahuan & Pengumuman'
-              }
-            >
-              <Bell className={`w-4 h-4 ${unreadAnnouncementCount > 0 ? 'text-amber-300 animate-bounce' : ''}`} />
-              {unreadAnnouncementCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 flex h-4.5 w-4.5 items-center justify-center">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                  <span className="relative inline-flex items-center justify-center rounded-full h-4.5 w-4.5 bg-red-600 text-[9px] font-black text-white shadow-sm">
-                    {unreadAnnouncementCount}
-                  </span>
-                </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Quick Broadcast Button for Admins */}
+              {isAdminOrSuper && (
+                <button
+                  type="button"
+                  onClick={() => setShowBroadcastModal(true)}
+                  className="p-2 rounded-xl border border-emerald-500/60 bg-emerald-600/30 text-emerald-200 hover:bg-emerald-500 hover:text-white transition-all cursor-pointer shadow-sm"
+                  title="Kirim Pesan Siaran ke Semua User / Desa"
+                >
+                  <Megaphone className="w-4 h-4" />
+                </button>
               )}
-            </button>
+
+              {/* Notification Bell with Blinking Indicator */}
+              <button
+                type="button"
+                onClick={() => setShowAnnounceReader(true)}
+                className={`relative p-2 rounded-xl border transition-all cursor-pointer ${
+                  unreadAnnouncementCount > 0
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 shadow-md shadow-amber-500/20 hover:bg-amber-500/30'
+                    : 'bg-emerald-900/40 text-emerald-300 border-emerald-700/40 hover:bg-emerald-800/50 hover:text-white'
+                }`}
+                title={
+                  unreadAnnouncementCount > 0
+                    ? `Ada ${unreadAnnouncementCount} pengumuman baru dari Super Admin (Klik untuk baca)`
+                    : 'Pemberitahuan & Pengumuman'
+                }
+              >
+                <Bell className={`w-4 h-4 ${unreadAnnouncementCount > 0 ? 'text-amber-300 animate-bounce' : ''}`} />
+                {unreadAnnouncementCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 flex h-4.5 w-4.5 items-center justify-center">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                    <span className="relative inline-flex items-center justify-center rounded-full h-4.5 w-4.5 bg-red-600 text-[9px] font-black text-white shadow-sm">
+                      {unreadAnnouncementCount}
+                    </span>
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Navigation Links */}
@@ -254,7 +285,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
       <AnnouncementReaderModal
         isOpen={showAnnounceReader}
         onClose={() => setShowAnnounceReader(false)}
+        onOpenBroadcast={isAdminOrSuper ? () => setShowBroadcastModal(true) : undefined}
       />
+
+      {/* Modal Pusat Kirim Pesan Siaran ke Semua User (Khusus Super Admin & Admin Kecamatan) */}
+      {isAdminOrSuper && (
+        <BroadcastMessageModal
+          isOpen={showBroadcastModal}
+          onClose={() => setShowBroadcastModal(false)}
+        />
+      )}
     </>
   );
 };

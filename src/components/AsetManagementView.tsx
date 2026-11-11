@@ -1170,6 +1170,8 @@ export const AsetManagementView: React.FC = () => {
                                     <img
                                       src={item.fotoAset[0]}
                                       alt=""
+                                      loading="lazy"
+                                      decoding="async"
                                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                                     />
                                     {item.fotoAset.length > 1 && (
@@ -1488,6 +1490,8 @@ export const AsetManagementView: React.FC = () => {
                                               <img
                                                 src={item.fotoAset[0]}
                                                 alt=""
+                                                loading="lazy"
+                                                decoding="async"
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                                               />
                                               {item.fotoAset.length > 1 && (

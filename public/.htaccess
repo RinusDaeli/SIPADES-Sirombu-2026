@@ -3,10 +3,17 @@
   RewriteBase /
 
   # 1. Direct API Rewrites to cPanel PHP Bridge
+  RewriteRule ^api/cpanel/test/?$ cpanel-api.php?action=ping [QSA,L]
+  RewriteRule ^api/cpanel/upload/?$ cpanel-api.php?action=upload_all [QSA,L]
+  RewriteRule ^api/cpanel/save_aset/?$ cpanel-api.php?action=save_aset [QSA,L]
+  RewriteRule ^api/cpanel/delete_aset/?$ cpanel-api.php?action=delete_aset [QSA,L]
+  RewriteRule ^api/zip-base64/?$ cpanel-api.php?action=zip_base64 [QSA,L]
+  RewriteRule ^api/download-zip/?$ sipades-web-sirombu.zip [L]
   RewriteRule ^api/data/?$ cpanel-api.php?action=data [QSA,L]
   RewriteRule ^api/asets/batch/?$ cpanel-api.php?action=upload_all [QSA,L]
   RewriteRule ^api/asets/?$ cpanel-api.php?action=save_aset [QSA,L]
   RewriteRule ^api/asets/(.*)$ cpanel-api.php?action=save_aset&id=$1 [QSA,L]
+  RewriteRule ^api/events/?$ cpanel-api.php?action=ping [QSA,L]
 
   # 2. Serve existing files directly
   RewriteCond %{REQUEST_FILENAME} -f [OR]
