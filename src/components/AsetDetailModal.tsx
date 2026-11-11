@@ -16,6 +16,7 @@ import {
   Download,
   Sparkles,
 } from 'lucide-react';
+import { getPhotoUrl, handlePhotoError } from '../utils/photoUrl';
 
 interface AsetDetailModalProps {
   aset: Aset | null;
@@ -76,8 +77,9 @@ export const AsetDetailModal: React.FC<AsetDetailModalProps> = ({
             </a>
           </div>
           <img
-            src={lightboxImage.url}
+            src={getPhotoUrl(lightboxImage.url)}
             alt={lightboxImage.title}
+            onError={handlePhotoError}
             className="max-w-[92vw] max-h-[85vh] object-contain rounded-xl shadow-2xl border border-slate-800"
           />
         </div>
@@ -146,8 +148,9 @@ export const AsetDetailModal: React.FC<AsetDetailModalProps> = ({
                     {/* Big Active Photo */}
                     <div className="relative group rounded-xl overflow-hidden bg-slate-950 border border-slate-800 flex items-center justify-center aspect-video max-h-[300px]">
                       <img
-                        src={activePhoto}
+                        src={getPhotoUrl(activePhoto)}
                         alt={`Foto Aset ${selectedPhotoIndex + 1}`}
+                        onError={handlePhotoError}
                         className="w-full h-full object-contain"
                       />
                       <button
@@ -179,8 +182,9 @@ export const AsetDetailModal: React.FC<AsetDetailModalProps> = ({
                             }`}
                           >
                             <img
-                              src={p}
+                              src={getPhotoUrl(p)}
                               alt={`Thumbnail ${idx + 1}`}
+                              onError={handlePhotoError}
                               className="w-full h-full object-cover"
                             />
                           </button>
@@ -203,8 +207,9 @@ export const AsetDetailModal: React.FC<AsetDetailModalProps> = ({
                 {aset.fotoBast ? (
                   <div className="relative group rounded-xl overflow-hidden bg-slate-950 border border-slate-800 flex items-center justify-center aspect-video max-h-[200px]">
                     <img
-                      src={aset.fotoBast}
+                      src={getPhotoUrl(aset.fotoBast)}
                       alt="Foto BAST Aset kepada Pengguna"
+                      onError={handlePhotoError}
                       className="w-full h-full object-contain"
                     />
                     <button

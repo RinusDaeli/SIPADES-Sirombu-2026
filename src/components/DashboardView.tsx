@@ -14,6 +14,7 @@ import {
   AsetVerificationBadge,
   VerificationStatusType,
 } from '../utils/verificationHelper';
+import { getPhotoUrl, handlePhotoError } from '../utils/photoUrl';
 import {
   Boxes,
   Layers,
@@ -305,17 +306,6 @@ export const DashboardView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap justify-end">
-          {/* Tombol Kirim Pesan Siaran (Broadcast ke Semua User) */}
-          <button
-            type="button"
-            onClick={() => setShowBroadcastModal(true)}
-            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center gap-2 transition-all cursor-pointer shadow-lg shadow-emerald-950/60 border border-emerald-400/50"
-            title="Kirim Pesan Siaran / Pengumuman Realtime ke Semua User"
-          >
-            <Megaphone className="w-4 h-4 text-emerald-200" />
-            <span>Kirim Pesan Siaran</span>
-          </button>
-
           {/* Tombol Notifikasi Verifikasi Aset Baru (Khusus Admin / Super Admin) */}
           {isAdminOrSuper && pendingVerificationCount > 0 && (
             <button
@@ -401,48 +391,6 @@ export const DashboardView: React.FC = () => {
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/50 font-bold hidden md:inline">
                 Bebas Kuota
               </span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Banner Siaran Pesan ke Semua User */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-slate-900 to-teal-950/70 border border-emerald-500/40 shadow-xl">
-        <div className="flex items-center gap-3.5">
-          <div className="p-3 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-slate-950 font-black shadow-lg shadow-emerald-500/20 shrink-0">
-            <Megaphone className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-sm font-black text-white tracking-wide">
-                Pusat Pesan & Pengumuman Siaran Realtime
-              </h3>
-              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                Semua User 25 Desa
-              </span>
-            </div>
-            <p className="text-xs text-slate-300 mt-0.5">
-              Kirim instruksi, imbauan, atau pengumuman resmi langsung ke layar seluruh Admin Desa dan Operator.
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2.5 shrink-0">
-          <button
-            type="button"
-            onClick={() => setShowBroadcastModal(true)}
-            className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md shadow-emerald-900/30"
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span>Tulis Pesan Siaran</span>
-          </button>
-          {announcements.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowAnnounceModal(true)}
-              className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-slate-700"
-            >
-              <Bell className="w-3.5 h-3.5 text-amber-400" />
-              <span>Baca Pesan ({announcements.length})</span>
             </button>
           )}
         </div>
@@ -992,10 +940,11 @@ export const DashboardView: React.FC = () => {
                             {aset.fotoAset && aset.fotoAset.length > 0 && aset.fotoAset[0] ? (
                               <>
                                 <img
-                                  src={aset.fotoAset[0]}
+                                  src={getPhotoUrl(aset.fotoAset[0])}
                                   alt=""
                                   loading="lazy"
                                   decoding="async"
+                                  onError={handlePhotoError}
                                   className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                                 />
                                 {aset.fotoAset.length > 1 && (

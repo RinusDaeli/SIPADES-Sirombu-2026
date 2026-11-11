@@ -182,9 +182,9 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
   AUTH_SESSION: 'sipades_sirombu_session_24h',
-  USERS: 'sipad_users_v3',
-  DESAS: 'sipad_desas_v6',
-  ASETS: 'sipad_asets_v6',
+  USERS: 'sipad_users_v4',
+  DESAS: 'sipad_desas_v7_light',
+  ASETS: 'sipad_asets_v7_light',
   DELETED_ASETS: 'sipad_deleted_asets_v2',
   VERIFIKASI: 'sipad_verifikasi_v2',
   PENGESAHAN: 'sipad_pengesahan_v2',
@@ -251,12 +251,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return null;
   });
 
-  // Track deleted asset IDs (Tombstones) - initialized clean so stale laptop caches never suppress live cPanel assets
+  // Track deleted asset IDs (Tombstones) - permanently suppresses deleted items like old Tenda 75 JT
   const [deletedAssetIds, setDeletedAssetIds] = useState<Set<string>>(() => {
     try {
-      localStorage.removeItem(STORAGE_KEYS.DELETED_ASETS);
+      const saved = localStorage.getItem(STORAGE_KEYS.DELETED_ASETS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return new Set<string>(['ast-1794407303430-0-85mzy', ...parsed]);
+        }
+      }
     } catch {}
-    return new Set<string>(['ast-test-1']);
+    return new Set<string>(['ast-1794407303430-0-85mzy', 'ast-test-1']);
   });
 
   const [firestoreQuotaStatus] = useState<FirestoreQuotaStatus>('NORMAL');
@@ -315,6 +321,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [announcements, readAnnouncementIds]);
 
   const sendAnnouncement = useCallback(async (title: string, message: string, priority: 'normal' | 'urgent' | 'warning' = 'warning') => {
+    const isAllowed = currentUser?.role === 'super_admin' || currentUser?.role === 'admin_kecamatan';
+    if (!isAllowed) {
+      console.warn('Hanya Super Admin dan Admin Kecamatan yang berhak mengirim siaran/pengumuman!');
+      return;
+    }
+
     const newAnn: SystemAnnouncement = {
       id: `ann-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       title: title || 'Pemberitahuan dari Super Admin',
@@ -356,15 +368,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
   }, []);
 
-  const CURRENT_DATA_REVISION = '2026_11_11_sirombu_v328_cpanel_authoritative';
   const [desas, setDesas] = useState<Desa[]>(() => {
     try {
-      const storedRev = localStorage.getItem('SIPADES_DATA_REVISION');
-      if (storedRev !== CURRENT_DATA_REVISION) {
-        localStorage.setItem('SIPADES_DATA_REVISION', CURRENT_DATA_REVISION);
-        localStorage.setItem(STORAGE_KEYS.DESAS, JSON.stringify(INITIAL_DESA_LIST));
-        return INITIAL_DESA_LIST;
-      }
       const saved = localStorage.getItem(STORAGE_KEYS.DESAS);
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -406,21 +411,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return INITIAL_USERS;
   });
 
-  // Primary state: loads from authoritative initial data, ignoring stale offline laptop cache
+  // Primary state: loads from authoritative initial data cleanly without blocking the browser thread
   const [asets, setAsets] = useState<Aset[]>(() => {
     try {
-      const storedRev = localStorage.getItem('SIPADES_DATA_REVISION');
-      if (storedRev !== CURRENT_DATA_REVISION) {
-        localStorage.setItem('SIPADES_DATA_REVISION', CURRENT_DATA_REVISION);
-        localStorage.setItem(STORAGE_KEYS.ASETS, JSON.stringify(INITIAL_ASETS));
-        return deduplicateAsets(INITIAL_ASETS);
-      }
       const saved = localStorage.getItem(STORAGE_KEYS.ASETS);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length >= INITIAL_ASETS.length) {
-          const clean = deduplicateAsets(parsed);
-          return clean;
+          return deduplicateAsets(parsed);
         }
       }
     } catch {}
@@ -502,6 +500,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedDesaFilter, setSelectedDesaFilter] = useState<string>('all');
   const [isServerConnected, setIsServerConnected] = useState<boolean>(true);
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
+  const cpanelBootLoadedRef = useRef(false);
 
   // Check 24-hour session expiry periodically
   useEffect(() => {
@@ -537,7 +536,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const cpData = await fetchCpanelData();
       if (cpData && Array.isArray(cpData.asets) && cpData.asets.length > 0) {
-        const cleanAsets = deduplicateAsets(cpData.asets);
+        const cleanAsets = deduplicateAsets(cpData.asets, deletedAssetIds);
         const { asets: normalized } = normalizeAsetRegisters(cleanAsets, desas);
         
         setAsets((prev) => {
@@ -551,14 +550,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               map.set(na.id, na);
               hasChanges = true;
             } else {
-              // Preserve existing photos if incoming is stripped
-              let fotoAset = na.fotoAset;
-              if ((!fotoAset || fotoAset.length === 0) && current.fotoAset && current.fotoAset.length > 0) {
-                fotoAset = current.fotoAset;
-              }
-              let fotoBast = na.fotoBast || current.fotoBast || '';
+              const currTime = new Date(current.updatedAt || 0).getTime();
+              const naTime = new Date(na.updatedAt || 0).getTime();
 
-              // Protect local verification from being reverted
+              // Protect verified status if incoming is not verified
               let statusVerifikasi = na.statusVerifikasi;
               let diverifikasiOleh = na.diverifikasiOleh;
               let tanggalVerifikasi = na.tanggalVerifikasi;
@@ -576,24 +571,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 nomorSKVerifikasi = current.nomorSKVerifikasi || na.nomorSKVerifikasi;
               }
 
-              if (
-                current.statusVerifikasi !== statusVerifikasi ||
-                current.updatedAt !== na.updatedAt ||
-                (fotoAset && fotoAset.length !== (current.fotoAset || []).length)
-              ) {
+              if (naTime > currTime) {
+                // Incoming edit from cPanel is strictly newer: overwrite local
                 hasChanges = true;
-              }
+                map.set(na.id, {
+                  ...na,
+                  statusVerifikasi,
+                  diverifikasiOleh,
+                  tanggalVerifikasi,
+                  catatanVerifikasi,
+                  nomorSKVerifikasi,
+                });
+              } else if (currTime > naTime) {
+                // Local edit is newer, preserve local
+              } else {
+                // Timestamps equal: check if ANY core property changed
+                const isDifferent =
+                  current.namaAset !== na.namaAset ||
+                  current.nomorSeri !== na.nomorSeri ||
+                  current.kondisi !== na.kondisi ||
+                  current.nilaiPerolehan !== na.nilaiPerolehan ||
+                  current.keterangan !== na.keterangan ||
+                  current.lokasi !== na.lokasi ||
+                  current.merk !== na.merk ||
+                  current.tipe !== na.tipe ||
+                  current.kodeAset !== na.kodeAset ||
+                  current.statusVerifikasi !== statusVerifikasi ||
+                  (current.fotoAset || []).join('|') !== (na.fotoAset || []).join('|') ||
+                  (current.fotoBast || '') !== (na.fotoBast || '');
 
-              map.set(na.id, {
-                ...na,
-                fotoAset: fotoAset || [],
-                fotoBast,
-                statusVerifikasi,
-                diverifikasiOleh,
-                tanggalVerifikasi,
-                catatanVerifikasi,
-                nomorSKVerifikasi,
-              });
+                if (isDifferent) {
+                  hasChanges = true;
+                  map.set(na.id, {
+                    ...current,
+                    ...na,
+                    statusVerifikasi,
+                    diverifikasiOleh,
+                    tanggalVerifikasi,
+                    catatanVerifikasi,
+                    nomorSKVerifikasi,
+                  });
+                }
+              }
             }
           }
 
@@ -630,29 +649,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) {
       console.warn('[cPanel Sync] refreshServerData error:', e);
     }
-  }, [desas, persistAsetsSafely]);
+  }, [desas, persistAsetsSafely, deletedAssetIds]);
 
   // Pure cPanel Central Database Synchronization (Disconnected from Firebase)
   useEffect(() => {
-    // Clean obsolete laptop cache tombstones
-    try {
-      localStorage.removeItem(STORAGE_KEYS.DELETED_ASETS);
-    } catch {}
+    if (cpanelBootLoadedRef.current) return;
+    cpanelBootLoadedRef.current = true;
 
     const loadAuthoritativeCpanelData = async () => {
       try {
         const cpData = await fetchCpanelData();
         if (cpData && Array.isArray(cpData.asets) && cpData.asets.length > 0) {
-          const clean = deduplicateAsets(cpData.asets);
+          const clean = deduplicateAsets(cpData.asets, deletedAssetIds);
           const { asets: normalized } = normalizeAsetRegisters(clean, desas);
 
-          // Authoritative state directly from cPanel (ignoring stale laptop offline cache)
-          setAsets(normalized);
-          persistAsetsSafely(normalized);
-          saveAsetsToIndexedDB(normalized).catch(() => {});
+          // Authoritative state directly from cPanel
+          setAsets((prev) => {
+            // Guard: never drop down to an incomplete/truncated asset list
+            if (prev.length >= 330 && normalized.length < 330) {
+              const map = new Map<string, Aset>(prev.map((a) => [a.id, a]));
+              for (const na of normalized) {
+                if (na && na.id) {
+                  const curr = map.get(na.id);
+                  const photos = (na.fotoAset && na.fotoAset.length > 0) ? na.fotoAset : (curr?.fotoAset || []);
+                  map.set(na.id, curr ? { ...curr, ...na, fotoAset: photos } : na);
+                }
+              }
+              const merged = Array.from(map.values());
+              persistAsetsSafely(merged);
+              return merged;
+            }
+
+            // Reference identity check: if asset count & all core props match, DO NOT CHANGE OBJECT REFERENCE
+            if (prev.length === normalized.length) {
+              let isDifferent = false;
+              for (let i = 0; i < prev.length; i++) {
+                if (
+                  prev[i].id !== normalized[i].id ||
+                  prev[i].updatedAt !== normalized[i].updatedAt ||
+                  prev[i].namaAset !== normalized[i].namaAset ||
+                  prev[i].nomorSeri !== normalized[i].nomorSeri ||
+                  prev[i].kondisi !== normalized[i].kondisi ||
+                  prev[i].nilaiPerolehan !== normalized[i].nilaiPerolehan ||
+                  (prev[i].fotoAset || []).length !== (normalized[i].fotoAset || []).length ||
+                  prev[i].statusVerifikasi !== normalized[i].statusVerifikasi
+                ) {
+                  isDifferent = true;
+                  break;
+                }
+              }
+              if (!isDifferent) {
+                return prev; // PRESERVE SAME OBJECT IDENTITY - NO FLICKERING!
+              }
+            }
+
+            persistAsetsSafely(normalized);
+            saveAsetsToIndexedDB(normalized).catch(() => {});
+            return normalized;
+          });
 
           if (Array.isArray(cpData.desas) && cpData.desas.length > 0) {
             setDesas((prev) => {
+              if (prev.length === cpData.desas!.length) return prev;
               const map = new Map<string, Desa>(prev.map((d) => [d.id, d]));
               cpData.desas!.forEach((cd) => {
                 if (cd && cd.id) {
@@ -668,6 +726,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
           if (Array.isArray(cpData.users) && cpData.users.length > 0) {
             setUsers((prev) => {
+              if (prev.length === cpData.users!.length) return prev;
               const map = new Map<string, User>(prev.map((u) => [u.id, u]));
               cpData.users!.forEach((u) => {
                 if (u && u.id) map.set(u.id, u);
@@ -851,21 +910,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
 
-    // Poll every 12 seconds for gentle real-time synchronization that respects shared hosting limits
-    const pulseInterval = setInterval(checkCpanelPulse, 12000);
-
-    // Instant sync on tab focus or visibility change
-    const onFocus = () => { checkCpanelPulse(); };
-    window.addEventListener('focus', onFocus);
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') checkCpanelPulse();
-    };
-    document.addEventListener('visibilitychange', onVisibility);
+    // Gentle periodic heartbeat every 60 seconds (prevents Rate exceeded and respects hosting limits)
+    const pulseInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        checkCpanelPulse();
+      }
+    }, 60000);
 
     return () => {
       clearInterval(pulseInterval);
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [refreshServerData]);
 
@@ -1024,13 +1077,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // Never resurrect deleted items from IndexedDB cache!
           // Google Cloud Firestore is the authoritative source of truth.
           // Only hydrate photo blobs for assets that are actively in current state.
-          return current.map((c) => {
+          let didHydrate = false;
+          const updated = current.map((c) => {
             const matched = idbAsets.find((item) => item && item.id === c.id);
             if (matched && (!c.fotoAset || c.fotoAset.length === 0) && matched.fotoAset && matched.fotoAset.length > 0) {
+              didHydrate = true;
               return { ...c, fotoAset: matched.fotoAset, fotoBast: matched.fotoBast || c.fotoBast };
             }
             return c;
           });
+          return didHydrate ? updated : current;
         });
       }
     }).catch(() => {});

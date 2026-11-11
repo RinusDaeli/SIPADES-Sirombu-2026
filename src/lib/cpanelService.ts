@@ -43,9 +43,9 @@ export async function pingCpanel(): Promise<{
     return {
       success: data.status === 'success',
       message: data.message || 'Koneksi cPanel berhasil',
-      totalAset: data.totalAset ?? data.totalUnit ?? 328,
-      totalUnit: data.totalUnit ?? data.totalAset ?? 328,
-      activeAset: data.activeAset ?? data.totalAset ?? 328,
+      totalAset: data.totalAset ?? data.totalUnit ?? 330,
+      totalUnit: data.totalUnit ?? data.totalAset ?? 330,
+      activeAset: data.activeAset ?? data.totalAset ?? 330,
       pendingVerifikasi: data.pendingVerifikasi,
       updatedAt: data.updatedAt,
     };
@@ -57,12 +57,17 @@ export async function pingCpanel(): Promise<{
   }
 }
 
-export async function fetchCpanelData(light: boolean = true): Promise<CpanelDatabase | null> {
+export async function fetchCpanelData(light: boolean = false): Promise<CpanelDatabase | null> {
   const lightParam = light ? '&light=1' : '';
   // 1. Direct from cPanel endpoint (if on production domain or direct access succeeds)
   try {
     const ep = getCpanelEndpoint();
-    const res = await fetch(`${ep}?action=data${lightParam}`, { cache: 'no-store' });
+    const res = await fetch(`${ep}?action=data${lightParam}`, {
+      cache: 'no-store',
+      headers: {
+        'Accept': 'application/json, text/plain, */*',
+      },
+    });
     if (res.ok) {
       const data = await res.json();
       if (data && Array.isArray(data.asets) && data.asets.length > 0) {
@@ -106,16 +111,24 @@ export async function fetchCpanelData(light: boolean = true): Promise<CpanelData
 }
 
 export async function saveAsetToCpanel(aset: Aset): Promise<boolean> {
-  // Strip large base64 photos to keep payload under 1 KB (cpanel-api.php automatically preserves existing photos)
+  // Preserve physical /uploads/ paths, external URLs, and new compressed data:image URLs so cPanel can save files
   const cleanAset: Record<string, any> = { ...aset };
   if (Array.isArray(cleanAset.fotoAset)) {
-    delete cleanAset.fotoAset;
-  } else if (typeof cleanAset.fotoAset === 'string' && cleanAset.fotoAset.length > 500) {
-    delete cleanAset.fotoAset;
+    cleanAset.fotoAset = cleanAset.fotoAset.filter(
+      (p: any) => typeof p === 'string' && (p.startsWith('/uploads/') || p.startsWith('http') || p.startsWith('data:image/'))
+    );
+  } else if (cleanAset.fotoAset === undefined || cleanAset.fotoAset === null) {
+    cleanAset.fotoAset = [];
   }
-  if (typeof cleanAset.fotoBast === 'string' && cleanAset.fotoBast.length > 500) {
-    delete cleanAset.fotoBast;
+
+  if (typeof cleanAset.fotoBast === 'string') {
+    if (!cleanAset.fotoBast.startsWith('/uploads/') && !cleanAset.fotoBast.startsWith('http') && !cleanAset.fotoBast.startsWith('data:image/')) {
+      cleanAset.fotoBast = '';
+    }
+  } else {
+    cleanAset.fotoBast = '';
   }
+
 
   // 1. Direct browser fetch if on production domain
   try {

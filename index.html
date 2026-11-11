@@ -43,6 +43,28 @@
         to { transform: rotate(360deg); }
       }
     </style>
+    <script>
+      // 1. Immediately purge legacy bloated base64 keys before React loads
+      (function() {
+        try {
+          var purgeKeys = [
+            'sipad_asets_v6',
+            'sipad_asets_v5',
+            'sipad_asets_v4',
+            'sipad_asets_v3',
+            'sipad_asets_v2',
+            'sipad_asets_v1',
+            'sipad_desas_v6',
+            'SIPADES_DATA_REVISION'
+          ];
+          for (var i = 0; i < purgeKeys.length; i++) {
+            if (localStorage.getItem(purgeKeys[i])) {
+              localStorage.removeItem(purgeKeys[i]);
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body class="bg-[#0B0F19] text-slate-100 font-['Plus_Jakarta_Sans',sans-serif] antialiased min-h-screen selection:bg-amber-500 selection:text-black">
     <div id="root">
@@ -54,11 +76,39 @@
         <p style="font-size: 0.75rem; color: #34d399; margin: 0 0 0.5rem 0; font-weight: 600;">
           Kecamatan Sirombu • Kabupaten Nias Barat
         </p>
-        <p style="font-size: 0.7rem; color: #94a3b8; margin: 0;">
+        <p id="loader-status-text" style="font-size: 0.7rem; color: #94a3b8; margin: 0;">
           Memuat Sistem Informasi Aset Desa...
         </p>
+        <div id="loader-recovery-btn" style="display:none;margin-top:16px;">
+          <button
+            onclick="try{localStorage.clear();sessionStorage.clear();}catch(e){}window.location.reload(true);"
+            style="background:#f59e0b;color:#0b0f19;border:none;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:bold;cursor:pointer;box-shadow:0 4px 12px rgba(245,158,11,0.3);"
+          >
+            ⚡ Masuk Cepat / Segarkan Halaman
+          </button>
+        </div>
       </div>
     </div>
+    <script>
+      // If still loading after 2.5s, display instant refresh button
+      setTimeout(function() {
+        var btn = document.getElementById('loader-recovery-btn');
+        if (btn) btn.style.display = 'block';
+        var txt = document.getElementById('loader-status-text');
+        if (txt) txt.textContent = 'Menyiapkan modul aplikasi...';
+      }, 2500);
+
+      // Global error listener to display error if a script fails to execute
+      window.addEventListener('error', function(e) {
+        var txt = document.getElementById('loader-status-text');
+        if (txt) {
+          txt.style.color = '#f87171';
+          txt.textContent = 'Kendala modul: ' + (e.message || 'Gagal memuat skrip');
+        }
+        var btn = document.getElementById('loader-recovery-btn');
+        if (btn) btn.style.display = 'block';
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

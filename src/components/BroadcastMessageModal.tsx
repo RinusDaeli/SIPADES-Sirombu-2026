@@ -34,12 +34,13 @@ export const BroadcastMessageModal: React.FC<BroadcastMessageModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'compose' | 'history'>('compose');
+  const isAdminOrSuper = currentUser?.role === 'super_admin' || currentUser?.role === 'admin_kecamatan';
 
-  if (!isOpen) return null;
+  if (!isOpen || !isAdminOrSuper) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim()) return;
+    if (!isAdminOrSuper || !message.trim()) return;
 
     setIsSubmitting(true);
     try {

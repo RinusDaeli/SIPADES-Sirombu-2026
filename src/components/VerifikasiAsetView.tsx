@@ -5,6 +5,7 @@ import { formatRupiah, formatTanggalIndonesia } from '../utils/reportGenerator';
 import { getAsetVerificationStatus, AsetVerificationBadge } from '../utils/verificationHelper';
 import { AsetDetailModal } from './AsetDetailModal';
 import { NiasBaratLogo } from './NiasBaratLogo';
+import { getPhotoUrl, handlePhotoError } from '../utils/photoUrl';
 import {
   ShieldCheck,
   CheckCircle2,
@@ -869,8 +870,9 @@ export const VerifikasiAsetView: React.FC = () => {
                             title="Klik untuk melihat foto fisik aset"
                           >
                             <img
-                              src={item.fotoAset![0]}
+                              src={getPhotoUrl(item.fotoAset![0])}
                               alt={item.namaAset}
+                              onError={handlePhotoError}
                               className="w-10 h-10 object-cover rounded-lg border border-slate-700 group-hover:border-emerald-400 transition-all shadow"
                             />
                             {item.fotoAset!.length > 1 && (
@@ -1372,8 +1374,9 @@ export const VerifikasiAsetView: React.FC = () => {
                     {printModalAset.fotoAset.slice(0, 2).map((img, idx) => (
                       <img
                         key={idx}
-                        src={img}
+                        src={getPhotoUrl(img)}
                         alt="Foto aset"
+                        onError={handlePhotoError}
                         className="w-32 h-24 object-cover rounded border border-slate-300"
                       />
                     ))}

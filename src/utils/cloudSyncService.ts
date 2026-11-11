@@ -157,55 +157,11 @@ class CloudSyncManager {
   }
 
   private initSignalListener() {
-    try {
-      this.eventSource = new EventSource(SSE_URL);
-      this.eventSource.onmessage = (event) => {
-        try {
-          const raw = JSON.parse(event.data);
-          if (!raw.message) return;
-          const msg = typeof raw.message === 'string' ? JSON.parse(raw.message) : raw.message;
-
-          if (msg && msg.peerId && msg.peerId !== this.peerId) {
-            if (msg.type === 'ANNOUNCE') {
-              // Connect to the newly announced peer
-              this.connectToPeer(msg.peerId);
-            } else if (
-              (msg.type === 'BROADCAST_STATE' ||
-                msg.type === 'DESA_UPDATE' ||
-                msg.type === 'ASET_UPDATE' ||
-                msg.type === 'DELETE_ASET' ||
-                msg.type === 'KECAMATAN_UPDATE') &&
-              msg.payload
-            ) {
-              this.notifySync(msg.payload);
-            }
-          }
-        } catch {
-          // ignore heartbeat / invalid format
-        }
-      };
-
-      this.eventSource.onerror = () => {
-        // SSE will auto-reconnect
-      };
-    } catch {
-      // ignore
-    }
+    // Disabled to prevent third-party ntfy.sh 'Rate exceeded' blocks
   }
 
-  private async broadcastSignal(data: any) {
-    try {
-      await fetch(SIGNAL_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic: SIGNAL_TOPIC,
-          message: JSON.stringify(data),
-        }),
-      });
-    } catch {
-      // ignore offline
-    }
+  private async broadcastSignal(_data: any) {
+    // Handled locally via BroadcastChannel and server SSE without hitting public rate limits
   }
 
   private notifySync(payload: FullSyncPayload) {

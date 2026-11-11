@@ -23,6 +23,7 @@ import {
   getAsetVerificationStatus,
   AsetVerificationBadge,
 } from '../utils/verificationHelper';
+import { getPhotoUrl, handlePhotoError } from '../utils/photoUrl';
 import {
   Plus,
   Search,
@@ -649,8 +650,8 @@ export const AsetManagementView: React.FC = () => {
       tipe: formData.tipe?.trim() || undefined,
       nomorSeri: formData.nomorSeri?.trim() || undefined,
       keterangan: formData.keterangan,
-      fotoAset: validPhotos.length > 0 ? validPhotos : selectedAset.fotoAset,
-      fotoBast: formData.fotoBast || selectedAset.fotoBast,
+      fotoAset: validPhotos,
+      fotoBast: formData.fotoBast || '',
     });
     showToast('Data aset berhasil diperbarui!');
     setShowEditModal(false);
@@ -1168,10 +1169,11 @@ export const AsetManagementView: React.FC = () => {
                                 {item.fotoAset && item.fotoAset.length > 0 && item.fotoAset[0] ? (
                                   <>
                                     <img
-                                      src={item.fotoAset[0]}
+                                      src={getPhotoUrl(item.fotoAset[0])}
                                       alt=""
                                       loading="lazy"
                                       decoding="async"
+                                      onError={handlePhotoError}
                                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                                     />
                                     {item.fotoAset.length > 1 && (
@@ -1488,10 +1490,11 @@ export const AsetManagementView: React.FC = () => {
                                           {item.fotoAset && item.fotoAset.length > 0 && item.fotoAset[0] ? (
                                             <>
                                               <img
-                                                src={item.fotoAset[0]}
+                                                src={getPhotoUrl(item.fotoAset[0])}
                                                 alt=""
                                                 loading="lazy"
                                                 decoding="async"
+                                                onError={handlePhotoError}
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                                               />
                                               {item.fotoAset.length > 1 && (

@@ -130,14 +130,36 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
   if (typeof window === 'undefined' || !window.localStorage) return false;
 
   try {
+    // If saving assets array, ensure heavy base64 images (> 20KB) are stripped
+    if (key.includes('aset')) {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          const lightweight = createLightweightAsets(parsed);
+          localStorage.setItem(key, JSON.stringify(lightweight));
+          return true;
+        }
+      } catch {}
+    }
+
     localStorage.setItem(key, value);
     return true;
   } catch (err: any) {
     console.warn(`[SafeStorage] localStorage quota reached for key "${key}". Applying quota relief.`);
 
     try {
-      // If it's the asets key, strip heavy images and store lightweight representation
-      if (key === 'sipad_asets_v2') {
+      // Purge obsolete heavy keys
+      localStorage.removeItem('sipad_asets_v6');
+      localStorage.removeItem('sipad_asets_v5');
+      localStorage.removeItem('sipad_asets_v4');
+      localStorage.removeItem('sipad_asets_v3');
+      localStorage.removeItem('sipad_asets_v2');
+      localStorage.removeItem('sipad_asets_v1');
+      localStorage.removeItem('sipad_desas_v6');
+      localStorage.removeItem('sipades_temp');
+
+      // Try saving lightweight version
+      if (key.includes('aset')) {
         const parsed = JSON.parse(value);
         if (Array.isArray(parsed)) {
           const lightweight = createLightweightAsets(parsed);
@@ -146,9 +168,6 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
         }
       }
 
-      // Try removing legacy or non-essential cache
-      localStorage.removeItem('sipad_asets_v1');
-      localStorage.removeItem('sipades_temp');
       localStorage.setItem(key, value);
       return true;
     } catch {
@@ -158,3 +177,4 @@ export function safeLocalStorageSetItem(key: string, value: string): boolean {
     }
   }
 }
+

@@ -23,6 +23,7 @@ interface DatabaseSchema {
   kecamatanProfile: KecamatanProfile;
   announcements?: SystemAnnouncement[];
   selectedYear: number;
+  deletedIds?: string[];
   updatedAt: string;
 }
 
@@ -52,38 +53,8 @@ function broadcastEvent(type: string, data: any) {
 }
 
 function restoreMissingPhotos(asets: Aset[]): Aset[] {
-  try {
-    const backupFile = path.join(process.cwd(), 'public/assets/aistudio/BACKUP-SIPADES-KEC-SIROMBU-2026-11-09_315__94e5555e.json');
-    if (!fs.existsSync(backupFile)) return asets;
-    const json = JSON.parse(fs.readFileSync(backupFile, 'utf-8'));
-    const bAsets = (json.data && json.data.asets) || json.asets || [];
-    const mapById = new Map<string, any>();
-    const mapByKode = new Map<string, any>();
-    const mapByNameDesa = new Map<string, any>();
-
-    bAsets.forEach((a: any) => {
-      if (a.id) mapById.set(a.id, a);
-      if (a.kodeAset) mapByKode.set(a.kodeAset, a);
-      if (a.namaAset && a.desaId) mapByNameDesa.set((a.namaAset + '_' + a.desaId).toLowerCase(), a);
-    });
-
-    return asets.map((a) => {
-      const b = mapById.get(a.id) || mapByKode.get(a.kodeAset) || mapByNameDesa.get((a.namaAset + '_' + a.desaId).toLowerCase());
-      if (b) {
-        let fotoAset = a.fotoAset;
-        if (!fotoAset || (Array.isArray(fotoAset) && fotoAset.length === 0)) {
-          if (Array.isArray(b.fotoAset) && b.fotoAset.length > 0) fotoAset = b.fotoAset;
-          else if (typeof b.fotoAset === 'string' && b.fotoAset.length > 100) fotoAset = [b.fotoAset];
-        }
-        let fotoBast = a.fotoBast;
-        if (!fotoBast && b.fotoBast && b.fotoBast.length > 50) fotoBast = b.fotoBast;
-        return { ...a, fotoAset: fotoAset || [], fotoBast: fotoBast || '' };
-      }
-      return a;
-    });
-  } catch (err) {
-    return asets;
-  }
+  // Photos are stored as lightweight URL paths (/uploads/foto-aset/...)
+  return asets;
 }
 
 function loadDatabase(): DatabaseSchema {
@@ -103,6 +74,7 @@ function loadDatabase(): DatabaseSchema {
         kecamatanProfile: parsed.kecamatanProfile || INITIAL_KECAMATAN_PROFILE,
         announcements: Array.isArray(parsed.announcements) ? parsed.announcements : [],
         selectedYear: typeof parsed.selectedYear === 'number' ? parsed.selectedYear : 0,
+        deletedIds: Array.isArray(parsed.deletedIds) ? parsed.deletedIds : ['ast-1794407303430-0-85mzy'],
         updatedAt: parsed.updatedAt || new Date().toISOString(),
       };
     }
@@ -119,6 +91,7 @@ function loadDatabase(): DatabaseSchema {
     kecamatanProfile: INITIAL_KECAMATAN_PROFILE,
     announcements: [],
     selectedYear: 0,
+    deletedIds: ['ast-1794407303430-0-85mzy'],
     updatedAt: new Date().toISOString(),
   };
   saveDatabase(defaultState);
@@ -242,10 +215,19 @@ async function startServer() {
       return res.status(400).json({ error: 'Payload tidak valid' });
     }
 
+    if (Array.isArray(payload.deletedIds)) {
+      if (!dbState.deletedIds) dbState.deletedIds = [];
+      payload.deletedIds.forEach((id: string) => {
+        if (!dbState.deletedIds!.includes(id)) dbState.deletedIds!.push(id);
+      });
+    }
+
+    const currentDeleted = new Set(dbState.deletedIds || []);
+
     if (Array.isArray(payload.asets)) {
-      const map = new Map<string, Aset>(dbState.asets.map((a) => [a.id, a]));
+      const map = new Map<string, Aset>(dbState.asets.filter((a) => !currentDeleted.has(a.id)).map((a) => [a.id, a]));
       payload.asets.forEach((a: Aset) => {
-        if (a && a.id) {
+        if (a && a.id && !currentDeleted.has(a.id)) {
           const exist = map.get(a.id);
           let fotoAset = a.fotoAset;
           if ((!fotoAset || fotoAset.length === 0) && exist?.fotoAset && exist.fotoAset.length > 0) {
@@ -427,6 +409,10 @@ async function startServer() {
 
   app.delete('/api/asets/:id', (req, res) => {
     const { id } = req.params;
+    if (!dbState.deletedIds) dbState.deletedIds = [];
+    if (!dbState.deletedIds.includes(id)) {
+      dbState.deletedIds.push(id);
+    }
     dbState.asets = dbState.asets.filter((a) => a.id !== id);
     saveDatabase(dbState);
     // Automatic Real-time Sync to cPanel hosting (Deletions are removed in cPanel)
@@ -634,6 +620,10 @@ async function startServer() {
       const { id } = req.body;
       if (!id) return res.status(400).json({ error: 'ID tidak boleh kosong' });
 
+      if (!dbState.deletedIds) dbState.deletedIds = [];
+      if (!dbState.deletedIds.includes(id)) {
+        dbState.deletedIds.push(id);
+      }
       dbState.asets = dbState.asets.filter((a) => a.id !== id);
       saveDatabase(dbState);
 
@@ -942,6 +932,12 @@ async function startServer() {
     }
   }));
 
+  // Serve uploads with explicit static middleware and long caching
+  app.use('/uploads', express.static(path.join(process.cwd(), 'public/uploads'), {
+    maxAge: '7d',
+    immutable: true,
+  }));
+
   // ==================== VITE MIDDLEWARE / SPA SERVING ====================
   const distPath = path.join(process.cwd(), 'dist');
   const indexHtmlPath = path.join(distPath, 'index.html');
@@ -969,7 +965,7 @@ async function startServer() {
     // SPA fallback: transform and serve index.html for client-side navigation
     app.use('*', async (req, res, next) => {
       const url = req.originalUrl;
-      if (url.startsWith('/api')) {
+      if (url.startsWith('/api') || url.startsWith('/uploads')) {
         return next();
       }
       try {
@@ -979,7 +975,12 @@ async function startServer() {
         }
         let template = fs.readFileSync(rootIndexHtml, 'utf-8');
         template = await vite.transformIndexHtml(url, template);
-        res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
+        res.status(200).set({
+          'Content-Type': 'text/html',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        }).end(template);
       } catch (e) {
         vite.ssrFixStacktrace(e as Error);
         next(e);

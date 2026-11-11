@@ -103,13 +103,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
     ...(isAdminOrSuper
       ? [
           {
-            id: 'broadcast_msg',
-            label: 'KIRIM PESAN SIARAN',
-            icon: Megaphone,
-            badge: 'Semua User',
-            badgeColor: 'emerald' as const,
-          },
-          {
             id: 'users',
             label: 'PENGGUNA',
             icon: Users,
@@ -121,6 +114,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
 
   const handleItemClick = (item: typeof menuItems[0]) => {
     if (item.id === 'broadcast_msg') {
+      if (!isAdminOrSuper) return;
       setShowBroadcastModal(true);
       if (onClose) {
         onClose();

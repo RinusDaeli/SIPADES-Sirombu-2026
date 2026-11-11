@@ -15,7 +15,8 @@
   RewriteRule ^api/asets/(.*)$ cpanel-api.php?action=save_aset&id=$1 [QSA,L]
   RewriteRule ^api/events/?$ cpanel-api.php?action=ping [QSA,L]
 
-  # 2. Serve existing files directly
+  # 2. Serve existing files and uploads directly
+  RewriteCond %{REQUEST_URI} ^/uploads/ [OR]
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]

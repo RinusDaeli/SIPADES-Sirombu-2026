@@ -3,25 +3,39 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/Sidebar';
 import { LoginView } from './components/LoginView';
 import { DashboardView } from './components/DashboardView';
-import { AsetManagementView } from './components/AsetManagementView';
-import { VerifikasiView } from './components/VerifikasiView';
-import { VerifikasiAsetView } from './components/VerifikasiAsetView';
-import { LaporanPermendagriView } from './components/LaporanPermendagriView';
-import { UserManagementView } from './components/UserManagementView';
-import { DesaInfoView } from './components/DesaInfoView';
 import { AnnouncementReaderModal } from './components/AnnouncementReaderModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Menu, X, LogOut, Bell } from 'lucide-react';
+
+// Lazy-load secondary heavy modules on demand to ensure lightning-fast initial startup
+const AsetManagementView = lazy(() => import('./components/AsetManagementView').then(m => ({ default: m.AsetManagementView })));
+const VerifikasiView = lazy(() => import('./components/VerifikasiView').then(m => ({ default: m.VerifikasiView })));
+const VerifikasiAsetView = lazy(() => import('./components/VerifikasiAsetView').then(m => ({ default: m.VerifikasiAsetView })));
+const LaporanPermendagriView = lazy(() => import('./components/LaporanPermendagriView').then(m => ({ default: m.LaporanPermendagriView })));
+const UserManagementView = lazy(() => import('./components/UserManagementView').then(m => ({ default: m.UserManagementView })));
+const DesaInfoView = lazy(() => import('./components/DesaInfoView').then(m => ({ default: m.DesaInfoView })));
+
+const ViewSuspenseLoader: React.FC = () => (
+  <div className="flex flex-col items-center justify-center p-16 text-slate-400">
+    <div className="w-8 h-8 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mb-3" />
+    <span className="text-xs font-medium text-slate-300">Memuat modul tampilan...</span>
+  </div>
+);
 
 const MainLayout: React.FC = () => {
   const { currentUser, activeTab, logout, unreadAnnouncementCount } = useApp();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [showMobileAnnounceModal, setShowMobileAnnounceModal] = useState(false);
+
+  React.useEffect(() => {
+    const loader = document.getElementById('app-loader');
+    if (loader) loader.remove();
+  }, []);
 
   if (!currentUser) {
     return <LoginView />;
@@ -113,13 +127,15 @@ const MainLayout: React.FC = () => {
       {/* Main Workspace with independent scrolling (Dark Theme) */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto bg-[#070C18]">
         <main className="flex-1 p-3 sm:p-5 md:p-8 lg:p-10 max-w-7xl w-full mx-auto text-slate-100">
-          {activeTab === 'dashboard' && <DashboardView />}
-          {activeTab === 'aset' && <AsetManagementView />}
-          {activeTab === 'verifikasi_aset' && (currentUser?.role === 'super_admin' || currentUser?.role === 'admin_kecamatan') && <VerifikasiAsetView />}
-          {activeTab === 'verifikasi' && <VerifikasiView />}
-          {activeTab === 'laporan' && <LaporanPermendagriView />}
-          {activeTab === 'users' && (currentUser?.role === 'super_admin' || currentUser?.role === 'admin_kecamatan') && <UserManagementView />}
-          {activeTab === 'desa_info' && <DesaInfoView />}
+          <Suspense fallback={<ViewSuspenseLoader />}>
+            {activeTab === 'dashboard' && <DashboardView />}
+            {activeTab === 'aset' && <AsetManagementView />}
+            {activeTab === 'verifikasi_aset' && (currentUser?.role === 'super_admin' || currentUser?.role === 'admin_kecamatan') && <VerifikasiAsetView />}
+            {activeTab === 'verifikasi' && <VerifikasiView />}
+            {activeTab === 'laporan' && <LaporanPermendagriView />}
+            {activeTab === 'users' && (currentUser?.role === 'super_admin' || currentUser?.role === 'admin_kecamatan') && <UserManagementView />}
+            {activeTab === 'desa_info' && <DesaInfoView />}
+          </Suspense>
         </main>
       </div>
 

@@ -81,7 +81,7 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
           setTestResult({
             success: true,
             message: pingRes.message || 'Koneksi ke cPanel Hosting Berhasil!',
-            count: pingRes.totalAset ?? 328,
+            count: pingRes.totalAset ?? 330,
           });
         } else {
           setTestResult({
@@ -113,7 +113,7 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
           data = {
             success: true,
             message: directPing.message,
-            totalAset: directPing.totalAset ?? 328,
+            totalAset: directPing.totalAset ?? 330,
           };
         }
       }
@@ -122,7 +122,7 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
         setTestResult({
           success: true,
           message: data.message || 'Koneksi ke cPanel Hosting Berhasil!',
-          count: data.totalAset ?? 328,
+          count: data.totalAset ?? 330,
         });
       } else {
         setTestResult({
@@ -518,7 +518,7 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
               <li>Setelah proses upload selesai (100%), kembali ke File Manager, klik kanan file <strong>sipades-web-sirombu.zip</strong>, lalu klik <strong>Extract</strong> (pilih lokasi <code className="text-cyan-300">/public_html</code>).</li>
             </ol>
             <div className="text-emerald-400 font-medium pt-1">
-              ✓ Selesai! Saat membuka <a href="https://sipadessirombu.my.id" target="_blank" rel="noreferrer" className="underline font-bold text-emerald-300">https://sipadessirombu.my.id</a>, antarmuka lengkap aplikasi SIPADES Kecamatan Sirombu langsung berjalan dengan seluruh 328 aset aktif secara real-time!
+              ✓ Selesai! Saat membuka <a href="https://sipadessirombu.my.id" target="_blank" rel="noreferrer" className="underline font-bold text-emerald-300">https://sipadessirombu.my.id</a>, antarmuka lengkap aplikasi SIPADES Kecamatan Sirombu langsung berjalan dengan seluruh 330 aset aktif secara real-time!
             </div>
           </div>
         </div>
