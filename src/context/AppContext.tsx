@@ -112,6 +112,7 @@ interface AppContextType {
   verifikasiAsetBatch: (asetIds: string[], catatan?: string, nomorSK?: string) => Promise<{ success: boolean; count: number; message: string }>;
   tolakVerifikasiAset: (asetId: string, catatanPerbaikan: string) => Promise<{ success: boolean; message: string }>;
   batalkanVerifikasiAset: (asetId: string) => Promise<{ success: boolean; message: string }>;
+  batalkanVerifikasiAsetBatch: (asetIds: string[]) => Promise<{ success: boolean; count: number; message: string }>;
   pendingVerificationCount: number;
   pendingAsetVerificationCount: number;
 
@@ -1659,6 +1660,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [currentUser, persistAsetsSafely]
   );
 
+  const batalkanVerifikasiAsetBatch = useCallback(
+    async (asetIds: string[]) => {
+      if (!currentUser || (currentUser.role !== 'super_admin' && currentUser.role !== 'admin_kecamatan')) {
+        return {
+          success: false,
+          count: 0,
+          message: 'Hanya Admin Kecamatan atau Super Admin yang berhak membatalkan pengesahan aset.',
+        };
+      }
+      if (!asetIds || asetIds.length === 0) {
+        return { success: false, count: 0, message: 'Tidak ada aset yang dipilih.' };
+      }
+
+      const now = new Date().toISOString();
+      pausePulseUntil.current = Date.now() + 15000;
+      const idSet = new Set(asetIds);
+      const updatedBatch: Aset[] = [];
+
+      setAsets((prev) => {
+        const next = prev.map((a) => {
+          if (idSet.has(a.id)) {
+            const item: Aset = {
+              ...a,
+              statusVerifikasi: 'sedang_diproses',
+              diverifikasiOleh: undefined,
+              tanggalVerifikasi: undefined,
+              catatanVerifikasi: undefined,
+              nomorSKVerifikasi: undefined,
+              updatedAt: now,
+            };
+            updatedBatch.push(item);
+            return item;
+          }
+          return a;
+        });
+        persistAsetsSafely(next);
+        return next;
+      });
+
+      Promise.all(updatedBatch.map((a) => saveAsetToCpanel(a))).catch(() => {});
+      fetch('/api/asets/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asets: updatedBatch }),
+      }).catch(() => {});
+
+      return {
+        success: true,
+        count: updatedBatch.length,
+        message: `Berhasil membatalkan pengesahan ${updatedBatch.length} aset.`,
+      };
+    },
+    [currentUser, persistAsetsSafely]
+  );
+
   const verifikasiAsetBatch = useCallback(
     async (asetIds: string[], catatan?: string, nomorSK?: string) => {
       if (!currentUser || (currentUser.role !== 'super_admin' && currentUser.role !== 'admin_kecamatan')) {
@@ -2549,6 +2605,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         verifikasiAsetBatch,
         tolakVerifikasiAset,
         batalkanVerifikasiAset,
+        batalkanVerifikasiAsetBatch,
         pendingVerificationCount,
         pendingAsetVerificationCount,
         ajukanMutasi,

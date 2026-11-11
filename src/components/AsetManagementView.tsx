@@ -59,6 +59,7 @@ import {
   Loader2,
   ShieldCheck,
   Server,
+  RotateCcw,
 } from 'lucide-react';
 
 export const AsetManagementView: React.FC = () => {
@@ -83,6 +84,7 @@ export const AsetManagementView: React.FC = () => {
     unreadAnnouncementCount,
     verifikasiAset,
     verifikasiSemuaAsetPending,
+    batalkanVerifikasiAset,
     pendingVerificationCount,
     pendingAsetVerificationCount,
   } = useApp();
@@ -124,6 +126,11 @@ export const AsetManagementView: React.FC = () => {
   const [showDetailModal, setShowDetailModal] = useState<boolean>(false);
   const [barcodeAset, setBarcodeAset] = useState<Aset | null>(null);
   const [showBarcodeModal, setShowBarcodeModal] = useState<boolean>(false);
+
+  // Batalkan Pengesahan & Hapus Langsung Modals
+  const [batalModalAset, setBatalModalAset] = useState<Aset | null>(null);
+  const [isSubmittingBatal, setIsSubmittingBatal] = useState<boolean>(false);
+  const [deleteDirectTarget, setDeleteDirectTarget] = useState<{ id: string; name: string } | null>(null);
 
   // Form states
   const [formData, setFormData] = useState({
@@ -709,13 +716,40 @@ export const AsetManagementView: React.FC = () => {
     setShowHapusModal(false);
   };
 
-  // Handle delete directly
+  // Handle delete directly (Modal driven - No window.confirm)
   const handleDeleteDirect = (id: string, name: string) => {
-    if (window.confirm(`Yakin ingin menghapus item aset "${name}"?`)) {
-      const res = deleteAset(id);
-      if (!res.success) {
-        alert(res.message);
+    setDeleteDirectTarget({ id, name });
+  };
+
+  const handleConfirmDeleteDirect = () => {
+    if (!deleteDirectTarget) return;
+    const res = deleteAset(deleteDirectTarget.id);
+    if (!res.success) {
+      setToastMessage(res.message || 'Gagal menghapus aset');
+    } else {
+      setToastMessage(`Aset "${deleteDirectTarget.name}" berhasil dihapus.`);
+    }
+    setDeleteDirectTarget(null);
+  };
+
+  // Handle batalkan pengesahan (Single - Super Admin)
+  const handleOpenBatalSah = (aset: Aset) => {
+    setBatalModalAset(aset);
+  };
+
+  const handleConfirmBatalSah = async () => {
+    if (!batalModalAset) return;
+    setIsSubmittingBatal(true);
+    try {
+      const res = await batalkanVerifikasiAset(batalModalAset.id);
+      if (res.success) {
+        setToastMessage(`Pengesahan untuk aset "${batalModalAset.namaAset}" berhasil dibatalkan.`);
+        setBatalModalAset(null);
+      } else {
+        setToastMessage(res.message);
       }
+    } finally {
+      setIsSubmittingBatal(false);
     }
   };
 
@@ -1629,6 +1663,18 @@ export const AsetManagementView: React.FC = () => {
 
                                         {!isTerhapus && (
                                           <>
+                                            {/* Batalkan Pengesahan button (khusus Super Admin / Admin Kecamatan jika aset sudah disahkan) */}
+                                            {isAdminOrSuper && item.statusVerifikasi === 'sudah_diverifikasi' && (
+                                              <button
+                                                type="button"
+                                                onClick={() => handleOpenBatalSah(item)}
+                                                className="p-1 rounded-md bg-rose-950/70 hover:bg-rose-900 border border-rose-500/40 text-rose-300 hover:text-white transition-colors cursor-pointer"
+                                                title="Batalkan Pengesahan Aset Ini (Kembalikan ke antrean verifikasi)"
+                                              >
+                                                <RotateCcw className="w-3.5 h-3.5" />
+                                              </button>
+                                            )}
+
                                             {/* Edit button */}
                                             <button
                                               onClick={() => handleOpenEdit(item)}
@@ -3223,6 +3269,128 @@ export const AsetManagementView: React.FC = () => {
         isOpen={showAnnounceModal}
         onClose={() => setShowAnnounceModal(false)}
       />
+
+      {/* MODAL: Konfirmasi Batalkan Pengesahan Aset (Super Admin) */}
+      {batalModalAset && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-[#0E1526] border border-rose-500/40 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative text-slate-100 animate-scale-up">
+            <button
+              onClick={() => !isSubmittingBatal && setBatalModalAset(null)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-start gap-3 mb-4">
+              <span className="p-3 rounded-xl bg-rose-500/20 text-rose-400 shrink-0">
+                <RotateCcw className="w-6 h-6" />
+              </span>
+              <div>
+                <h3 className="text-lg font-bold text-white">Batalkan Pengesahan Aset</h3>
+                <p className="text-xs text-rose-300">
+                  Kembalikan status aset ke "sedang diproses" (menunggu verifikasi)
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-900/90 rounded-xl p-4 border border-slate-800 space-y-2 mb-4 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Nama Aset:</span>
+                <span className="text-white font-bold max-w-[240px] truncate text-right">
+                  {batalModalAset.namaAset}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Desa:</span>
+                <span className="text-emerald-400 font-semibold">{batalModalAset.desaName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Nomor SK Pengesahan:</span>
+                <span className="font-mono text-amber-300">{batalModalAset.nomorSKVerifikasi || '-'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Nilai Perolehan:</span>
+                <span className="font-mono text-white font-bold">{formatRupiah(batalModalAset.nilaiPerolehan)}</span>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-200 text-xs mb-5 flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <div>
+                Nomor SK dan tanggal verifikasi akan dibersihkan, dan aset ini akan kembali dapat diverifikasi atau diperbaiki oleh desa. Data tersinkron otomatis ke database server cPanel.
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                disabled={isSubmittingBatal}
+                onClick={() => setBatalModalAset(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingBatal}
+                onClick={handleConfirmBatalSah}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-rose-600/30 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <RotateCcw className={`w-4 h-4 ${isSubmittingBatal ? 'animate-spin' : ''}`} />
+                <span>{isSubmittingBatal ? 'Membatalkan...' : 'Ya, Batalkan Pengesahan'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Konfirmasi Hapus Data Aset Langsung */}
+      {deleteDirectTarget && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-[#0E1526] border border-red-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl relative text-slate-100 animate-scale-up">
+            <button
+              onClick={() => setDeleteDirectTarget(null)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-start gap-3 mb-4">
+              <span className="p-3 rounded-xl bg-red-500/20 text-red-400 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </span>
+              <div>
+                <h3 className="text-lg font-bold text-white">Hapus Data Aset</h3>
+                <p className="text-xs text-red-300">
+                  Tindakan ini akan menghapus aset secara permanen
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-5 leading-relaxed">
+              Apakah Anda yakin ingin menghapus aset <strong className="text-white">"{deleteDirectTarget.name}"</strong>? Data yang dihapus tidak akan ditampilkan lagi dan terhapus dari basis data.
+            </p>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteDirectTarget(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteDirect}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-red-600/30 transition-all cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Ya, Hapus Aset</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

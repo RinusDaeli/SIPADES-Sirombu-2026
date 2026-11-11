@@ -243,13 +243,17 @@ switch ($action) {
             foreach ($incoming as $idx => $ia) {
                 if (isset($ia['id']) && isset($existingMap[$ia['id']])) {
                     $orig = $existing[$existingMap[$ia['id']]];
-                    // Lindungi status verifikasi agar tidak tertimpa kembali ke 'sedang_diproses'
+                    // Lindungi status verifikasi jika snapshot pengunggah lebih usang dari server
+                    $origTime = isset($orig['updatedAt']) ? strtotime($orig['updatedAt']) : 0;
+                    $incTime = isset($ia['updatedAt']) ? strtotime($ia['updatedAt']) : 0;
                     if (($orig['statusVerifikasi'] ?? '') === 'sudah_diverifikasi' && ($ia['statusVerifikasi'] ?? '') !== 'sudah_diverifikasi') {
-                        $incoming[$idx]['statusVerifikasi'] = 'sudah_diverifikasi';
-                        $incoming[$idx]['diverifikasiOleh'] = $orig['diverifikasiOleh'] ?? ($ia['diverifikasiOleh'] ?? '');
-                        $incoming[$idx]['tanggalVerifikasi'] = $orig['tanggalVerifikasi'] ?? ($ia['tanggalVerifikasi'] ?? '');
-                        $incoming[$idx]['catatanVerifikasi'] = $orig['catatanVerifikasi'] ?? ($ia['catatanVerifikasi'] ?? '');
-                        $incoming[$idx]['nomorSKVerifikasi'] = $orig['nomorSKVerifikasi'] ?? ($ia['nomorSKVerifikasi'] ?? '');
+                        if ($incTime <= $origTime && empty($ia['batalPengesahan'])) {
+                            $incoming[$idx]['statusVerifikasi'] = 'sudah_diverifikasi';
+                            $incoming[$idx]['diverifikasiOleh'] = $orig['diverifikasiOleh'] ?? ($ia['diverifikasiOleh'] ?? '');
+                            $incoming[$idx]['tanggalVerifikasi'] = $orig['tanggalVerifikasi'] ?? ($ia['tanggalVerifikasi'] ?? '');
+                            $incoming[$idx]['catatanVerifikasi'] = $orig['catatanVerifikasi'] ?? ($ia['catatanVerifikasi'] ?? '');
+                            $incoming[$idx]['nomorSKVerifikasi'] = $orig['nomorSKVerifikasi'] ?? ($ia['nomorSKVerifikasi'] ?? '');
+                        }
                     }
                     if (empty($incoming[$idx]['fotoAset']) && !empty($orig['fotoAset'])) {
                         $incoming[$idx]['fotoAset'] = $orig['fotoAset'];
@@ -421,7 +425,12 @@ switch ($action) {
             foreach ($asets as $i => $a) {
                 if ($a['id'] === $item['id']) {
                     // Timpa data lama secara presisi dengan data editan terbaru
-                    $asets[$i] = array_merge($a, $item);
+                    $merged = array_merge($a, $item);
+                    if (($item['statusVerifikasi'] ?? '') === 'sedang_diproses') {
+                        unset($merged['nomorSKVerifikasi'], $merged['diverifikasiOleh'], $merged['tanggalVerifikasi'], $merged['catatanVerifikasi']);
+                        $merged['statusVerifikasi'] = 'sedang_diproses';
+                    }
+                    $asets[$i] = $merged;
                     break;
                 }
             }

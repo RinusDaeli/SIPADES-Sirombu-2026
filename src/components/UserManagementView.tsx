@@ -28,6 +28,8 @@ export const UserManagementView: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [deleteTargetUser, setDeleteTargetUser] = useState<User | null>(null);
+  const [toastMsg, setToastMsg] = useState<string>('');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -138,16 +140,23 @@ export const UserManagementView: React.FC = () => {
 
   const handleDelete = (user: User) => {
     if (user.email === 'udniat.01@gmail.com') {
-      alert('Akun Super Admin Utama tidak boleh dihapus.');
+      setToastMsg('Akun Super Admin Utama tidak boleh dihapus.');
+      setTimeout(() => setToastMsg(''), 4000);
       return;
     }
+    setDeleteTargetUser(user);
+  };
 
-    if (window.confirm(`Yakin ingin menghapus administrator ${user.name} (${user.email})?`)) {
-      const res = deleteUser(user.id);
-      if (!res.success) {
-        alert(res.message);
-      }
+  const handleConfirmDeleteUser = () => {
+    if (!deleteTargetUser) return;
+    const res = deleteUser(deleteTargetUser.id);
+    if (!res.success) {
+      setToastMsg(res.message || 'Gagal menghapus pengguna');
+    } else {
+      setToastMsg(`Pengguna ${deleteTargetUser.name} berhasil dihapus.`);
     }
+    setDeleteTargetUser(null);
+    setTimeout(() => setToastMsg(''), 4000);
   };
 
   return (
@@ -573,6 +582,62 @@ export const UserManagementView: React.FC = () => {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* MODAL: Konfirmasi Hapus Pengguna */}
+      {deleteTargetUser && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-[#0E1526] border border-red-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl relative text-slate-100 animate-scale-up">
+            <button
+              onClick={() => setDeleteTargetUser(null)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-start gap-3 mb-4">
+              <span className="p-3 rounded-xl bg-red-500/20 text-red-400 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </span>
+              <div>
+                <h3 className="text-lg font-bold text-white">Hapus Pengguna</h3>
+                <p className="text-xs text-red-300">
+                  Konfirmasi penghapusan akses akun
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-5 leading-relaxed">
+              Apakah Anda yakin ingin menghapus akun administrator <strong className="text-white">{deleteTargetUser.name}</strong> ({deleteTargetUser.email})? Pengguna ini tidak akan dapat login lagi.
+            </p>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteTargetUser(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteUser}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-red-600/30 transition-all cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Ya, Hapus Pengguna</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMsg && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 border border-slate-700 text-white text-xs px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 animate-slide-up">
+          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+          <span>{toastMsg}</span>
         </div>
       )}
     </div>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useApp } from '../context/AppContext';
 import { Aset } from '../types';
 import { getAsetVerificationStatus, AsetVerificationBadge } from '../utils/verificationHelper';
 import {
@@ -15,6 +16,7 @@ import {
   AlertCircle,
   Download,
   Sparkles,
+  RotateCcw,
 } from 'lucide-react';
 import { getPhotoUrl, handlePhotoError } from '../utils/photoUrl';
 
@@ -31,10 +33,16 @@ export const AsetDetailModal: React.FC<AsetDetailModalProps> = ({
   onClose,
   onOpenBarcode,
 }) => {
+  const { currentUser, batalkanVerifikasiAset } = useApp();
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number>(0);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null);
+  const [showBatalConfirm, setShowBatalConfirm] = useState<boolean>(false);
+  const [isCanceling, setIsCanceling] = useState<boolean>(false);
 
   if (!isOpen || !aset) return null;
+
+  const isSuperAdmin = currentUser?.role === 'super_admin' || currentUser?.role === 'admin_kecamatan';
+  const isVerified = aset.statusVerifikasi === 'sudah_diverifikasi' || (!aset.statusVerifikasi && aset.status === 'aktif');
 
   const photos = aset.fotoAset && aset.fotoAset.length > 0 ? aset.fotoAset : [];
   const activePhoto = photos[selectedPhotoIndex] || photos[0];
@@ -363,6 +371,58 @@ export const AsetDetailModal: React.FC<AsetDetailModalProps> = ({
                         </div>
                       )}
                     </div>
+
+                    {/* Super Admin / Admin Kecamatan: Batalkan Pengesahan Action */}
+                    {isVerified && isSuperAdmin && (
+                      <div className="mt-2.5">
+                        {!showBatalConfirm ? (
+                          <button
+                            type="button"
+                            onClick={() => setShowBatalConfirm(true)}
+                            className="w-full py-1.5 px-3 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                            title="Batalkan pengesahan aset ini dan kembalikan ke status sedang diproses"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
+                            <span>Batalkan Pengesahan Aset Ini</span>
+                          </button>
+                        ) : (
+                          <div className="p-2.5 rounded-lg bg-rose-950/80 border border-rose-500/50 text-[11px] space-y-2 animate-fade-in">
+                            <div className="flex items-start gap-1.5 text-rose-200">
+                              <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />
+                              <span>Batalkan pengesahan dan kembalikan ke antrean verifikasi?</span>
+                            </div>
+                            <div className="flex justify-end gap-1.5 pt-0.5">
+                              <button
+                                type="button"
+                                disabled={isCanceling}
+                                onClick={() => setShowBatalConfirm(false)}
+                                className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold cursor-pointer"
+                              >
+                                Batal
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isCanceling}
+                                onClick={async () => {
+                                  setIsCanceling(true);
+                                  try {
+                                    await batalkanVerifikasiAset(aset.id);
+                                    setShowBatalConfirm(false);
+                                    onClose();
+                                  } finally {
+                                    setIsCanceling(false);
+                                  }
+                                }}
+                                className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                              >
+                                <RotateCcw className={`w-3 h-3 ${isCanceling ? 'animate-spin' : ''}`} />
+                                <span>{isCanceling ? 'Memproses...' : 'Ya, Batalkan'}</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {aset.keterangan && (

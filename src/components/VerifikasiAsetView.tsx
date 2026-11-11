@@ -46,6 +46,7 @@ export const VerifikasiAsetView: React.FC = () => {
     verifikasiSemuaAsetPending,
     tolakVerifikasiAset,
     batalkanVerifikasiAset,
+    batalkanVerifikasiAsetBatch,
   } = useApp();
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
@@ -78,6 +79,12 @@ export const VerifikasiAsetView: React.FC = () => {
   const [bulkNomorSK, setBulkNomorSK] = useState<string>('');
   const [bulkCatatan, setBulkCatatan] = useState<string>('');
   const [isSubmittingBulk, setIsSubmittingBulk] = useState<boolean>(false);
+
+  // Batalkan Pengesahan Modal (Single & Bulk)
+  const [batalModalAset, setBatalModalAset] = useState<Aset | null>(null);
+  const [showBulkCancelModal, setShowBulkCancelModal] = useState<boolean>(false);
+  const [showVerifyAllModal, setShowVerifyAllModal] = useState<boolean>(false);
+  const [isSubmittingBatal, setIsSubmittingBatal] = useState<boolean>(false);
 
   // Reject / Revision Modal
   const [revisiModalAset, setRevisiModalAset] = useState<Aset | null>(null);
@@ -239,6 +246,20 @@ export const VerifikasiAsetView: React.FC = () => {
     );
   };
 
+  const selectedVerifiedCount = useMemo(() => {
+    return selectedAssetIds.filter((id) => {
+      const a = asets.find((item) => item.id === id);
+      return a && (a.statusVerifikasi === 'sudah_diverifikasi' || (!a.statusVerifikasi && a.status === 'aktif'));
+    }).length;
+  }, [selectedAssetIds, asets]);
+
+  const selectedPendingCount = useMemo(() => {
+    return selectedAssetIds.filter((id) => {
+      const a = asets.find((item) => item.id === id);
+      return a && a.statusVerifikasi !== 'sudah_diverifikasi';
+    }).length;
+  }, [selectedAssetIds, asets]);
+
   // Open Single Verification Modal
   const handleOpenVerifyModal = (aset: Aset) => {
     setVerifyModalAset(aset);
@@ -326,33 +347,69 @@ export const VerifikasiAsetView: React.FC = () => {
     }
   };
 
-  // Revert Verification
-  const handleBatalkanVerifikasi = async (aset: Aset) => {
-    if (!window.confirm(`Batalkan pengesahan verifikasi untuk aset "${aset.namaAset}" dan kembalikan ke status belum diverifikasi?`)) {
-      return;
-    }
-    const res = await batalkanVerifikasiAset(aset.id);
-    if (res.success) {
-      showToast(res.message, 'info');
-    } else {
-      showToast(res.message, 'error');
+  // Revert Verification Handlers (Single & Bulk - Modal Driven)
+  const handleOpenBatalkanModal = (aset: Aset) => {
+    setBatalModalAset(aset);
+  };
+
+  const handleConfirmBatalkanSingle = async () => {
+    if (!batalModalAset) return;
+    setIsSubmittingBatal(true);
+    try {
+      const res = await batalkanVerifikasiAset(batalModalAset.id);
+      if (res.success) {
+        showToast(res.message, 'info');
+        setBatalModalAset(null);
+      } else {
+        showToast(res.message, 'error');
+      }
+    } finally {
+      setIsSubmittingBatal(false);
     }
   };
 
-  // Quick Verify All Pending
-  const handleVerifyAllPending = async () => {
+  const handleConfirmBatalkanBulk = async () => {
+    const verifiedIds = selectedAssetIds.filter((id) => {
+      const a = asets.find((item) => item.id === id);
+      return a && a.statusVerifikasi === 'sudah_diverifikasi';
+    });
+    if (verifiedIds.length === 0) return;
+    setIsSubmittingBatal(true);
+    try {
+      const res = await batalkanVerifikasiAsetBatch(verifiedIds);
+      if (res.success) {
+        showToast(res.message, 'info');
+        setShowBulkCancelModal(false);
+        setSelectedAssetIds((prev) => prev.filter((id) => !verifiedIds.includes(id)));
+      } else {
+        showToast(res.message, 'error');
+      }
+    } finally {
+      setIsSubmittingBatal(false);
+    }
+  };
+
+  // Quick Verify All Pending (Modal Driven - No window.confirm)
+  const handleOpenVerifyAllModal = () => {
     if (stats.pendingCount === 0) {
       showToast('Tidak ada aset yang sedang menunggu verifikasi.', 'info');
       return;
     }
-    if (!window.confirm(`Apakah Anda yakin ingin memverifikasi dan mengesahkan seluruh ${stats.pendingCount} aset yang sedang menunggu verifikasi sekaligus?`)) {
-      return;
-    }
-    const res = await verifikasiSemuaAsetPending();
-    if (res.success) {
-      showToast(res.message);
-    } else {
-      showToast(res.message, 'error');
+    setShowVerifyAllModal(true);
+  };
+
+  const handleConfirmVerifyAll = async () => {
+    setIsSubmittingVerify(true);
+    try {
+      const res = await verifikasiSemuaAsetPending();
+      if (res.success) {
+        showToast(res.message);
+        setShowVerifyAllModal(false);
+      } else {
+        showToast(res.message, 'error');
+      }
+    } finally {
+      setIsSubmittingVerify(false);
     }
   };
 
@@ -404,7 +461,7 @@ export const VerifikasiAsetView: React.FC = () => {
           {stats.pendingCount > 0 && (
             <button
               type="button"
-              onClick={handleVerifyAllPending}
+              onClick={handleOpenVerifyAllModal}
               className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
               title="Sahkan & Verifikasi Seluruh Aset yang Menunggu Verifikasi"
             >
@@ -692,10 +749,14 @@ export const VerifikasiAsetView: React.FC = () => {
           <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 flex flex-wrap items-center justify-between gap-3 animate-fade-in text-xs">
             <div className="flex items-center gap-2 text-amber-200 font-bold">
               <CheckSquare className="w-4 h-4 text-amber-400" />
-              <span>{selectedAssetIds.length} aset dipilih untuk diproses bersama</span>
+              <span>
+                {selectedAssetIds.length} aset dipilih
+                {selectedPendingCount > 0 && ` (${selectedPendingCount} menunggu sah)`}
+                {selectedVerifiedCount > 0 && ` (${selectedVerifiedCount} sudah disahkan)`}
+              </span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={() => setSelectedAssetIds([])}
@@ -703,14 +764,29 @@ export const VerifikasiAsetView: React.FC = () => {
               >
                 Batal Pilihan
               </button>
-              <button
-                type="button"
-                onClick={handleOpenBulkVerifyModal}
-                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/30 cursor-pointer"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Verifikasi Masal ({selectedAssetIds.length})</span>
-              </button>
+
+              {selectedPendingCount > 0 && canVerify && (
+                <button
+                  type="button"
+                  onClick={handleOpenBulkVerifyModal}
+                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/30 cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Sahkan Masal ({selectedPendingCount})</span>
+                </button>
+              )}
+
+              {selectedVerifiedCount > 0 && canVerify && (
+                <button
+                  type="button"
+                  onClick={() => setShowBulkCancelModal(true)}
+                  className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-rose-600/30 cursor-pointer"
+                  title="Batalkan pengesahan untuk aset terverifikasi yang dipilih"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Batalkan Pengesahan Masal ({selectedVerifiedCount})</span>
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -937,15 +1013,16 @@ export const VerifikasiAsetView: React.FC = () => {
                             </button>
                           )}
 
-                          {/* Revert if already verified */}
-                          {isVerified && (
+                          {/* Batalkan Pengesahan button if already verified */}
+                          {isVerified && canVerify && (
                             <button
                               type="button"
-                              onClick={() => handleBatalkanVerifikasi(item)}
-                              className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                              title="Batalkan Pengesahan Verifikasi (Kembalikan ke antrean)"
+                              onClick={() => handleOpenBatalkanModal(item)}
+                              className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                              title="Batalkan Pengesahan Aset Ini (Kembalikan ke status sedang diproses)"
                             >
-                              <RotateCcw className="w-3.5 h-3.5" />
+                              <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
+                              <span>Batalkan Pengesahan</span>
                             </button>
                           )}
 
@@ -1422,6 +1499,200 @@ export const VerifikasiAsetView: React.FC = () => {
           onClose={() => setDetailAset(null)}
           onOpenBarcode={() => {}}
         />
+      )}
+
+      {/* MODAL 6: Batalkan Pengesahan Aset Tunggal */}
+      {batalModalAset && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-[#0E1526] border border-rose-500/40 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative text-slate-100 animate-scale-up">
+            <button
+              onClick={() => !isSubmittingBatal && setBatalModalAset(null)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-start gap-3 mb-4">
+              <span className="p-3 rounded-xl bg-rose-500/20 text-rose-400 shrink-0">
+                <RotateCcw className="w-6 h-6" />
+              </span>
+              <div>
+                <h3 className="text-lg font-bold text-white">Batalkan Pengesahan Aset</h3>
+                <p className="text-xs text-rose-300">
+                  Kembalikan status aset ke antrean verifikasi ("sedang diproses")
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-900/90 rounded-xl p-4 border border-slate-800 space-y-2 mb-4 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Nama Aset:</span>
+                <span className="text-white font-bold max-w-[240px] truncate text-right">
+                  {batalModalAset.namaAset}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Desa:</span>
+                <span className="text-emerald-400 font-semibold">{batalModalAset.desaName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Kode / Register:</span>
+                <span className="font-mono text-slate-300">{batalModalAset.kodeAset || '-'} / {batalModalAset.nomorRegister || '-'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Nomor SK Pengesahan:</span>
+                <span className="font-mono text-amber-300">{batalModalAset.nomorSKVerifikasi || '-'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Nilai Perolehan:</span>
+                <span className="font-mono text-white font-bold">{formatRupiah(batalModalAset.nilaiPerolehan)}</span>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-200 text-xs mb-5 flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <div>
+                <strong>Konfirmasi Pencabutan:</strong> Dengan membatalkan pengesahan, status aset ini akan kembali menjadi <em>sedang diproses</em>. Nomor SK dan tanggal verifikasi akan dibersihkan, dan perubahan langsung disinkronkan ke database server cPanel.
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                disabled={isSubmittingBatal}
+                onClick={() => setBatalModalAset(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingBatal}
+                onClick={handleConfirmBatalkanSingle}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-rose-600/30 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <RotateCcw className={`w-4 h-4 ${isSubmittingBatal ? 'animate-spin' : ''}`} />
+                <span>{isSubmittingBatal ? 'Membatalkan...' : 'Ya, Batalkan Pengesahan'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 7: Batalkan Pengesahan Masal */}
+      {showBulkCancelModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-[#0E1526] border border-rose-500/40 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative text-slate-100 animate-scale-up">
+            <button
+              onClick={() => !isSubmittingBatal && setShowBulkCancelModal(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-start gap-3 mb-4">
+              <span className="p-3 rounded-xl bg-rose-500/20 text-rose-400 shrink-0">
+                <RotateCcw className="w-6 h-6" />
+              </span>
+              <div>
+                <h3 className="text-lg font-bold text-white">Batalkan Pengesahan Masal</h3>
+                <p className="text-xs text-rose-300">
+                  Pencabutan status pengesahan untuk beberapa aset sekaligus
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 mb-4 text-xs space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400">Jumlah Aset Terpilih:</span>
+                <span className="text-rose-400 font-bold font-mono text-sm">{selectedVerifiedCount} Aset</span>
+              </div>
+              <p className="text-slate-400 leading-relaxed text-[11px]">
+                Aset-aset yang dipilih akan dikembalikan ke status <em>sedang diproses</em> (menunggu verifikasi). Nomor registrasi dan nomor SK verifikasi akan direset agar dapat diperiksa ulang.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                disabled={isSubmittingBatal}
+                onClick={() => setShowBulkCancelModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer disabled:opacity-50"
+              >
+                Kembali
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingBatal || selectedVerifiedCount === 0}
+                onClick={handleConfirmBatalkanBulk}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-rose-600/30 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <RotateCcw className={`w-4 h-4 ${isSubmittingBatal ? 'animate-spin' : ''}`} />
+                <span>{isSubmittingBatal ? 'Memproses...' : `Batalkan ${selectedVerifiedCount} Pengesahan`}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 8: Sahkan Semua Pending */}
+      {showVerifyAllModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-[#0E1526] border border-emerald-500/40 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative text-slate-100 animate-scale-up">
+            <button
+              onClick={() => !isSubmittingVerify && setShowVerifyAllModal(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-start gap-3 mb-4">
+              <span className="p-3 rounded-xl bg-emerald-500/20 text-emerald-400 shrink-0">
+                <CheckCircle2 className="w-6 h-6" />
+              </span>
+              <div>
+                <h3 className="text-lg font-bold text-white">Sahkan Seluruh Aset Pending</h3>
+                <p className="text-xs text-emerald-300">
+                  Verifikasi dan pengesahan serentak untuk seluruh antrean
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 mb-4 text-xs space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400">Total Aset Menunggu:</span>
+                <span className="text-emerald-400 font-bold font-mono text-sm">{stats.pendingCount} Aset</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400">Total Nilai Aset:</span>
+                <span className="text-white font-bold font-mono">{formatRupiah(stats.pendingNilai)}</span>
+              </div>
+              <p className="text-slate-400 leading-relaxed text-[11px] pt-2 border-t border-slate-800">
+                Seluruh aset berstatus sedang diproses / belum diverifikasi akan disahkan dengan Berita Acara Verifikasi Kecamatan Sirombu dan dicatat resmi.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                disabled={isSubmittingVerify}
+                onClick={() => setShowVerifyAllModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingVerify}
+                onClick={handleConfirmVerifyAll}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <CheckCircle2 className={`w-4 h-4 ${isSubmittingVerify ? 'animate-spin' : ''}`} />
+                <span>{isSubmittingVerify ? 'Memproses...' : `Ya, Sahkan Seluruhnya (${stats.pendingCount})`}</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
