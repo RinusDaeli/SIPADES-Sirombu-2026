@@ -13,6 +13,11 @@ import {
   INITIAL_KECAMATAN_PROFILE,
 } from './src/data/initialData';
 import { Aset, PermohonanVerifikasi, PengesahanLaporan, User, Desa, KecamatanProfile, SystemAnnouncement } from './src/types';
+import {
+  normalizeAsetRegisters,
+  ensureUniqueRegistersForNewAsets,
+  ensureUniqueRegisterOnUpdate,
+} from './src/utils/reportGenerator';
 
 interface DatabaseSchema {
   asets: Aset[];
@@ -64,26 +69,34 @@ function loadDatabase(): DatabaseSchema {
       const parsed = JSON.parse(raw);
       const rawAsets = Array.isArray(parsed.asets) ? parsed.asets : INITIAL_ASETS;
       const hydratedAsets = restoreMissingPhotos(rawAsets);
+      const loadedDesas = Array.isArray(parsed.desas) && parsed.desas.length > 0 ? parsed.desas : INITIAL_DESA_LIST;
+      const normalizedRes = normalizeAsetRegisters(hydratedAsets, loadedDesas);
 
-      return {
-        asets: hydratedAsets,
+      const state: DatabaseSchema = {
+        asets: normalizedRes.asets,
         verifikasiList: Array.isArray(parsed.verifikasiList) ? parsed.verifikasiList : INITIAL_VERIFIKASI,
         pengesahanList: Array.isArray(parsed.pengesahanList) ? parsed.pengesahanList : INITIAL_PENGESAHAN,
         users: Array.isArray(parsed.users) && parsed.users.length > 0 ? parsed.users : INITIAL_USERS,
-        desas: Array.isArray(parsed.desas) && parsed.desas.length > 0 ? parsed.desas : INITIAL_DESA_LIST,
+        desas: loadedDesas,
         kecamatanProfile: parsed.kecamatanProfile || INITIAL_KECAMATAN_PROFILE,
         announcements: Array.isArray(parsed.announcements) ? parsed.announcements : [],
         selectedYear: typeof parsed.selectedYear === 'number' ? parsed.selectedYear : 0,
         deletedIds: Array.isArray(parsed.deletedIds) ? parsed.deletedIds : ['ast-1794407303430-0-85mzy'],
         updatedAt: parsed.updatedAt || new Date().toISOString(),
       };
+
+      if (normalizedRes.changed) {
+        fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), 'utf-8');
+      }
+      return state;
     }
   } catch (error) {
     console.error('[Database] Failed to read database file, initializing defaults:', error);
   }
 
+  const normalizedInit = normalizeAsetRegisters(restoreMissingPhotos(INITIAL_ASETS), INITIAL_DESA_LIST).asets;
   const defaultState: DatabaseSchema = {
-    asets: restoreMissingPhotos(INITIAL_ASETS),
+    asets: normalizedInit,
     verifikasiList: INITIAL_VERIFIKASI,
     pengesahanList: INITIAL_PENGESAHAN,
     users: INITIAL_USERS,
@@ -237,7 +250,7 @@ async function startServer() {
           map.set(a.id, { ...a, fotoAset: fotoAset || [], fotoBast });
         }
       });
-      dbState.asets = restoreMissingPhotos(Array.from(map.values()));
+      dbState.asets = normalizeAsetRegisters(restoreMissingPhotos(Array.from(map.values())), dbState.desas).asets;
     }
     if (Array.isArray(payload.verifikasiList)) {
       const map = new Map<string, PermohonanVerifikasi>(dbState.verifikasiList.map((v) => [v.id, v]));
@@ -277,27 +290,49 @@ async function startServer() {
   async function callCpanelHttp(
     pathWithQuery: string,
     method: string = 'GET',
-    postData: string = ''
+    postData: string = '',
+    customBaseUrl?: string
   ): Promise<{ statusCode: number; body: string }> {
     return new Promise((resolve, reject) => {
+      let targetHost = 'sipadessirombu.my.id';
+      let targetPath = pathWithQuery.startsWith('/') ? pathWithQuery : '/' + pathWithQuery;
+      let targetPort = 443;
+      let useHttp = false;
+
+      if (customBaseUrl && customBaseUrl.trim()) {
+        try {
+          const parsedUrl = new URL(customBaseUrl.trim());
+          targetHost = parsedUrl.hostname;
+          useHttp = parsedUrl.protocol === 'http:';
+          targetPort = parsedUrl.port ? parseInt(parsedUrl.port, 10) : useHttp ? 80 : 443;
+          const qIdx = pathWithQuery.indexOf('?');
+          const queryPart = qIdx >= 0 ? pathWithQuery.slice(qIdx) : '';
+          targetPath = (parsedUrl.pathname || '/cpanel-api.php') + queryPart;
+        } catch {
+          // fallback to default host & path
+        }
+      }
+
       const reqHeaders: Record<string, string> = {
-        'Host': 'sipadessirombu.my.id',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
+        Host: targetHost,
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'application/json, text/plain, */*',
       };
       if (postData) {
         reqHeaders['Content-Type'] = 'application/json';
         reqHeaders['Content-Length'] = Buffer.byteLength(postData).toString();
       }
 
-      const req = https.request(
+      const clientModule = useHttp ? http : https;
+      const req = clientModule.request(
         {
-          hostname: 'sipadessirombu.my.id',
-          port: 443,
-          path: pathWithQuery.startsWith('/') ? pathWithQuery : '/' + pathWithQuery,
+          hostname: targetHost,
+          port: targetPort,
+          path: targetPath,
           method,
           headers: reqHeaders,
-          servername: 'sipadessirombu.my.id',
+          ...(useHttp ? {} : { servername: targetHost }),
         },
         (res: any) => {
           let resBody = '';
@@ -330,20 +365,29 @@ async function startServer() {
       return res.status(400).json({ error: 'Daftar aset tidak valid' });
     }
 
-    for (const a of asets) {
-      if (a && a.id) {
-        const idx = dbState.asets.findIndex((item) => item.id === a.id);
-        if (idx >= 0) {
-          dbState.asets[idx] = a;
-        } else {
-          dbState.asets.unshift(a);
-        }
+    const validIncoming = asets.filter((a: any) => a && a.id);
+    const existingIds = new Set(dbState.asets.map((a) => a.id));
+    const updates = validIncoming.filter((a: Aset) => existingIds.has(a.id));
+    const additions = validIncoming.filter((a: Aset) => !existingIds.has(a.id));
+
+    for (const a of updates) {
+      const idx = dbState.asets.findIndex((item) => item.id === a.id);
+      if (idx >= 0) {
+        const merged = { ...dbState.asets[idx], ...a };
+        dbState.asets[idx] = ensureUniqueRegisterOnUpdate(merged, dbState.asets, dbState.desas);
+      }
+    }
+
+    if (additions.length > 0) {
+      const lockedAdditions = ensureUniqueRegistersForNewAsets(additions, dbState.asets, dbState.desas);
+      for (let i = lockedAdditions.length - 1; i >= 0; i--) {
+        dbState.asets.unshift(lockedAdditions[i]);
       }
     }
 
     saveDatabase(dbState);
-    // Automatic Real-time Sync to cPanel hosting
-    callCpanelHttp('/cpanel-api.php?action=upload_all', 'POST', JSON.stringify({ data: { asets: dbState.asets } })).catch((e) =>
+    // Automatic Real-time Atomic Batch Sync to cPanel hosting (never overwrites unrelated assets)
+    callCpanelHttp('/cpanel-api.php?action=batch_sync', 'POST', JSON.stringify({ data: { asets: validIncoming } })).catch((e) =>
       console.warn('[cPanel Sync] batch error:', e.message)
     );
     res.json({ success: true, count: asets.length, total: dbState.asets.length });
@@ -351,18 +395,27 @@ async function startServer() {
 
   app.post('/api/asets', (req, res) => {
     if (Array.isArray(req.body)) {
-      for (const a of req.body) {
-        if (a && a.id) {
-          const idx = dbState.asets.findIndex((item) => item.id === a.id);
-          if (idx >= 0) {
-            dbState.asets[idx] = a;
-          } else {
-            dbState.asets.unshift(a);
-          }
+      const validIncoming = req.body.filter((a: any) => a && a.id);
+      const existingIds = new Set(dbState.asets.map((a) => a.id));
+      const updates = validIncoming.filter((a: Aset) => existingIds.has(a.id));
+      const additions = validIncoming.filter((a: Aset) => !existingIds.has(a.id));
+
+      for (const a of updates) {
+        const idx = dbState.asets.findIndex((item) => item.id === a.id);
+        if (idx >= 0) {
+          const merged = { ...dbState.asets[idx], ...a };
+          dbState.asets[idx] = ensureUniqueRegisterOnUpdate(merged, dbState.asets, dbState.desas);
         }
       }
+      if (additions.length > 0) {
+        const lockedAdditions = ensureUniqueRegistersForNewAsets(additions, dbState.asets, dbState.desas);
+        for (let i = lockedAdditions.length - 1; i >= 0; i--) {
+          dbState.asets.unshift(lockedAdditions[i]);
+        }
+      }
+
       saveDatabase(dbState);
-      callCpanelHttp('/cpanel-api.php?action=upload_all', 'POST', JSON.stringify({ data: { asets: dbState.asets } })).catch(() => {});
+      callCpanelHttp('/cpanel-api.php?action=batch_sync', 'POST', JSON.stringify({ data: { asets: validIncoming } })).catch(() => {});
       return res.json({ success: true, count: req.body.length, total: dbState.asets.length });
     }
 
@@ -371,20 +424,23 @@ async function startServer() {
       return res.status(400).json({ error: 'Data aset tidak lengkap' });
     }
 
-    // Check if asset already exists, replace or append
+    // Check if asset already exists, replace or append with locked unique nomorRegister
     const idx = dbState.asets.findIndex((a) => a.id === newAset.id);
+    let savedAset: Aset;
     if (idx >= 0) {
-      dbState.asets[idx] = newAset;
+      savedAset = ensureUniqueRegisterOnUpdate({ ...dbState.asets[idx], ...newAset }, dbState.asets, dbState.desas);
+      dbState.asets[idx] = savedAset;
     } else {
-      dbState.asets.unshift(newAset);
+      savedAset = ensureUniqueRegistersForNewAsets([newAset], dbState.asets, dbState.desas)[0];
+      dbState.asets.unshift(savedAset);
     }
 
     saveDatabase(dbState);
     // Automatic Real-time Sync to cPanel hosting
-    callCpanelHttp('/cpanel-api.php?action=save_aset', 'POST', JSON.stringify(newAset)).catch((e) =>
+    callCpanelHttp('/cpanel-api.php?action=save_aset', 'POST', JSON.stringify(savedAset)).catch((e) =>
       console.warn('[cPanel Sync] save error:', e.message)
     );
-    res.json({ success: true, aset: newAset, total: dbState.asets.length });
+    res.json({ success: true, aset: savedAset, total: dbState.asets.length });
   });
 
   app.put('/api/asets/:id', (req, res) => {
@@ -395,7 +451,8 @@ async function startServer() {
       return res.status(404).json({ error: 'Aset tidak ditemukan' });
     }
 
-    dbState.asets[idx] = { ...dbState.asets[idx], ...updated };
+    const candidate = { ...dbState.asets[idx], ...updated };
+    dbState.asets[idx] = ensureUniqueRegisterOnUpdate(candidate, dbState.asets, dbState.desas);
     saveDatabase(dbState);
     // Automatic Real-time Sync to cPanel hosting with lightweight payload
     const lightAset: Record<string, any> = { ...dbState.asets[idx] };
@@ -457,10 +514,10 @@ async function startServer() {
 
   // Proxy endpoint to diagnose and connect cPanel without CORS / Mixed Content issues
   app.post('/api/cpanel/test', async (req, res) => {
-    const { url } = req.body;
+    const { url } = req.body || {};
     if (!url) return res.status(400).json({ success: false, message: 'URL tidak boleh kosong' });
     try {
-      const response = await callCpanelHttp('/cpanel-api.php?action=ping', 'GET');
+      const response = await callCpanelHttp(`/cpanel-api.php?action=ping&_t=${Date.now()}`, 'GET', '', url);
       let parsed: any = null;
       try {
         parsed = JSON.parse(response.body);
@@ -470,7 +527,11 @@ async function startServer() {
         return res.json({
           success: true,
           message: parsed.message || 'Koneksi cPanel Web Hosting Berhasil!',
-          totalAset: parsed.totalAset ?? 0,
+          totalAset: parsed.totalAset ?? parsed.totalUnit ?? 0,
+          totalUnit: parsed.totalUnit ?? parsed.totalAset ?? 0,
+          activeAset: parsed.activeAset ?? parsed.totalAset ?? 0,
+          pendingVerifikasi: parsed.pendingVerifikasi ?? 0,
+          updatedAt: parsed.updatedAt,
         });
       }
 
@@ -487,29 +548,31 @@ async function startServer() {
   });
 
   app.post('/api/cpanel/upload', async (req, res) => {
-    const { payload } = req.body;
+    const { url, payload } = req.body || {};
     try {
       if (payload) {
         const d = payload.data || payload;
+        if (Array.isArray(d.desas) && d.desas.length > 0) dbState.desas = d.desas;
         if (Array.isArray(d.asets) && d.asets.length > 0) {
           const map = new Map<string, Aset>(dbState.asets.map((a) => [a.id, a]));
           d.asets.forEach((a: Aset) => {
-            if (a && a.id) map.set(a.id, a);
+            if (a && a.id) {
+              const exist = map.get(a.id);
+              map.set(a.id, exist ? { ...exist, ...a } : a);
+            }
           });
-          dbState.asets = Array.from(map.values());
+          dbState.asets = normalizeAsetRegisters(Array.from(map.values()), dbState.desas).asets;
         }
         if (Array.isArray(d.verifikasiList)) dbState.verifikasiList = d.verifikasiList;
         if (Array.isArray(d.pengesahanList)) dbState.pengesahanList = d.pengesahanList;
         if (Array.isArray(d.users) && d.users.length > 0) dbState.users = d.users;
-        if (Array.isArray(d.desas) && d.desas.length > 0) dbState.desas = d.desas;
         if (d.kecamatanProfile) dbState.kecamatanProfile = d.kecamatanProfile;
         saveDatabase(dbState);
       }
 
-      // Ensure proper nesting expected by cpanel-api.php
       const cpanelPayload = payload && payload.data ? payload : { data: payload || { asets: dbState.asets } };
       const payloadStr = JSON.stringify(cpanelPayload);
-      const response = await callCpanelHttp('/cpanel-api.php?action=upload_all', 'POST', payloadStr);
+      const response = await callCpanelHttp('/cpanel-api.php?action=upload_all', 'POST', payloadStr, url);
       let parsed: any = null;
       try {
         parsed = JSON.parse(response.body);
@@ -544,29 +607,44 @@ async function startServer() {
     }
   });
 
-  app.post('/api/cpanel/upload_chunk', async (req, res) => {
-    const { payload } = req.body;
+  app.post(['/api/cpanel/batch_sync', '/api/cpanel/upload_chunk'], async (req, res) => {
+    const { url, payload, data: directData } = req.body || {};
+    const bodyObj = payload || (directData ? { data: directData } : req.body);
     try {
-      if (payload) {
-        const d = payload.data || payload;
-        if (Array.isArray(d.asets) && d.asets.length > 0) {
-          const map = new Map<string, Aset>(dbState.asets.map((a) => [a.id, a]));
-          d.asets.forEach((a: Aset) => {
-            if (a && a.id) map.set(a.id, a);
-          });
-          dbState.asets = Array.from(map.values());
-        }
-        if (Array.isArray(d.verifikasiList)) dbState.verifikasiList = d.verifikasiList;
-        if (Array.isArray(d.pengesahanList)) dbState.pengesahanList = d.pengesahanList;
-        if (Array.isArray(d.users) && d.users.length > 0) dbState.users = d.users;
-        if (Array.isArray(d.desas) && d.desas.length > 0) dbState.desas = d.desas;
-        if (d.kecamatanProfile) dbState.kecamatanProfile = d.kecamatanProfile;
-        saveDatabase(dbState);
-      }
+      const d = bodyObj?.data || bodyObj || {};
+      if (Array.isArray(d.desas) && d.desas.length > 0) dbState.desas = d.desas;
+      if (Array.isArray(d.asets) && d.asets.length > 0) {
+        const deletedSet = new Set(dbState.deletedIds || []);
+        const validIncoming = d.asets.filter((a: Aset) => a && a.id);
+        validIncoming.forEach((a: Aset) => deletedSet.delete(a.id));
+        dbState.deletedIds = Array.from(deletedSet);
 
-      const cpanelPayload = payload && payload.data ? payload : { data: payload || { asets: dbState.asets } };
-      const payloadStr = JSON.stringify(cpanelPayload);
-      const response = await callCpanelHttp('/cpanel-api.php?action=upload_all', 'POST', payloadStr);
+        const existingIds = new Set(dbState.asets.map((a) => a.id));
+        const updates = validIncoming.filter((a: Aset) => existingIds.has(a.id));
+        const additions = validIncoming.filter((a: Aset) => !existingIds.has(a.id));
+
+        for (const a of updates) {
+          const idx = dbState.asets.findIndex((item) => item.id === a.id);
+          if (idx >= 0) {
+            const merged = { ...dbState.asets[idx], ...a };
+            dbState.asets[idx] = ensureUniqueRegisterOnUpdate(merged, dbState.asets, dbState.desas);
+          }
+        }
+        if (additions.length > 0) {
+          const lockedAdditions = ensureUniqueRegistersForNewAsets(additions, dbState.asets, dbState.desas);
+          for (let i = lockedAdditions.length - 1; i >= 0; i--) {
+            dbState.asets.unshift(lockedAdditions[i]);
+          }
+        }
+      }
+      if (Array.isArray(d.verifikasiList)) dbState.verifikasiList = d.verifikasiList;
+      if (Array.isArray(d.pengesahanList)) dbState.pengesahanList = d.pengesahanList;
+      if (Array.isArray(d.users) && d.users.length > 0) dbState.users = d.users;
+      if (d.kecamatanProfile) dbState.kecamatanProfile = d.kecamatanProfile;
+      saveDatabase(dbState);
+
+      const cpanelPayload = bodyObj && bodyObj.data ? bodyObj : { data: d };
+      const response = await callCpanelHttp('/cpanel-api.php?action=batch_sync', 'POST', JSON.stringify(cpanelPayload), url);
       let parsed: any = null;
       try {
         parsed = JSON.parse(response.body);
@@ -576,6 +654,7 @@ async function startServer() {
         status: 'success',
         success: true,
         totalAset: parsed?.totalAset || dbState.asets.length,
+        message: parsed?.message || 'Batch data berhasil disinkronkan ke cPanel',
       });
     } catch (err: any) {
       return res.status(500).json({ status: 'error', success: false, message: err.message });
@@ -590,17 +669,20 @@ async function startServer() {
         return res.status(400).json({ error: 'Data aset tidak valid' });
       }
 
-      // Update local dbState
+      // Update local dbState with unique nomorRegister lock
       const idx = dbState.asets.findIndex((a) => a.id === item.id);
+      let lockedItem: Aset;
       if (idx >= 0) {
-        dbState.asets[idx] = { ...dbState.asets[idx], ...item };
+        lockedItem = ensureUniqueRegisterOnUpdate({ ...dbState.asets[idx], ...item }, dbState.asets, dbState.desas);
+        dbState.asets[idx] = lockedItem;
       } else {
-        dbState.asets.unshift(item);
+        lockedItem = ensureUniqueRegistersForNewAsets([item], dbState.asets, dbState.desas)[0];
+        dbState.asets.unshift(lockedItem);
       }
       saveDatabase(dbState);
 
       // Lightweight copy for cPanel
-      const light: Record<string, any> = { ...item };
+      const light: Record<string, any> = { ...lockedItem };
       if (typeof light.fotoAset === 'string' && light.fotoAset.length > 500) delete light.fotoAset;
       if (typeof light.fotoBast === 'string' && light.fotoBast.length > 500) delete light.fotoBast;
 
@@ -608,7 +690,7 @@ async function startServer() {
         console.warn('[cPanel Proxy save_aset error]:', e.message)
       );
 
-      return res.json({ success: true, aset: dbState.asets[idx >= 0 ? idx : 0] });
+      return res.json({ success: true, aset: lockedItem });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
@@ -805,57 +887,79 @@ async function startServer() {
   // Fetch live database from cPanel hosting via server-to-server HTTPS (bypasses browser CORS & LiteSpeed 406)
   app.get('/api/cpanel/data', async (req, res) => {
     try {
-      const response = await callCpanelHttp('/cpanel-api.php?action=data', 'GET');
+      const response = await callCpanelHttp(`/cpanel-api.php?action=data&_t=${Date.now()}`, 'GET');
       if (response.statusCode === 200 && response.body) {
         try {
           const parsed = JSON.parse(response.body);
           if (parsed && Array.isArray(parsed.asets) && parsed.asets.length > 0) {
-            // Read-only pass: Merge remote data with local photos WITHOUT calling saveDatabase or triggering SSE re-render loops
+            const remoteDeleted = new Set<string>(Array.isArray(parsed.deletedIds) ? parsed.deletedIds : []);
+            const localDeleted = new Set<string>(dbState.deletedIds || []);
             const map = new Map<string, Aset>(dbState.asets.map((a) => [a.id, a]));
-            const mergedAsets = parsed.asets.map((rAset: Aset) => {
-              if (!rAset || !rAset.id) return rAset;
-              const localAset = map.get(rAset.id);
-              if (!localAset) return rAset;
+            const seenRemoteIds = new Set<string>();
 
-              let fotoAset = rAset.fotoAset;
-              if ((!fotoAset || fotoAset.length === 0) && localAset.fotoAset && localAset.fotoAset.length > 0) {
-                fotoAset = localAset.fotoAset;
+            const mergedAsets = parsed.asets
+              .filter((rAset: Aset) => rAset && rAset.id && !localDeleted.has(rAset.id))
+              .map((rAset: Aset) => {
+                seenRemoteIds.add(rAset.id);
+                const localAset = map.get(rAset.id);
+                if (!localAset) return rAset;
+
+                let fotoAset = rAset.fotoAset;
+                if ((!fotoAset || fotoAset.length === 0) && localAset.fotoAset && localAset.fotoAset.length > 0) {
+                  fotoAset = localAset.fotoAset;
+                }
+                let fotoBast = rAset.fotoBast || localAset.fotoBast || '';
+
+                const localTime = new Date(localAset.updatedAt || 0).getTime();
+                const remoteTime = new Date(rAset.updatedAt || 0).getTime();
+
+                if (localTime > remoteTime) {
+                  return {
+                    ...rAset,
+                    ...localAset,
+                    fotoAset: (localAset.fotoAset && localAset.fotoAset.length > 0 ? localAset.fotoAset : fotoAset) || [],
+                    fotoBast: localAset.fotoBast || fotoBast,
+                  };
+                }
+
+                return {
+                  ...localAset,
+                  ...rAset,
+                  fotoAset: fotoAset || [],
+                  fotoBast,
+                };
+              });
+
+            // Include any active local assets not yet deleted remotely
+            for (const localAset of dbState.asets) {
+              if (localAset && localAset.id && !seenRemoteIds.has(localAset.id) && !remoteDeleted.has(localAset.id) && !localDeleted.has(localAset.id)) {
+                mergedAsets.unshift(localAset);
               }
-              let fotoBast = rAset.fotoBast || localAset.fotoBast || '';
+            }
 
-              let statusVerifikasi = rAset.statusVerifikasi;
-              let diverifikasiOleh = rAset.diverifikasiOleh;
-              let tanggalVerifikasi = rAset.tanggalVerifikasi;
-              let catatanVerifikasi = rAset.catatanVerifikasi;
-              let nomorSKVerifikasi = rAset.nomorSKVerifikasi;
+            const finalAsets = normalizeAsetRegisters(restoreMissingPhotos(mergedAsets), parsed.desas || dbState.desas).asets;
 
-              if (localAset.statusVerifikasi === 'sudah_diverifikasi') {
-                statusVerifikasi = 'sudah_diverifikasi';
-                diverifikasiOleh = localAset.diverifikasiOleh || rAset.diverifikasiOleh;
-                tanggalVerifikasi = localAset.tanggalVerifikasi || rAset.tanggalVerifikasi;
-                catatanVerifikasi = localAset.catatanVerifikasi || rAset.catatanVerifikasi;
-                nomorSKVerifikasi = localAset.nomorSKVerifikasi || rAset.nomorSKVerifikasi;
-              }
-
-              return {
-                ...localAset,
-                ...rAset,
-                fotoAset: fotoAset || [],
-                fotoBast,
-                statusVerifikasi,
-                diverifikasiOleh,
-                tanggalVerifikasi,
-                catatanVerifikasi,
-                nomorSKVerifikasi,
-              };
-            });
+            // Keep dbState and local data/database.json in sync with live cPanel
+            const combinedDeleted = Array.from(new Set([...(dbState.deletedIds || []), ...Array.from(remoteDeleted)]));
+            dbState.deletedIds = combinedDeleted;
+            dbState.asets = finalAsets;
+            if (Array.isArray(parsed.desas) && parsed.desas.length > 0) dbState.desas = parsed.desas;
+            if (Array.isArray(parsed.users) && parsed.users.length > 0) dbState.users = parsed.users;
+            if (Array.isArray(parsed.verifikasiList)) dbState.verifikasiList = parsed.verifikasiList;
+            if (Array.isArray(parsed.pengesahanList)) dbState.pengesahanList = parsed.pengesahanList;
+            if (parsed.kecamatanProfile) dbState.kecamatanProfile = parsed.kecamatanProfile;
+            dbState.updatedAt = parsed.updatedAt || new Date().toISOString();
+            try {
+              fs.writeFileSync(DB_FILE, JSON.stringify(dbState, null, 2), 'utf-8');
+            } catch {}
 
             return res.json({
               ...parsed,
-              asets: restoreMissingPhotos(mergedAsets),
-              desas: parsed.desas || dbState.desas,
-              users: parsed.users || dbState.users,
-              kecamatanProfile: parsed.kecamatanProfile || dbState.kecamatanProfile,
+              deletedIds: combinedDeleted,
+              asets: finalAsets,
+              desas: dbState.desas,
+              users: dbState.users,
+              kecamatanProfile: dbState.kecamatanProfile,
             });
           }
         } catch {

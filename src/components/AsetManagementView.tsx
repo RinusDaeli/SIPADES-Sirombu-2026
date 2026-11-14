@@ -6,8 +6,12 @@ import {
   formatRupiah,
   formatNumber,
   formatTanggalIndonesia,
+  formatTanggalWaktuIndonesia,
   generateAutoKodeAset,
   generateSequentialKodeAset,
+  distributeTotalPrice,
+  ensureUniqueRegisterOnUpdate,
+  findDuplicateRegisters,
 } from '../utils/reportGenerator';
 import { BarcodeModal } from './BarcodeModal';
 import { AsetDetailModal } from './AsetDetailModal';
@@ -60,6 +64,7 @@ import {
   ShieldCheck,
   Server,
   RotateCcw,
+  Lock,
 } from 'lucide-react';
 
 export const AsetManagementView: React.FC = () => {
@@ -87,6 +92,7 @@ export const AsetManagementView: React.FC = () => {
     batalkanVerifikasiAset,
     pendingVerificationCount,
     pendingAsetVerificationCount,
+    perbaikiSemuaNomorRegister,
   } = useApp();
 
   const [showSyncModal, setShowSyncModal] = useState(false);
@@ -160,9 +166,10 @@ export const AsetManagementView: React.FC = () => {
   const [jumlahUnit, setJumlahUnit] = useState<number>(1);
   const [tipeHarga, setTipeHarga] = useState<'satuan' | 'total'>('satuan');
   const [showPreviewRegister, setShowPreviewRegister] = useState<boolean>(true);
-  const [customStartSeq, setCustomStartSeq] = useState<number | ''>('');
-  const [showCustomSeq, setShowCustomSeq] = useState<boolean>(false);
+  const [isRepairingRegisters, setIsRepairingRegisters] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const duplicateRegisterGroups = useMemo(() => findDuplicateRegisters(asets), [asets]);
 
   // Accordion state for admin grouped villages (collapsed by default)
   const [expandedAdminDesas, setExpandedAdminDesas] = useState<Record<string, boolean>>({});
@@ -196,10 +203,9 @@ export const AsetManagementView: React.FC = () => {
     setTimeout(() => setToastMessage(null), 6000);
   };
 
-  // Compute real-time sequential codes for the current selection and quantity
+  // Compute real-time sequential codes for the current selection and quantity (terkunci anti-duplikat)
   const sequentialCodes = useMemo(() => {
     const count = Math.max(1, jumlahUnit);
-    const startSeq = typeof customStartSeq === 'number' && customStartSeq > 0 ? customStartSeq : undefined;
     const year = Number(formData.tahunPerolehan) || new Date().getFullYear();
     return generateSequentialKodeAset(
       formData.desaId,
@@ -207,27 +213,35 @@ export const AsetManagementView: React.FC = () => {
       count,
       asets,
       desas,
-      startSeq,
+      undefined,
       year
     );
-  }, [formData.desaId, formData.klasifikasi, formData.tahunPerolehan, jumlahUnit, asets, desas, customStartSeq]);
+  }, [formData.desaId, formData.klasifikasi, formData.tahunPerolehan, jumlahUnit, asets, desas]);
 
   const autoKodeAwal = sequentialCodes[0]?.kodeAset || '';
   const autoKodeAkhir = sequentialCodes[sequentialCodes.length - 1]?.kodeAset || '';
 
   // Value calculation for multi-unit
   const inputNilai = Number(formData.nilaiPerolehan) || 0;
-  const hargaPerUnit = useMemo(() => {
-    if (jumlahUnit <= 1) return inputNilai;
-    if (tipeHarga === 'satuan') return inputNilai;
-    return jumlahUnit > 0 ? Math.round(inputNilai / jumlahUnit) : 0;
+  const priceDistribution = useMemo(() => {
+    const safeCount = Math.max(1, jumlahUnit);
+    if (safeCount <= 1 || tipeHarga === 'satuan') {
+      const unitVal = Math.max(0, Math.round(inputNilai));
+      return {
+        prices: Array.from({ length: safeCount }, () => unitVal),
+        basePrice: unitVal,
+        adjustedPrice: unitVal,
+        baseCount: safeCount,
+        adjustedCount: 0,
+        remainder: 0,
+        totalRounded: unitVal * safeCount,
+      };
+    }
+    return distributeTotalPrice(inputNilai, safeCount);
   }, [inputNilai, jumlahUnit, tipeHarga]);
 
-  const hargaTotal = useMemo(() => {
-    if (jumlahUnit <= 1) return inputNilai;
-    if (tipeHarga === 'total') return inputNilai;
-    return inputNilai * jumlahUnit;
-  }, [inputNilai, jumlahUnit, tipeHarga]);
+  const hargaPerUnit = priceDistribution.basePrice;
+  const hargaTotal = priceDistribution.totalRounded;
 
   // Photo handlers with HD loading state
   const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
@@ -424,8 +438,6 @@ export const AsetManagementView: React.FC = () => {
     setPhotoError('');
     setJumlahUnit(1);
     setTipeHarga('satuan');
-    setCustomStartSeq('');
-    setShowCustomSeq(false);
     setShowPreviewRegister(true);
 
     const targetDesaId = isDesaUser ? currentUser.desaId || 'desa-21' : desas[0]?.id || 'desa-01';
@@ -525,17 +537,16 @@ export const AsetManagementView: React.FC = () => {
       }
     }
 
-    const startSeq = typeof customStartSeq === 'number' && customStartSeq > 0 ? customStartSeq : undefined;
     const targetYear = Number(formData.tahunPerolehan) || new Date().getFullYear();
 
-    // Compute fresh sequential codes for all units
+    // Compute fresh sequential codes for all units (terkunci otomatis & anti-duplikat)
     const freshCodes = generateSequentialKodeAset(
       formData.desaId,
       formData.klasifikasi,
       count,
       asets,
       desas,
-      startSeq,
+      undefined,
       targetYear
     );
 
@@ -569,7 +580,17 @@ export const AsetManagementView: React.FC = () => {
       showToast(`Berhasil menambahkan 1 unit aset: ${formData.namaAset} (${singleCode.kodeAset} • No. Reg: ${singleCode.nomorRegister})`);
     } else {
       // Multiple units purchase: ciptakan data barang yang sama persis, cuma kode asetnya yang berbeda (otomatis)
-      const batchItems = freshCodes.map((codeInfo) => {
+      // Jika total dibagi jumlah unit menghasilkan koma, selisihnya ditambahkan (+Rp 1) pada unit-unit terakhir
+      const batchPriceDist =
+        tipeHarga === 'total'
+          ? distributeTotalPrice(inputNilai, count)
+          : null;
+
+      const batchItems = freshCodes.map((codeInfo, idx) => {
+        const itemPrice = batchPriceDist
+          ? batchPriceDist.prices[idx]
+          : Math.max(0, Math.round(inputNilai));
+
         return {
           desaId: formData.desaId,
           desaName: desa?.name || 'DESA',
@@ -583,7 +604,7 @@ export const AsetManagementView: React.FC = () => {
             tanggal: formData.buktiTanggal,
           },
           tahunPerolehan: Number(formData.tahunPerolehan),
-          nilaiPerolehan: Number(hargaPerUnit),
+          nilaiPerolehan: itemPrice,
           kondisi: formData.kondisi,
           sumberDana: formData.sumberDana,
           volume: formData.volume || '1 Unit',
@@ -598,8 +619,12 @@ export const AsetManagementView: React.FC = () => {
       });
 
       await addAsetBatch(batchItems);
+      const priceSummaryToast =
+        batchPriceDist && batchPriceDist.remainder > 0
+          ? ` (${batchPriceDist.baseCount} unit @ ${formatRupiah(batchPriceDist.basePrice)} & ${batchPriceDist.adjustedCount} unit terakhir @ ${formatRupiah(batchPriceDist.adjustedPrice)})`
+          : '';
       showToast(
-        `Berhasil mendaftarkan ${count} unit barang "${formData.namaAset}" dengan data sama & kode aset urut otomatis: ${freshCodes[0].kodeAset} s/d ${freshCodes[count - 1].kodeAset}`
+        `Berhasil mendaftarkan ${count} unit barang "${formData.namaAset}"${priceSummaryToast} dengan kode aset urut otomatis: ${freshCodes[0].kodeAset} s/d ${freshCodes[count - 1].kodeAset}`
       );
     }
 
@@ -635,13 +660,28 @@ export const AsetManagementView: React.FC = () => {
     const rawVal = String(formData.nilaiPerolehan ?? '0').replace(/[^0-9]/g, '');
     const nilaiClean = parseInt(rawVal, 10) || 0;
     const tahunClean = Number(formData.tahunPerolehan) || new Date().getFullYear();
+    const lockedEdit = ensureUniqueRegisterOnUpdate(
+      {
+        ...selectedAset,
+        desaId: formData.desaId,
+        klasifikasi: formData.klasifikasi,
+        tahunPerolehan: tahunClean,
+        kodeAset: formData.kodeAset,
+        nomorRegister: selectedAset.tahunPerolehan === tahunClean && selectedAset.desaId === formData.desaId
+          ? selectedAset.nomorRegister
+          : undefined,
+      },
+      asets,
+      desas
+    );
 
     updateAset(selectedAset.id, {
       desaId: formData.desaId,
       desaName: desa?.name || selectedAset.desaName,
       klasifikasi: formData.klasifikasi,
       namaAset: formData.namaAset,
-      kodeAset: formData.kodeAset,
+      kodeAset: lockedEdit.kodeAset,
+      nomorRegister: lockedEdit.nomorRegister,
       bukti: {
         jenis: formData.buktiJenis,
         nomor: formData.buktiNomor,
@@ -660,7 +700,7 @@ export const AsetManagementView: React.FC = () => {
       fotoAset: validPhotos,
       fotoBast: formData.fotoBast || '',
     });
-    showToast('Data aset berhasil diperbarui!');
+    showToast(`Data aset berhasil diperbarui (${lockedEdit.kodeAset} • No. Reg: ${lockedEdit.nomorRegister})!`);
     setShowEditModal(false);
   };
 
@@ -951,6 +991,42 @@ export const AsetManagementView: React.FC = () => {
               <span>Verifikasi Semua ({pendingVerificationCount})</span>
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Peringatan Otomatis Jika Terdeteksi Nomor Register Ganda */}
+      {isAdminOrSuper && duplicateRegisterGroups.length > 0 && (
+        <div className="rounded-2xl bg-red-950/60 border-2 border-red-500/60 p-4 sm:p-5 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center text-red-400 shrink-0">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-extrabold text-white">
+                Terdeteksi {duplicateRegisterGroups.length} Nomor Register Aset Ganda / Kosong
+              </h3>
+              <p className="text-xs text-red-200/90 mt-0.5">
+                Klik tombol di sebelah kanan untuk menormalkan seluruh nomor register aset sekaligus dan menyimpannya ke database cPanel.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={isRepairingRegisters}
+            onClick={async () => {
+              setIsRepairingRegisters(true);
+              try {
+                const res = await perbaikiSemuaNomorRegister();
+                showToast(res.message);
+              } finally {
+                setIsRepairingRegisters(false);
+              }
+            }}
+            className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-2 shadow-lg cursor-pointer shrink-0 transition-all"
+          >
+            <Lock className="w-4 h-4" />
+            <span>{isRepairingRegisters ? 'Memperbaiki...' : 'Perbaiki & Kunci No. Register'}</span>
+          </button>
         </div>
       )}
 
@@ -1301,7 +1377,7 @@ export const AsetManagementView: React.FC = () => {
                               </span>
                             </div>
                           </td>
-                          <td className="py-2 px-2 text-center min-w-[110px]">
+                          <td className="py-2 px-2 text-center min-w-[130px]">
                             {isTerhapus ? (
                               <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold">
                                 Terhapus
@@ -1312,6 +1388,18 @@ export const AsetManagementView: React.FC = () => {
                                 size="sm"
                               />
                             )}
+                            <div className="mt-1 space-y-0.5 text-[9px] font-mono leading-tight text-slate-400">
+                              <div title={`Waktu Entri: ${formatTanggalWaktuIndonesia(item.createdAt)}`}>
+                                <span className="text-slate-500">Entri:</span>{' '}
+                                <span className="text-slate-300">{formatTanggalWaktuIndonesia(item.createdAt, true)}</span>
+                              </div>
+                              {item.updatedAt && (
+                                <div title={`Terakhir Update: ${formatTanggalWaktuIndonesia(item.updatedAt)}`}>
+                                  <span className="text-slate-500">Upd:</span>{' '}
+                                  <span className="text-cyan-300">{formatTanggalWaktuIndonesia(item.updatedAt, true)}</span>
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="py-2 px-2 text-center sticky right-0 bg-[#0E1526] z-10 border-l border-slate-800 shadow-[-6px_0_12px_rgba(0,0,0,0.6)] min-w-[150px]">
                             <div className="flex items-center justify-center gap-1">
@@ -1629,7 +1717,7 @@ export const AsetManagementView: React.FC = () => {
                                         </span>
                                       </div>
                                     </td>
-                                    <td className="py-2 px-2 text-center min-w-[110px]">
+                                    <td className="py-2 px-2 text-center min-w-[130px]">
                                       {isTerhapus ? (
                                         <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold">
                                           Terhapus
@@ -1640,6 +1728,18 @@ export const AsetManagementView: React.FC = () => {
                                           size="sm"
                                         />
                                       )}
+                                      <div className="mt-1 space-y-0.5 text-[9px] font-mono leading-tight text-slate-400">
+                                        <div title={`Waktu Entri: ${formatTanggalWaktuIndonesia(item.createdAt)}`}>
+                                          <span className="text-slate-500">Entri:</span>{' '}
+                                          <span className="text-slate-300">{formatTanggalWaktuIndonesia(item.createdAt, true)}</span>
+                                        </div>
+                                        {item.updatedAt && (
+                                          <div title={`Terakhir Update: ${formatTanggalWaktuIndonesia(item.updatedAt)}`}>
+                                            <span className="text-slate-500">Upd:</span>{' '}
+                                            <span className="text-cyan-300">{formatTanggalWaktuIndonesia(item.updatedAt, true)}</span>
+                                          </div>
+                                        )}
+                                      </div>
                                     </td>
                                     <td className="py-2 px-2 text-center sticky right-0 bg-[#0E1526] z-10 border-l border-slate-800 shadow-[-6px_0_12px_rgba(0,0,0,0.6)] min-w-[150px]">
                                       <div className="flex items-center justify-center gap-1">
@@ -1933,9 +2033,20 @@ export const AsetManagementView: React.FC = () => {
                     <div className="grid grid-cols-2 gap-2 text-center text-xs">
                       <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
                         <span className="text-[10px] text-slate-400 block">Harga Per Unit</span>
-                        <span className="font-mono font-bold text-emerald-400 text-xs sm:text-sm">
-                          {formatRupiah(hargaPerUnit)}
-                        </span>
+                        {priceDistribution.remainder > 0 ? (
+                          <>
+                            <span className="font-mono font-bold text-emerald-400 text-xs sm:text-sm">
+                              {formatRupiah(priceDistribution.basePrice)} – {formatRupiah(priceDistribution.adjustedPrice)}
+                            </span>
+                            <span className="text-[9px] text-amber-300 block mt-0.5">
+                              {priceDistribution.baseCount} unit @ {formatRupiah(priceDistribution.basePrice)} • {priceDistribution.adjustedCount} unit terakhir @ {formatRupiah(priceDistribution.adjustedPrice)}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="font-mono font-bold text-emerald-400 text-xs sm:text-sm">
+                            {formatRupiah(hargaPerUnit)}
+                          </span>
+                        )}
                       </div>
                       <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
                         <span className="text-[10px] text-slate-400 block">
@@ -1984,31 +2095,47 @@ export const AsetManagementView: React.FC = () => {
                         <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 p-2 space-y-1.5">
                           <div className="text-[10px] font-bold text-slate-400 px-1 pb-1 border-b border-slate-800 flex justify-between">
                             <span>Unit Barang</span>
-                            <span>No. Register & Kode Aset Tetap</span>
+                            <span>Nilai & Kode Aset Tetap</span>
                           </div>
-                          {sequentialCodes.map((item, idx) => (
-                            <div
-                              key={idx}
-                              className="flex items-center justify-between p-1.5 rounded bg-slate-900/60 hover:bg-slate-900 text-[11px]"
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold text-[10px]">
-                                  Unit {idx + 1}
-                                </span>
-                                <span className="text-slate-300 truncate max-w-[140px] sm:max-w-[200px]">
-                                  {formData.namaAset || 'Aset Tetap'}
-                                </span>
+                          {sequentialCodes.map((item, idx) => {
+                            const unitPrice = priceDistribution.prices[idx] ?? hargaPerUnit;
+                            const isAdjusted =
+                              priceDistribution.remainder > 0 &&
+                              unitPrice === priceDistribution.adjustedPrice;
+                            return (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between p-1.5 rounded bg-slate-900/60 hover:bg-slate-900 text-[11px] gap-2"
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold text-[10px] shrink-0">
+                                    Unit {idx + 1}
+                                  </span>
+                                  <span className="text-slate-300 truncate max-w-[120px] sm:max-w-[170px]">
+                                    {formData.namaAset || 'Aset Tetap'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span
+                                    className={`font-mono text-[10px] px-1.5 py-0.5 rounded ${
+                                      isAdjusted
+                                        ? 'bg-amber-500/20 text-amber-300 font-bold'
+                                        : 'bg-slate-800 text-slate-300'
+                                    }`}
+                                    title={isAdjusted ? 'Ditambah selisih pembulatan (+Rp 1)' : 'Harga satuan dasar'}
+                                  >
+                                    {formatRupiah(unitPrice)}
+                                  </span>
+                                  <span className="font-mono font-bold text-emerald-400 text-[11px]">
+                                    {item.kodeAset}
+                                  </span>
+                                  <span className="px-1 py-0.2 rounded bg-slate-800 text-[10px] text-amber-300 font-mono">
+                                    Reg: {item.nomorRegister}
+                                  </span>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-bold text-emerald-400 text-[11px]">
-                                  {item.kodeAset}
-                                </span>
-                                <span className="px-1 py-0.2 rounded bg-slate-800 text-[10px] text-amber-300 font-mono">
-                                  Reg: {item.nomorRegister}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
 
@@ -2068,23 +2195,10 @@ export const AsetManagementView: React.FC = () => {
                     <label className="block font-semibold text-slate-300 text-xs">
                       {jumlahUnit > 1 ? 'Rentang Kode Aset Tetap' : 'Kode Aset Tetap / ID Register'}
                     </label>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-medium flex items-center gap-1">
-                        <Sparkles className="w-2.5 h-2.5 text-emerald-400" />
-                        Otomatis
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCustomStartSeq('');
-                        }}
-                        className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 hover:underline cursor-pointer"
-                        title="Buat ulang nomor register urut otomatis"
-                      >
-                        <RefreshCw className="w-2.5 h-2.5" />
-                        Reset
-                      </button>
-                    </div>
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-medium flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5 text-emerald-400" />
+                      Terkunci Otomatis
+                    </span>
                   </div>
 
                   {jumlahUnit > 1 ? (
@@ -2095,46 +2209,21 @@ export const AsetManagementView: React.FC = () => {
                     <input
                       type="text"
                       readOnly
-                      placeholder="Contoh: 01.01.01.21.0001"
+                      placeholder="Contoh: 01.01.01.21.2026.0001"
                       value={autoKodeAwal}
-                      className="w-full bg-slate-900 border border-emerald-500/50 rounded-xl px-3 py-2 text-emerald-400 font-mono text-sm font-semibold tracking-wider focus:outline-none"
+                      className="w-full bg-slate-900 border border-emerald-500/50 rounded-xl px-3 py-2 text-emerald-400 font-mono text-sm font-semibold tracking-wider focus:outline-none cursor-not-allowed"
                     />
                   )}
 
                   <div className="flex items-center justify-between mt-1">
                     <p className="text-[10px] text-slate-400">
-                      Format: <span className="font-mono text-slate-300">Klasifikasi.Desa.Urut</span>
+                      Format: <span className="font-mono text-slate-300">Klasifikasi.Desa.Tahun.Urut</span>
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => setShowCustomSeq((prev) => !prev)}
-                      className="text-[10px] text-slate-400 hover:text-amber-300 underline cursor-pointer"
-                    >
-                      {showCustomSeq ? 'Tutup Atur Urut' : 'Atur No. Urut Awal'}
-                    </button>
+                    <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3" />
+                      Anti-Duplikat
+                    </span>
                   </div>
-
-                  {showCustomSeq && (
-                    <div className="mt-1.5 p-2 bg-slate-950 border border-slate-800 rounded-lg space-y-1">
-                      <label className="text-[10px] text-slate-300 block font-semibold">
-                        Nomor Register Urut Awal (Opsional):
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="Contoh: 1, 15, 100"
-                        value={customStartSeq}
-                        onChange={(e) => {
-                          const val = e.target.value === '' ? '' : parseInt(e.target.value, 10);
-                          setCustomStartSeq(val);
-                        }}
-                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white font-mono"
-                      />
-                      <span className="text-[9px] text-slate-400 block">
-                        Kosongkan untuk otomatis melanjutkan nomor urut terakhir di database.
-                      </span>
-                    </div>
-                  )}
                 </div>
 
                 <div>
@@ -2206,6 +2295,8 @@ export const AsetManagementView: React.FC = () => {
                       <span className="text-amber-300 text-[9px] block">
                         {tipeHarga === 'satuan'
                           ? `Total ${jumlahUnit} unit: ${formatRupiah(hargaTotal)}`
+                          : priceDistribution.remainder > 0
+                          ? `Pembagian ${jumlahUnit} unit: ${priceDistribution.baseCount} unit @ ${formatRupiah(priceDistribution.basePrice)} + ${priceDistribution.adjustedCount} unit terakhir @ ${formatRupiah(priceDistribution.adjustedPrice)} (Total pas ${formatRupiah(hargaTotal)})`
                           : `Harga per unit: ${formatRupiah(hargaPerUnit)}`}
                       </span>
                     )}
@@ -2403,8 +2494,9 @@ export const AsetManagementView: React.FC = () => {
                         ) : photoUrl ? (
                           <div className="relative w-full h-full flex flex-col items-center">
                             <img
-                              src={photoUrl}
+                              src={getPhotoUrl(photoUrl)}
                               alt={`Foto ${slotIdx + 1}`}
+                              onError={handlePhotoError}
                               className="w-full h-16 object-cover rounded-lg mb-1 border border-slate-800"
                             />
                             <span className="text-[10px] font-bold text-emerald-400">
@@ -2471,8 +2563,9 @@ export const AsetManagementView: React.FC = () => {
                 {formData.fotoBast ? (
                   <div className="relative w-full p-2.5 bg-slate-950 rounded-xl border border-emerald-500/60 flex items-center gap-3">
                     <img
-                      src={formData.fotoBast}
+                      src={getPhotoUrl(formData.fotoBast)}
                       alt="Foto BAST"
+                      onError={handlePhotoError}
                       className="w-20 h-16 object-cover rounded-lg border border-slate-700 shrink-0"
                     />
                     <div className="flex-1 min-w-0">
@@ -2557,6 +2650,12 @@ export const AsetManagementView: React.FC = () => {
                 <p className="text-xs text-slate-400 font-mono">
                   ID: {selectedAset.id} • {selectedAset.desaName}
                 </p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-slate-400 font-mono mt-0.5">
+                  <span>Entri: {formatTanggalWaktuIndonesia(selectedAset.createdAt, true)}</span>
+                  <span className="text-cyan-300">
+                    Update terakhir: {formatTanggalWaktuIndonesia(selectedAset.updatedAt || selectedAset.createdAt, true)}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -2568,7 +2667,21 @@ export const AsetManagementView: React.FC = () => {
                   </label>
                   <select
                     value={formData.klasifikasi}
-                    onChange={(e) => setFormData({ ...formData, klasifikasi: e.target.value as KlasAset })}
+                    onChange={(e) => {
+                      const newKlas = e.target.value as KlasAset;
+                      const yr = Number(formData.tahunPerolehan) || selectedAset.tahunPerolehan;
+                      const locked = ensureUniqueRegisterOnUpdate(
+                        {
+                          ...selectedAset,
+                          desaId: formData.desaId,
+                          klasifikasi: newKlas,
+                          tahunPerolehan: yr,
+                        },
+                        asets,
+                        desas
+                      );
+                      setFormData({ ...formData, klasifikasi: newKlas, kodeAset: locked.kodeAset });
+                    }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
                   >
                     {KLASIFIKASI_LIST.map((k) => (
@@ -2639,25 +2752,17 @@ export const AsetManagementView: React.FC = () => {
                     <label className="block font-semibold text-slate-300 text-xs">
                       Kode Aset Tetap
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const yr = Number(formData.tahunPerolehan) || new Date().getFullYear();
-                        const freshKode = generateAutoKodeAset(formData.desaId, formData.klasifikasi, asets, desas, undefined, yr);
-                        setFormData((prev) => ({ ...prev, kodeAset: freshKode }));
-                      }}
-                      className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 hover:underline cursor-pointer"
-                      title="Hitung kode register otomatis"
-                    >
-                      <RefreshCw className="w-2.5 h-2.5" />
-                      Set Otomatis
-                    </button>
+                    <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-semibold">
+                      <Lock className="w-2.5 h-2.5" />
+                      Terkunci Anti-Duplikat
+                    </span>
                   </div>
                   <input
                     type="text"
+                    readOnly
                     value={formData.kodeAset}
-                    onChange={(e) => setFormData({ ...formData, kodeAset: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-amber-400"
+                    className="w-full bg-slate-900 border border-emerald-500/50 rounded-xl px-3 py-2 text-emerald-300 font-mono text-xs focus:outline-none cursor-not-allowed"
+                    title="Kode aset & nomor register dikunci otomatis agar tidak pernah sama dengan aset lain"
                   />
                 </div>
                 <div>
@@ -2669,8 +2774,16 @@ export const AsetManagementView: React.FC = () => {
                       type="button"
                       onClick={() => {
                         const curYear = new Date().getFullYear();
-                        const freshKode = generateAutoKodeAset(formData.desaId, formData.klasifikasi, asets, desas, undefined, curYear);
-                        setFormData({ ...formData, tahunPerolehan: curYear, kodeAset: freshKode });
+                        const otherAsets = asets.filter((a) => a.id !== selectedAset.id);
+                        const locked =
+                          curYear === selectedAset.tahunPerolehan && formData.desaId === selectedAset.desaId
+                            ? ensureUniqueRegisterOnUpdate(
+                                { ...selectedAset, klasifikasi: formData.klasifikasi, tahunPerolehan: curYear },
+                                asets,
+                                desas
+                              ).kodeAset
+                            : generateAutoKodeAset(formData.desaId, formData.klasifikasi, otherAsets, desas, undefined, curYear);
+                        setFormData({ ...formData, tahunPerolehan: curYear, kodeAset: locked });
                       }}
                       className="text-[10px] text-amber-400 hover:text-amber-300 font-semibold hover:underline cursor-pointer"
                       title="Set ke tahun sekarang"
@@ -2686,9 +2799,17 @@ export const AsetManagementView: React.FC = () => {
                     onChange={(e) => {
                       const val = parseInt(e.target.value, 10);
                       const targetYear = isNaN(val) ? ('' as any) : val;
-                      const autoKode = !isNaN(val) && val >= 1970
-                        ? generateAutoKodeAset(formData.desaId, formData.klasifikasi, asets, desas, undefined, val)
-                        : formData.kodeAset;
+                      const otherAsets = asets.filter((a) => a.id !== selectedAset.id);
+                      const autoKode =
+                        !isNaN(val) && val >= 1970
+                          ? val === selectedAset.tahunPerolehan && formData.desaId === selectedAset.desaId
+                            ? ensureUniqueRegisterOnUpdate(
+                                { ...selectedAset, klasifikasi: formData.klasifikasi, tahunPerolehan: val },
+                                asets,
+                                desas
+                              ).kodeAset
+                            : generateAutoKodeAset(formData.desaId, formData.klasifikasi, otherAsets, desas, undefined, val)
+                          : formData.kodeAset;
                       setFormData({ ...formData, tahunPerolehan: targetYear, kodeAset: autoKode });
                     }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold focus:outline-none focus:border-amber-400"
@@ -2878,8 +2999,9 @@ export const AsetManagementView: React.FC = () => {
                         ) : photoUrl ? (
                           <div className="relative w-full h-full flex flex-col items-center">
                             <img
-                              src={photoUrl}
+                              src={getPhotoUrl(photoUrl)}
                               alt={`Foto ${slotIdx + 1}`}
+                              onError={handlePhotoError}
                               className="w-full h-16 object-cover rounded-lg mb-1 border border-slate-800"
                             />
                             <span className="text-[10px] font-bold text-emerald-400">
@@ -2946,8 +3068,9 @@ export const AsetManagementView: React.FC = () => {
                 ) : formData.fotoBast ? (
                   <div className="relative w-full p-2.5 bg-slate-950 rounded-xl border border-emerald-500/60 flex items-center gap-3">
                     <img
-                      src={formData.fotoBast}
+                      src={getPhotoUrl(formData.fotoBast)}
                       alt="Foto BAST"
+                      onError={handlePhotoError}
                       className="w-20 h-16 object-cover rounded-lg border border-slate-700 shrink-0"
                     />
                     <div className="flex-1 min-w-0">

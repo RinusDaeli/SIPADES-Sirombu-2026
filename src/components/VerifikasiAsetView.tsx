@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { Aset, KlasAset } from '../types';
-import { formatRupiah, formatTanggalIndonesia } from '../utils/reportGenerator';
+import { formatRupiah, formatTanggalIndonesia, formatTanggalWaktuIndonesia } from '../utils/reportGenerator';
 import { getAsetVerificationStatus, AsetVerificationBadge } from '../utils/verificationHelper';
 import { AsetDetailModal } from './AsetDetailModal';
 import { NiasBaratLogo } from './NiasBaratLogo';
@@ -965,7 +965,7 @@ export const VerifikasiAsetView: React.FC = () => {
                       </td>
 
                       {/* Status & Verifikator */}
-                      <td className="py-3 px-3 min-w-[180px]">
+                      <td className="py-3 px-3 min-w-[195px]">
                         <AsetVerificationBadge statusInfo={verifStatus} size="sm" />
                         {item.diverifikasiOleh && (
                           <div className="text-[10px] text-slate-400 mt-1 leading-tight">
@@ -973,10 +973,22 @@ export const VerifikasiAsetView: React.FC = () => {
                           </div>
                         )}
                         {item.tanggalVerifikasi && (
-                          <div className="text-[9px] text-slate-500">
-                            {formatTanggalIndonesia(item.tanggalVerifikasi)}
+                          <div className="text-[9px] text-emerald-400/90 font-mono">
+                            Sah: {formatTanggalWaktuIndonesia(item.tanggalVerifikasi, true)}
                           </div>
                         )}
+                        <div className="mt-1 space-y-0.5 text-[9px] font-mono leading-tight text-slate-400">
+                          <div>
+                            <span className="text-slate-500">Entri:</span>{' '}
+                            <span className="text-slate-300">{formatTanggalWaktuIndonesia(item.createdAt, true)}</span>
+                          </div>
+                          {item.updatedAt && (
+                            <div>
+                              <span className="text-slate-500">Upd:</span>{' '}
+                              <span className="text-cyan-300">{formatTanggalWaktuIndonesia(item.updatedAt, true)}</span>
+                            </div>
+                          )}
+                        </div>
                         {item.catatanVerifikasi && (
                           <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-2 italic" title={item.catatanVerifikasi}>
                             "{item.catatanVerifikasi}"
@@ -1134,6 +1146,15 @@ export const VerifikasiAsetView: React.FC = () => {
                 <span>Foto Fisik:</span>
                 <span className="text-slate-200">
                   {verifyModalAset.fotoAset?.length ? `${verifyModalAset.fotoAset.length} Foto Terlampir` : 'Belum Ada Foto'}
+                </span>
+              </div>
+              <div className="flex justify-between text-slate-400 pt-1 border-t border-slate-800/80">
+                <span>Waktu Entri / Update:</span>
+                <span className="font-mono text-[11px] text-cyan-300">
+                  {formatTanggalWaktuIndonesia(verifyModalAset.createdAt, true)}
+                  {verifyModalAset.updatedAt && verifyModalAset.updatedAt !== verifyModalAset.createdAt
+                    ? ` • Upd: ${formatTanggalWaktuIndonesia(verifyModalAset.updatedAt, true)}`
+                    : ''}
                 </span>
               </div>
             </div>

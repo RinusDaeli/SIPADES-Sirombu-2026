@@ -10648,8 +10648,8 @@ export const INITIAL_ASETS: Aset[] = [
     "desaName": "DESA BAWOSALOO",
     "klasifikasi": "Aset Tetap Lainnya",
     "namaAset": "Lemari Arsip 2 pintu, 4 Rak",
-    "kodeAset": "05.01.01.01.2026.0002",
-    "nomorRegister": "0002",
+    "kodeAset": "05.01.01.01.2026.0001",
+    "nomorRegister": "0001",
     "bukti": {
       "jenis": "Kwitansi / BAST",
       "nomor": "00107/KWT/02.2001/2026",
@@ -10761,8 +10761,8 @@ export const INITIAL_ASETS: Aset[] = [
     "desaName": "DESA BAWOSALOO",
     "klasifikasi": "Aset Tetap Lainnya",
     "namaAset": "Tenda Teratak uk. 4x6 m",
-    "kodeAset": "05.01.01.01.2026.0003",
-    "nomorRegister": "0003",
+    "kodeAset": "05.01.01.01.2026.0004",
+    "nomorRegister": "0004",
     "bukti": {
       "jenis": "Kwitansi / BAST",
       "nomor": "00008/KWT/02.2001/2026",
@@ -10800,8 +10800,8 @@ export const INITIAL_ASETS: Aset[] = [
     "desaName": "DESA BAWOSALOO",
     "klasifikasi": "Aset Tetap Lainnya",
     "namaAset": "Tenda Teratak uk. 4x6 m",
-    "kodeAset": "05.01.01.01.2026.0004",
-    "nomorRegister": "0004",
+    "kodeAset": "05.01.01.01.2026.0005",
+    "nomorRegister": "0005",
     "bukti": {
       "jenis": "Kwitansi / BAST",
       "nomor": "00008/KWT/02.2001/2026",
@@ -10839,8 +10839,8 @@ export const INITIAL_ASETS: Aset[] = [
     "desaName": "DESA BAWOSALOO",
     "klasifikasi": "Aset Tetap Lainnya",
     "namaAset": "Tenda Teratak uk. 4x6 m",
-    "kodeAset": "05.01.01.01.2026.0007",
-    "nomorRegister": "0007",
+    "kodeAset": "05.01.01.01.2026.0006",
+    "nomorRegister": "0006",
     "bukti": {
       "jenis": "Kwitansi / BAST",
       "nomor": "00008/KWT/02.2001/2026",

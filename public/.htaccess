@@ -4,13 +4,16 @@
 
   # 1. Direct API Rewrites to cPanel PHP Bridge
   RewriteRule ^api/cpanel/test/?$ cpanel-api.php?action=ping [QSA,L]
+  RewriteRule ^api/cpanel/data/?$ cpanel-api.php?action=data [QSA,L]
+  RewriteRule ^api/cpanel/batch_sync/?$ cpanel-api.php?action=batch_sync [QSA,L]
+  RewriteRule ^api/cpanel/upload_chunk/?$ cpanel-api.php?action=batch_sync [QSA,L]
   RewriteRule ^api/cpanel/upload/?$ cpanel-api.php?action=upload_all [QSA,L]
   RewriteRule ^api/cpanel/save_aset/?$ cpanel-api.php?action=save_aset [QSA,L]
   RewriteRule ^api/cpanel/delete_aset/?$ cpanel-api.php?action=delete_aset [QSA,L]
   RewriteRule ^api/zip-base64/?$ cpanel-api.php?action=zip_base64 [QSA,L]
   RewriteRule ^api/download-zip/?$ sipades-web-sirombu.zip [L]
   RewriteRule ^api/data/?$ cpanel-api.php?action=data [QSA,L]
-  RewriteRule ^api/asets/batch/?$ cpanel-api.php?action=upload_all [QSA,L]
+  RewriteRule ^api/asets/batch/?$ cpanel-api.php?action=batch_sync [QSA,L]
   RewriteRule ^api/asets/?$ cpanel-api.php?action=save_aset [QSA,L]
   RewriteRule ^api/asets/(.*)$ cpanel-api.php?action=save_aset&id=$1 [QSA,L]
   RewriteRule ^api/events/?$ cpanel-api.php?action=ping [QSA,L]
@@ -25,9 +28,13 @@
   RewriteRule ^ index.html [L]
 </IfModule>
 
-# Security & CORS Headers
+# Security, CORS & No-Cache for API/JSON
 <IfModule mod_headers.c>
   Header set Access-Control-Allow-Origin "*"
   Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
   Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+  <FilesMatch "\.(php|json)$">
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+  </FilesMatch>
 </IfModule>

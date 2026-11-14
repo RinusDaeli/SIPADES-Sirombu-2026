@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { formatRupiah } from '../utils/reportGenerator';
+import { formatRupiah, formatTanggalWaktuIndonesia } from '../utils/reportGenerator';
 import { ThreeDColumnChart, ColumnChartItem } from './ThreeDColumnChart';
 import { ThreeDPieChart, PieChartItem } from './ThreeDPieChart';
 import { AnnouncementReaderModal } from './AnnouncementReaderModal';
@@ -1035,13 +1035,25 @@ export const DashboardView: React.FC = () => {
                         </span>
                       </td>
 
-                      {/* 7. STATUS VERIFIKASI (PROMINENT COLOR BADGE) */}
+                      {/* 7. STATUS VERIFIKASI & WAKTU ENTRI/UPDATE */}
                       <td className="py-3 px-3 text-center">
                         <AsetVerificationBadge
                           statusInfo={verifInfo}
                           size="md"
                           className="shadow-sm"
                         />
+                        <div className="mt-1 space-y-0.5 text-[9px] font-mono leading-tight text-slate-400">
+                          <div title={`Waktu Entri: ${formatTanggalWaktuIndonesia(aset.createdAt)}`}>
+                            <span className="text-slate-500">Entri:</span>{' '}
+                            <span className="text-slate-300">{formatTanggalWaktuIndonesia(aset.createdAt, true)}</span>
+                          </div>
+                          {aset.updatedAt && (
+                            <div title={`Terakhir Update: ${formatTanggalWaktuIndonesia(aset.updatedAt)}`}>
+                              <span className="text-slate-500">Upd:</span>{' '}
+                              <span className="text-cyan-300">{formatTanggalWaktuIndonesia(aset.updatedAt, true)}</span>
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       {/* 8. Action buttons */}

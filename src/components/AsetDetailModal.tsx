@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Aset } from '../types';
 import { getAsetVerificationStatus, AsetVerificationBadge } from '../utils/verificationHelper';
+import { formatTanggalWaktuIndonesia } from '../utils/reportGenerator';
 import {
   X,
   Camera,
   FileText,
   Calendar,
+  Clock,
   DollarSign,
   Tag,
   MapPin,
@@ -361,8 +363,8 @@ export const AsetDetailModal: React.FC<AsetDetailModalProps> = ({
                       )}
                       {aset.tanggalVerifikasi && (
                         <div className="flex items-center justify-between text-[10px]">
-                          <span className="text-slate-400">Tanggal:</span>
-                          <span className="text-slate-300 font-mono">{aset.tanggalVerifikasi}</span>
+                          <span className="text-slate-400">Tanggal Verifikasi:</span>
+                          <span className="text-slate-300 font-mono">{formatTanggalWaktuIndonesia(aset.tanggalVerifikasi, true)}</span>
                         </div>
                       )}
                       {aset.catatanVerifikasi && (
@@ -370,6 +372,26 @@ export const AsetDetailModal: React.FC<AsetDetailModalProps> = ({
                           &quot;{aset.catatanVerifikasi}&quot;
                         </div>
                       )}
+                    </div>
+
+                    {/* Riwayat Tanggal & Jam Entri / Update Aset */}
+                    <div className="mt-2.5 bg-slate-950/70 p-2.5 rounded-lg border border-slate-800 text-[11px] space-y-1">
+                      <div className="text-[10px] font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-1.5 mb-1">
+                        <Clock className="w-3 h-3 text-cyan-400" />
+                        <span>Riwayat Waktu Entri &amp; Pembaruan</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-slate-400">Waktu Entri Data:</span>
+                        <span className="text-slate-200 font-mono">
+                          {formatTanggalWaktuIndonesia(aset.createdAt)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-slate-400">Terakhir Diupdate:</span>
+                        <span className="text-cyan-300 font-mono font-semibold">
+                          {formatTanggalWaktuIndonesia(aset.updatedAt || aset.createdAt)}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Super Admin / Admin Kecamatan: Batalkan Pengesahan Action */}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '../context/AppContext';
 import { pingCpanel, saveAllToCpanel } from '../lib/cpanelService';
+import { formatTanggalWaktuIndonesia } from '../utils/reportGenerator';
 import {
   Server,
   Database,
@@ -40,14 +41,34 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
   });
 
   const [testingConnection, setTestingConnection] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string; count?: number } | null>(null);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    message: string;
+    count?: number;
+    pendingVerifikasi?: number;
+    updatedAt?: string;
+  } | null>(null);
 
   const [uploadingToCpanel, setUploadingToCpanel] = useState(false);
+  const [syncingNow, setSyncingNow] = useState(false);
   const [uploadResult, setUploadResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const [copiedCode, setCopiedCode] = useState(false);
   const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
   const [zipProgress, setZipProgress] = useState<string | null>(null);
+  const [zipSizeKB, setZipSizeKB] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    fetch('/api/zip-info', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((info) => {
+        if (info && info.exists && typeof info.sizeBytes === 'number') {
+          setZipSizeKB((info.sizeBytes / 1024).toFixed(1));
+        }
+      })
+      .catch(() => {});
+  }, [isOpen]);
 
   useEffect(() => {
     if (cpanelUrl) {
@@ -60,7 +81,8 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
   }, [useCpanelPrimary]);
 
   const handleTestConnection = async () => {
-    if (!cpanelUrl.trim()) {
+    const trimmedUrl = cpanelUrl.trim();
+    if (!trimmedUrl) {
       setTestResult({
         success: false,
         message: 'Masukkan URL endpoint cPanel terlebih dahulu (contoh: https://sipadessirombu.my.id/cpanel-api.php)',
@@ -72,62 +94,19 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
     setTestResult(null);
 
     try {
-      const isProd = typeof window !== 'undefined' && window.location.hostname.includes('sipadessirombu');
-
-      // Jika dijalankan langsung di situs produksi (sipadessirombu.my.id), panggil pingCpanel() langsung
-      if (isProd) {
-        const pingRes = await pingCpanel();
-        if (pingRes.success) {
-          setTestResult({
-            success: true,
-            message: pingRes.message || 'Koneksi ke cPanel Hosting Berhasil!',
-            count: pingRes.totalAset ?? 330,
-          });
-        } else {
-          setTestResult({
-            success: false,
-            message: pingRes.message,
-          });
-        }
-        return;
-      }
-
-      // Jika di lingkungan dev preview, coba server proxy terlebih dahulu lalu fallback ke ping langsung
-      let data: any = null;
-      try {
-        const proxyRes = await fetch('/api/cpanel/test', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: cpanelUrl.trim() }),
-        });
-        if (proxyRes.ok) {
-          data = await proxyRes.json();
-        }
-      } catch (proxyErr) {
-        console.warn('Proxy test notice, mencoba ping langsung:', proxyErr);
-      }
-
-      if (!data || !data.success) {
-        const directPing = await pingCpanel();
-        if (directPing.success) {
-          data = {
-            success: true,
-            message: directPing.message,
-            totalAset: directPing.totalAset ?? 330,
-          };
-        }
-      }
-
-      if (data && data.success) {
+      const pingRes = await pingCpanel(trimmedUrl);
+      if (pingRes.success) {
         setTestResult({
           success: true,
-          message: data.message || 'Koneksi ke cPanel Hosting Berhasil!',
-          count: data.totalAset ?? 330,
+          message: pingRes.message || 'Koneksi ke cPanel Hosting Berhasil!',
+          count: pingRes.totalAset ?? pingRes.totalUnit ?? 0,
+          pendingVerifikasi: pingRes.pendingVerifikasi,
+          updatedAt: pingRes.updatedAt,
         });
       } else {
         setTestResult({
           success: false,
-          message: data?.message || 'Gagal tersambung ke cPanel. Periksa URL atau koneksi internet.',
+          message: pingRes.message || 'Gagal tersambung ke cPanel. Periksa URL atau koneksi internet.',
         });
       }
     } catch (err: any) {
@@ -137,6 +116,44 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
       });
     } finally {
       setTestingConnection(false);
+    }
+  };
+
+  const handleSyncNow = async () => {
+    setSyncingNow(true);
+    setUploadResult(null);
+    try {
+      await refreshServerData(true);
+      const pingRes = await pingCpanel(cpanelUrl.trim());
+      if (pingRes.success) {
+        setTestResult({
+          success: true,
+          message: pingRes.message || 'Koneksi cPanel Web Hosting Berhasil!',
+          count: pingRes.totalAset ?? pingRes.totalUnit ?? 0,
+          pendingVerifikasi: pingRes.pendingVerifikasi,
+          updatedAt: pingRes.updatedAt,
+        });
+        setUploadResult({
+          success: true,
+          message: `Sinkronisasi selesai! Server cPanel saat ini mencatat ${pingRes.totalAset ?? 0} aset${
+            typeof pingRes.pendingVerifikasi === 'number' && pingRes.pendingVerifikasi > 0
+              ? ` (${pingRes.pendingVerifikasi} menunggu verifikasi)`
+              : ''
+          }.`,
+        });
+      } else {
+        setUploadResult({
+          success: false,
+          message: pingRes.message || 'Sinkronisasi lokal berjalan, namun server cPanel belum merespons.',
+        });
+      }
+    } catch (err: any) {
+      setUploadResult({
+        success: false,
+        message: `Gagal sinkronisasi: ${err?.message || 'Periksa koneksi jaringan.'}`,
+      });
+    } finally {
+      setSyncingNow(false);
     }
   };
 
@@ -163,7 +180,7 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
 
       // 1. Jika di domain produksi sipadessirombu.my.id, kirim langsung ke cpanel-api.php
       if (isProd) {
-        const directRes = await saveAllToCpanel(payload);
+        const directRes = await saveAllToCpanel(payload, cpanelUrl.trim());
         if (directRes.success) {
           setUploadResult({
             success: true,
@@ -202,7 +219,7 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
 
       // 3. Fallback: Direct browser call ke cpanel-api.php
       if (!success) {
-        const directRes = await saveAllToCpanel(payload);
+        const directRes = await saveAllToCpanel(payload, cpanelUrl.trim());
         if (directRes.success) {
           success = true;
           totalReported = directRes.totalAset || asets.length;
@@ -239,7 +256,7 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
 
       if (fileName === 'sipades-web-sirombu.zip') {
         let base64Data: string | null = null;
-        let fileSizeKB = '866.9';
+        let fileSizeKB = zipSizeKB || 'terbaru';
 
         // 1. Ambil paket ZIP murni via API Base64 JSON (kebal terhadap pemotongan / error proxy iframe)
         try {
@@ -495,10 +512,12 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
               >
                 <Download className={`w-4 h-4 ${downloadingFile === 'sipades-web-sirombu.zip' ? 'animate-bounce' : ''}`} />
-                {downloadingFile === 'sipades-web-sirombu.zip' ? 'Sedang Mempersiapkan Berkas...' : 'Unduh Paket Web SIPADES (.ZIP ~867 KB)'}
+                {downloadingFile === 'sipades-web-sirombu.zip'
+                  ? 'Sedang Mempersiapkan Berkas...'
+                  : `Unduh Paket Web SIPADES (.ZIP${zipSizeKB ? ` ~${zipSizeKB} KB` : ''})`}
               </button>
               <span className="text-[11px] text-slate-400">
-                (Ukuran Resmi: 866.9 KB • Berisi index.html, assets, logo, dan .htaccess)
+                ({zipSizeKB ? `Ukuran Resmi: ${zipSizeKB} KB` : 'Paket Build Terbaru'} • Berisi index.html, assets, cpanel-api.php, dan .htaccess; aman terhadap database Anda)
               </span>
             </div>
 
@@ -518,7 +537,7 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
               <li>Setelah proses upload selesai (100%), kembali ke File Manager, klik kanan file <strong>sipades-web-sirombu.zip</strong>, lalu klik <strong>Extract</strong> (pilih lokasi <code className="text-cyan-300">/public_html</code>).</li>
             </ol>
             <div className="text-emerald-400 font-medium pt-1">
-              ✓ Selesai! Saat membuka <a href="https://sipadessirombu.my.id" target="_blank" rel="noreferrer" className="underline font-bold text-emerald-300">https://sipadessirombu.my.id</a>, antarmuka lengkap aplikasi SIPADES Kecamatan Sirombu langsung berjalan dengan seluruh 330 aset aktif secara real-time!
+              ✓ Selesai! Saat membuka <a href="https://sipadessirombu.my.id" target="_blank" rel="noreferrer" className="underline font-bold text-emerald-300">https://sipadessirombu.my.id</a>, antarmuka lengkap aplikasi SIPADES Kecamatan Sirombu langsung berjalan dengan seluruh {asets.length} aset aktif secara real-time!
             </div>
           </div>
         </div>
@@ -573,14 +592,20 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
                 <p className="font-semibold">{testResult.message}</p>
                 {testResult.count !== undefined && (
                   <p className="text-[11px] text-emerald-400/90 mt-0.5">
-                    Jumlah aset yang sudah tercatat di cPanel: <strong>{testResult.count} unit</strong>.
+                    Jumlah aset yang sudah tercatat di cPanel: <strong>{testResult.count} unit</strong>
+                    {typeof testResult.pendingVerifikasi === 'number' && (
+                      <span> • Menunggu Verifikasi: <strong>{testResult.pendingVerifikasi} unit</strong></span>
+                    )}
+                    {testResult.updatedAt && (
+                      <span> • Diupdate: {formatTanggalWaktuIndonesia(testResult.updatedAt, true)}</span>
+                    )}
                   </p>
                 )}
               </div>
             </div>
           )}
 
-          {/* Tombol Push Data Langsung ke cPanel */}
+          {/* Tombol Sync & Push Data Langsung ke cPanel */}
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-800">
             <div className="flex items-center gap-2">
               <input
@@ -595,21 +620,33 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
               </label>
             </div>
 
-            <button
-              onClick={handleUploadAllToCpanel}
-              disabled={uploadingToCpanel || !cpanelUrl.trim()}
-              className="w-full sm:w-auto px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow"
-            >
-              {uploadingToCpanel ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Mengunggah ke cPanel...
-                </>
-              ) : (
-                <>
-                  <Upload className="w-3.5 h-3.5" /> Kirim Seluruh {asets.length} Aset ke cPanel
-                </>
-              )}
-            </button>
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={handleSyncNow}
+                disabled={syncingNow || uploadingToCpanel || !cpanelUrl.trim()}
+                className="w-full sm:w-auto px-3.5 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syncingNow ? 'animate-spin' : ''}`} />
+                {syncingNow ? 'Menyinkronkan...' : 'Sinkronkan Sekarang (Tarik & Dorong)'}
+              </button>
+
+              <button
+                onClick={handleUploadAllToCpanel}
+                disabled={uploadingToCpanel || syncingNow || !cpanelUrl.trim()}
+                className="w-full sm:w-auto px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow"
+              >
+                {uploadingToCpanel ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Mengunggah ke cPanel...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-3.5 h-3.5" /> Kirim Seluruh {asets.length} Aset ke cPanel
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
           {uploadResult && (

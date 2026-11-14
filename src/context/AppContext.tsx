@@ -21,6 +21,10 @@ import {
   formatTanggalIndonesia,
   generateSequentialKodeAset,
   normalizeAsetRegisters,
+  distributeTotalPrice,
+  ensureUniqueRegistersForNewAsets,
+  ensureUniqueRegisterOnUpdate,
+  findDuplicateRegisters,
 } from '../utils/reportGenerator';
 import {
   safeLocalStorageSetItem,
@@ -31,6 +35,7 @@ import { syncManager, FullSyncPayload } from '../utils/cloudSyncService';
 import {
   fetchCpanelData,
   saveAsetToCpanel,
+  saveBatchToCpanel,
   deleteAsetFromCpanel,
   saveAllToCpanel,
   saveDesasToCpanel,
@@ -105,6 +110,7 @@ interface AppContextType {
   addAsetBatch: (items: Omit<Aset, 'id' | 'createdAt' | 'updatedAt' | 'status'>[]) => Promise<{ success: boolean; count: number }>;
   updateAset: (id: string, data: Partial<Aset>) => void;
   deleteAset: (id: string) => { success: boolean; message?: string };
+  perbaikiSemuaNomorRegister: () => Promise<{ fixedCount: number; message: string }>;
   
   // Verifikasi Aset Baru (Admin / Super Admin)
   verifikasiAset: (asetId: string, catatan?: string, nomorSK?: string) => Promise<{ success: boolean; message: string }>;
@@ -194,12 +200,13 @@ const STORAGE_KEYS = {
 };
 
 /**
- * Deduplicate assets by unique identity (desaId + kodeAset + nomorRegister)
- * and strictly filter out any permanently deleted IDs and dummy sample assets.
+ * Deduplicate assets strictly by unique asset ID (`a.id`)
+ * and filter out permanently deleted IDs and dummy sample assets.
+ * Never drops distinct asset IDs even if their kodeAset/nomorRegister temporarily collide
+ * (those are safely repaired downstream by normalizeAsetRegisters).
  */
 export function deduplicateAsets(list: Aset[], deletedIds?: Set<string>): Aset[] {
   if (!Array.isArray(list)) return [];
-  const seenKey = new Set<string>();
   const seenId = new Set<string>();
   const result: Aset[] = [];
 
@@ -207,19 +214,7 @@ export function deduplicateAsets(list: Aset[], deletedIds?: Set<string>): Aset[]
     if (!a || !a.id) continue;
     if (a.id === 'ast-test-1') continue; // Never allow sample dummy asset
     if (deletedIds && deletedIds.has(a.id)) continue; // Never allow deleted assets to reappear
-    if (seenId.has(a.id)) continue; // Avoid duplicate IDs
-
-    // Unique identity key per asset in a desa: only deduplicate if the exact same asset name, kodeAset, and nomorRegister match
-    const reg = a.nomorRegister ? a.nomorRegister.replace(/^0+/, '') : '';
-    const kode = (a.kodeAset || '').trim();
-    const nama = (a.namaAset || '').trim().toLowerCase();
-    if (kode && reg && nama) {
-      const uniqueKey = `${a.desaId || ''}_${nama}_${kode}_${reg}`;
-      if (seenKey.has(uniqueKey)) {
-        continue; // Duplicate entry of the exact same asset!
-      }
-      seenKey.add(uniqueKey);
-    }
+    if (seenId.has(a.id)) continue; // Avoid duplicate IDs only
 
     seenId.add(a.id);
     result.push(a);
@@ -274,7 +269,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const checkFirestoreQuotaStatus = useCallback(async () => {
     const res = await pingCpanel();
     const detail = res.success
-      ? `Hosting cPanel Server Aktif (${res.totalAset ?? 316} aset) — Bebas Batasan Kuota.`
+      ? `Hosting cPanel Server Aktif (${res.totalAset ?? 0} aset) — Bebas Batasan Kuota.`
       : res.message;
     setFirestoreQuotaDetail(detail);
     return {
@@ -412,19 +407,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return INITIAL_USERS;
   });
 
-  // Primary state: loads from authoritative initial data cleanly without blocking the browser thread
+  // Primary state: loads from authoritative localStorage cache cleanly, or falls back to INITIAL_ASETS
   const [asets, setAsets] = useState<Aset[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ASETS);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= INITIAL_ASETS.length) {
-          return deduplicateAsets(parsed);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return normalizeAsetRegisters(deduplicateAsets(parsed, deletedAssetIds), INITIAL_DESA_LIST).asets;
         }
       }
     } catch {}
-    return deduplicateAsets(INITIAL_ASETS);
+    return normalizeAsetRegisters(deduplicateAsets(INITIAL_ASETS, deletedAssetIds), INITIAL_DESA_LIST).asets;
   });
+
+  const asetsRef = useRef<Aset[]>(asets);
+  useEffect(() => {
+    asetsRef.current = asets;
+  }, [asets]);
+  const registerRepairSyncedRef = useRef<boolean>(false);
 
   const [verifikasiList, setVerifikasiList] = useState<PermohonanVerifikasi[]>(() => {
     try {
@@ -532,125 +533,255 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     saveAsetsToIndexedDB(list).catch(() => {});
   }, []);
 
-  // Central cPanel Web Hosting Synchronization (100% cPanel Unlimited Storage)
-  const refreshServerData = useCallback(async (_force = false) => {
-    try {
-      const cpData = await fetchCpanelData();
-      if (cpData && Array.isArray(cpData.asets) && cpData.asets.length > 0) {
-        const cleanAsets = deduplicateAsets(cpData.asets, deletedAssetIds);
-        const { asets: normalized } = normalizeAsetRegisters(cleanAsets, desas);
-        
-        setAsets((prev) => {
-          const map = new Map<string, Aset>(prev.map((a) => [a.id, a]));
-          let hasChanges = false;
+  const syncRepairedRegistersToServers = useCallback((repairedItems: Aset[]) => {
+    if (!repairedItems || repairedItems.length === 0) return;
+    saveBatchToCpanel(repairedItems).catch((err) =>
+      console.warn('[cPanel] Auto-repair register sync notice:', err)
+    );
+  }, []);
 
-          for (const na of normalized) {
-            if (!na || !na.id) continue;
-            const current = map.get(na.id);
-            if (!current) {
-              map.set(na.id, na);
-              hasChanges = true;
-            } else {
-              const currTime = new Date(current.updatedAt || 0).getTime();
-              const naTime = new Date(na.updatedAt || 0).getTime();
+  const mergeCpanelWithLocal = useCallback(
+    (
+      remoteAsets: Aset[],
+      localAsets: Aset[],
+      deletedSet: Set<string>,
+      desaList: Desa[]
+    ): { merged: Aset[]; unsyncedToPush: Aset[]; changed: boolean } => {
+      const cleanRemote = deduplicateAsets(remoteAsets, deletedSet);
+      const { asets: normalizedRemoteRaw, changedIds } = normalizeAsetRegisters(cleanRemote, desaList);
+      const nowIso = new Date().toISOString();
+      const changedSet = new Set(changedIds);
+      const normalizedRemote =
+        changedIds.length > 0
+          ? normalizedRemoteRaw.map((item) => (changedSet.has(item.id) ? { ...item, updatedAt: nowIso } : item))
+          : normalizedRemoteRaw;
 
-              // Protect verified status if incoming is not verified
-              let statusVerifikasi = na.statusVerifikasi;
-              let diverifikasiOleh = na.diverifikasiOleh;
-              let tanggalVerifikasi = na.tanggalVerifikasi;
-              let catatanVerifikasi = na.catatanVerifikasi;
-              let nomorSKVerifikasi = na.nomorSKVerifikasi;
+      const localMap = new Map<string, Aset>(
+        localAsets
+          .filter((a) => a && a.id && a.id !== 'ast-test-1' && !deletedSet.has(a.id))
+          .map((a) => [a.id, a])
+      );
+      const mergedMap = new Map<string, Aset>();
+      const unsyncedToPush: Aset[] = [];
 
-              if (
-                current.statusVerifikasi === 'sudah_diverifikasi' &&
-                (na.statusVerifikasi === 'sedang_diproses' || na.statusVerifikasi === 'belum_diverifikasi' || !na.statusVerifikasi)
-              ) {
-                statusVerifikasi = 'sudah_diverifikasi';
-                diverifikasiOleh = current.diverifikasiOleh || na.diverifikasiOleh;
-                tanggalVerifikasi = current.tanggalVerifikasi || na.tanggalVerifikasi;
-                catatanVerifikasi = current.catatanVerifikasi || na.catatanVerifikasi;
-                nomorSKVerifikasi = current.nomorSKVerifikasi || na.nomorSKVerifikasi;
-              }
+      for (const na of normalizedRemote) {
+        if (!na || !na.id) continue;
+        const current = localMap.get(na.id);
+        if (!current) {
+          mergedMap.set(na.id, na);
+          if (changedSet.has(na.id)) {
+            unsyncedToPush.push(na);
+          }
+        } else {
+          const currTime = new Date(current.updatedAt || 0).getTime();
+          const naTime = new Date(na.updatedAt || 0).getTime();
+          const naFotos = Array.isArray(na.fotoAset) ? na.fotoAset.filter(Boolean) : [];
+          const curFotos = Array.isArray(current.fotoAset) ? current.fotoAset.filter(Boolean) : [];
+          const mergedPhotos =
+            naFotos.length > curFotos.length
+              ? naFotos
+              : curFotos.length > naFotos.length
+              ? curFotos
+              : naFotos.length > 0
+              ? naFotos
+              : [];
+          const mergedBast = na.fotoBast || current.fotoBast || '';
 
-              if (naTime > currTime) {
-                // Incoming edit from cPanel is strictly newer: overwrite local
-                hasChanges = true;
-                map.set(na.id, {
-                  ...na,
-                  statusVerifikasi,
-                  diverifikasiOleh,
-                  tanggalVerifikasi,
-                  catatanVerifikasi,
-                  nomorSKVerifikasi,
-                });
-              } else if (currTime > naTime) {
-                // Local edit is newer, preserve local
-              } else {
-                // Timestamps equal: check if ANY core property changed
-                const isDifferent =
-                  current.namaAset !== na.namaAset ||
-                  current.nomorSeri !== na.nomorSeri ||
-                  current.kondisi !== na.kondisi ||
-                  current.nilaiPerolehan !== na.nilaiPerolehan ||
-                  current.keterangan !== na.keterangan ||
-                  current.lokasi !== na.lokasi ||
-                  current.merk !== na.merk ||
-                  current.tipe !== na.tipe ||
-                  current.kodeAset !== na.kodeAset ||
-                  current.statusVerifikasi !== statusVerifikasi ||
-                  (current.fotoAset || []).join('|') !== (na.fotoAset || []).join('|') ||
-                  (current.fotoBast || '') !== (na.fotoBast || '');
-
-                if (isDifferent) {
-                  hasChanges = true;
-                  map.set(na.id, {
-                    ...current,
-                    ...na,
-                    statusVerifikasi,
-                    diverifikasiOleh,
-                    tanggalVerifikasi,
-                    catatanVerifikasi,
-                    nomorSKVerifikasi,
-                  });
-                }
-              }
+          if (currTime > naTime && !changedSet.has(na.id)) {
+            const chosen: Aset = {
+              ...na,
+              ...current,
+              fotoAset: curFotos.length >= naFotos.length && curFotos.length > 0 ? curFotos : mergedPhotos,
+              fotoBast: current.fotoBast || mergedBast,
+            };
+            mergedMap.set(na.id, chosen);
+            unsyncedToPush.push(chosen);
+          } else if (naTime > currTime) {
+            const chosen: Aset = {
+              ...current,
+              ...na,
+              fotoAset: mergedPhotos,
+              fotoBast: mergedBast,
+            };
+            if (na.statusVerifikasi === 'sedang_diproses') {
+              delete chosen.diverifikasiOleh;
+              delete chosen.tanggalVerifikasi;
+              delete chosen.catatanVerifikasi;
+              delete chosen.nomorSKVerifikasi;
+            }
+            mergedMap.set(na.id, chosen);
+            if (changedSet.has(na.id)) {
+              unsyncedToPush.push(chosen);
+            }
+          } else {
+            const localVerifiedMore =
+              current.statusVerifikasi === 'sudah_diverifikasi' && na.statusVerifikasi !== 'sudah_diverifikasi';
+            const chosen: Aset = {
+              ...current,
+              ...na,
+              fotoAset: mergedPhotos,
+              fotoBast: mergedBast,
+              ...(localVerifiedMore
+                ? {
+                    statusVerifikasi: 'sudah_diverifikasi' as const,
+                    diverifikasiOleh: current.diverifikasiOleh || na.diverifikasiOleh,
+                    tanggalVerifikasi: current.tanggalVerifikasi || na.tanggalVerifikasi,
+                    catatanVerifikasi: current.catatanVerifikasi || na.catatanVerifikasi,
+                    nomorSKVerifikasi: current.nomorSKVerifikasi || na.nomorSKVerifikasi,
+                  }
+                : {}),
+            };
+            mergedMap.set(na.id, chosen);
+            if (localVerifiedMore || changedSet.has(na.id)) {
+              unsyncedToPush.push(chosen);
             }
           }
+        }
+      }
 
-          if (!hasChanges && map.size === prev.length) {
-            return prev; // Same object identity: eliminates photo flickering completely!
+      // Preserve any local-only active non-deleted assets (e.g. saved offline/failed sync) and push them to cPanel
+      for (const pa of localAsets) {
+        if (!pa || !pa.id || pa.id === 'ast-test-1' || deletedSet.has(pa.id)) continue;
+        if (!mergedMap.has(pa.id)) {
+          mergedMap.set(pa.id, pa);
+          unsyncedToPush.push(pa);
+        }
+      }
+
+      const finalNormalized = normalizeAsetRegisters(
+        deduplicateAsets(Array.from(mergedMap.values()), deletedSet),
+        desaList
+      );
+      const merged = finalNormalized.asets;
+      if (finalNormalized.changedIds.length > 0) {
+        const pushIds = new Set(unsyncedToPush.map((u) => u.id));
+        finalNormalized.changedIds.forEach((cid) => {
+          if (!pushIds.has(cid)) {
+            const found = merged.find((m) => m.id === cid);
+            if (found) unsyncedToPush.push(found);
+          }
+        });
+      }
+
+      let changed = merged.length !== localAsets.length;
+      if (!changed) {
+        for (let i = 0; i < localAsets.length; i++) {
+          const a = localAsets[i];
+          const b = merged[i];
+          if (
+            !a ||
+            !b ||
+            a.id !== b.id ||
+            a.updatedAt !== b.updatedAt ||
+            a.statusVerifikasi !== b.statusVerifikasi ||
+            a.namaAset !== b.namaAset ||
+            a.nomorSeri !== b.nomorSeri ||
+            a.nomorRegister !== b.nomorRegister ||
+            a.kodeAset !== b.kodeAset ||
+            a.kondisi !== b.kondisi ||
+            a.nilaiPerolehan !== b.nilaiPerolehan ||
+            (a.fotoAset || []).length !== (b.fotoAset || []).length ||
+            (a.fotoBast || '') !== (b.fotoBast || '')
+          ) {
+            changed = true;
+            break;
+          }
+        }
+      }
+
+      return { merged, unsyncedToPush, changed };
+    },
+    []
+  );
+
+  const lastKnownCpanelCount = useRef<number>(asets.length);
+  const lastKnownCpanelUpdated = useRef<string>('');
+  const pausePulseUntil = useRef<number>(0);
+
+  useEffect(() => {
+    lastKnownCpanelCount.current = asets.length;
+  }, [asets.length]);
+
+  // Central cPanel Web Hosting Synchronization (100% cPanel Unlimited Storage)
+  const refreshServerData = useCallback(
+    async (_force = false) => {
+      try {
+        const cpData = await fetchCpanelData();
+        if (cpData && Array.isArray(cpData.asets) && cpData.asets.length > 0) {
+          const remoteDeleted = Array.isArray(cpData.deletedIds) ? cpData.deletedIds : [];
+          const effectiveDeleted = new Set<string>(deletedAssetIds);
+          let deletedUpdated = false;
+          remoteDeleted.forEach((id) => {
+            if (id && !effectiveDeleted.has(id)) {
+              effectiveDeleted.add(id);
+              deletedUpdated = true;
+            }
+          });
+          if (deletedUpdated) {
+            setDeletedAssetIds(effectiveDeleted);
+            try {
+              localStorage.setItem(STORAGE_KEYS.DELETED_ASETS, JSON.stringify(Array.from(effectiveDeleted)));
+            } catch {}
           }
 
-          const merged = Array.from(map.values());
-          persistAsetsSafely(merged);
-          saveAsetsToIndexedDB(merged).catch(() => {});
-          return merged;
-        });
+          const activeDesas = Array.isArray(cpData.desas) && cpData.desas.length > 0 ? cpData.desas : desas;
+          const currentLocal = asetsRef.current;
+          const { merged, unsyncedToPush, changed } = mergeCpanelWithLocal(
+            cpData.asets,
+            currentLocal,
+            effectiveDeleted,
+            activeDesas
+          );
 
-        if (Array.isArray(cpData.verifikasiList)) {
-          setVerifikasiList(cpData.verifikasiList);
-          safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(cpData.verifikasiList));
-        }
-        if (Array.isArray(cpData.users) && cpData.users.length > 0) {
-          setUsers(cpData.users);
-          safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(cpData.users));
-        }
-        if (Array.isArray(cpData.desas) && cpData.desas.length > 0) {
-          setDesas(cpData.desas);
-          safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(cpData.desas));
-        }
-        if (cpData.kecamatanProfile) {
-          setKecamatanProfile(cpData.kecamatanProfile);
-          safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(cpData.kecamatanProfile));
-        }
+          if (changed) {
+            asetsRef.current = merged;
+            setAsets(merged);
+            persistAsetsSafely(merged);
+            saveAsetsToIndexedDB(merged).catch(() => {});
+          }
 
-        setIsServerConnected(true);
-        setLastSyncTime(new Date());
+          if (unsyncedToPush.length > 0 && !registerRepairSyncedRef.current) {
+            registerRepairSyncedRef.current = true;
+            pausePulseUntil.current = Date.now() + 15000;
+            saveBatchToCpanel(unsyncedToPush)
+              .catch((err) => console.warn('[cPanel] Auto-push unsynced assets notice:', err))
+              .finally(() => {
+                registerRepairSyncedRef.current = false;
+              });
+          }
+
+          if (Array.isArray(cpData.verifikasiList)) {
+            setVerifikasiList(cpData.verifikasiList);
+            safeLocalStorageSetItem(STORAGE_KEYS.VERIFIKASI, JSON.stringify(cpData.verifikasiList));
+          }
+          if (Array.isArray(cpData.users) && cpData.users.length > 0) {
+            setUsers(cpData.users);
+            safeLocalStorageSetItem(STORAGE_KEYS.USERS, JSON.stringify(cpData.users));
+          }
+          if (Array.isArray(cpData.desas) && cpData.desas.length > 0) {
+            setDesas(cpData.desas);
+            safeLocalStorageSetItem(STORAGE_KEYS.DESAS, JSON.stringify(cpData.desas));
+          }
+          if (Array.isArray(cpData.pengesahanList)) {
+            setPengesahanList(cpData.pengesahanList);
+            safeLocalStorageSetItem(STORAGE_KEYS.PENGESAHAN, JSON.stringify(cpData.pengesahanList));
+          }
+          if (cpData.kecamatanProfile) {
+            setKecamatanProfile(cpData.kecamatanProfile);
+            safeLocalStorageSetItem(STORAGE_KEYS.KECAMATAN_PROFILE, JSON.stringify(cpData.kecamatanProfile));
+          }
+
+          setIsServerConnected(true);
+          setLastSyncTime(new Date());
+          lastKnownCpanelCount.current = merged.length;
+          if (cpData.updatedAt) lastKnownCpanelUpdated.current = cpData.updatedAt;
+        }
+      } catch (e) {
+        console.warn('[cPanel Sync] refreshServerData error:', e);
       }
-    } catch (e) {
-      console.warn('[cPanel Sync] refreshServerData error:', e);
-    }
-  }, [desas, persistAsetsSafely, deletedAssetIds]);
+    },
+    [desas, persistAsetsSafely, deletedAssetIds, mergeCpanelWithLocal]
+  );
 
   // Pure cPanel Central Database Synchronization (Disconnected from Firebase)
   useEffect(() => {
@@ -659,55 +790,75 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const loadAuthoritativeCpanelData = async () => {
       try {
-        const cpData = await fetchCpanelData();
+        const [cpData, idbAsets] = await Promise.all([
+          fetchCpanelData(),
+          loadAsetsFromIndexedDB().catch(() => [] as Aset[]),
+        ]);
+
+        // Unify localStorage & IndexedDB before comparing with cPanel so offline additions/verifications are preserved
+        const baseLocalMap = new Map<string, Aset>(asetsRef.current.map((a) => [a.id, a]));
+        if (Array.isArray(idbAsets)) {
+          for (const item of idbAsets) {
+            if (!item || !item.id || item.id === 'ast-test-1' || deletedAssetIds.has(item.id)) continue;
+            const exist = baseLocalMap.get(item.id);
+            if (!exist) {
+              baseLocalMap.set(item.id, item);
+            } else {
+              const existTime = new Date(exist.updatedAt || 0).getTime();
+              const itemTime = new Date(item.updatedAt || 0).getTime();
+              if (itemTime > existTime) {
+                baseLocalMap.set(item.id, {
+                  ...exist,
+                  ...item,
+                  fotoAset: item.fotoAset && item.fotoAset.length > 0 ? item.fotoAset : exist.fotoAset,
+                  fotoBast: item.fotoBast || exist.fotoBast,
+                });
+              } else if ((!exist.fotoAset || exist.fotoAset.length === 0) && item.fotoAset && item.fotoAset.length > 0) {
+                baseLocalMap.set(item.id, { ...exist, fotoAset: item.fotoAset, fotoBast: item.fotoBast || exist.fotoBast });
+              }
+            }
+          }
+        }
+        const unifiedLocal = Array.from(baseLocalMap.values());
+
         if (cpData && Array.isArray(cpData.asets) && cpData.asets.length > 0) {
-          const clean = deduplicateAsets(cpData.asets, deletedAssetIds);
-          const { asets: normalized } = normalizeAsetRegisters(clean, desas);
-
-          // Authoritative state directly from cPanel
-          setAsets((prev) => {
-            // Guard: never drop down to an incomplete/truncated asset list
-            if (prev.length >= 330 && normalized.length < 330) {
-              const map = new Map<string, Aset>(prev.map((a) => [a.id, a]));
-              for (const na of normalized) {
-                if (na && na.id) {
-                  const curr = map.get(na.id);
-                  const photos = (na.fotoAset && na.fotoAset.length > 0) ? na.fotoAset : (curr?.fotoAset || []);
-                  map.set(na.id, curr ? { ...curr, ...na, fotoAset: photos } : na);
-                }
-              }
-              const merged = Array.from(map.values());
-              persistAsetsSafely(merged);
-              return merged;
+          const remoteDeleted = Array.isArray(cpData.deletedIds) ? cpData.deletedIds : [];
+          const effectiveDeleted = new Set<string>(deletedAssetIds);
+          let deletedUpdated = false;
+          remoteDeleted.forEach((id) => {
+            if (id && !effectiveDeleted.has(id)) {
+              effectiveDeleted.add(id);
+              deletedUpdated = true;
             }
-
-            // Reference identity check: if asset count & all core props match, DO NOT CHANGE OBJECT REFERENCE
-            if (prev.length === normalized.length) {
-              let isDifferent = false;
-              for (let i = 0; i < prev.length; i++) {
-                if (
-                  prev[i].id !== normalized[i].id ||
-                  prev[i].updatedAt !== normalized[i].updatedAt ||
-                  prev[i].namaAset !== normalized[i].namaAset ||
-                  prev[i].nomorSeri !== normalized[i].nomorSeri ||
-                  prev[i].kondisi !== normalized[i].kondisi ||
-                  prev[i].nilaiPerolehan !== normalized[i].nilaiPerolehan ||
-                  (prev[i].fotoAset || []).length !== (normalized[i].fotoAset || []).length ||
-                  prev[i].statusVerifikasi !== normalized[i].statusVerifikasi
-                ) {
-                  isDifferent = true;
-                  break;
-                }
-              }
-              if (!isDifferent) {
-                return prev; // PRESERVE SAME OBJECT IDENTITY - NO FLICKERING!
-              }
-            }
-
-            persistAsetsSafely(normalized);
-            saveAsetsToIndexedDB(normalized).catch(() => {});
-            return normalized;
           });
+          if (deletedUpdated) {
+            setDeletedAssetIds(effectiveDeleted);
+            try {
+              localStorage.setItem(STORAGE_KEYS.DELETED_ASETS, JSON.stringify(Array.from(effectiveDeleted)));
+            } catch {}
+          }
+
+          const activeDesas = Array.isArray(cpData.desas) && cpData.desas.length > 0 ? cpData.desas : desas;
+          const { merged, unsyncedToPush, changed } = mergeCpanelWithLocal(
+            cpData.asets,
+            unifiedLocal,
+            effectiveDeleted,
+            activeDesas
+          );
+
+          if (changed) {
+            asetsRef.current = merged;
+            setAsets(merged);
+            persistAsetsSafely(merged);
+            saveAsetsToIndexedDB(merged).catch(() => {});
+          }
+
+          if (unsyncedToPush.length > 0) {
+            pausePulseUntil.current = Date.now() + 15000;
+            saveBatchToCpanel(unsyncedToPush).catch((err) =>
+              console.warn('[cPanel Boot] Push unsynced local assets notice:', err)
+            );
+          }
 
           if (Array.isArray(cpData.desas) && cpData.desas.length > 0) {
             setDesas((prev) => {
@@ -762,7 +913,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     loadAuthoritativeCpanelData();
-  }, [desas, persistAsetsSafely]);
+  }, [desas, deletedAssetIds, mergeCpanelWithLocal, persistAsetsSafely]);
 
   // Real-time Multi-Laptop Synchronization via SSE & Central Server
   useEffect(() => {
@@ -780,7 +931,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const serverData = payload.data;
               if (Array.isArray(serverData.asets)) {
                 setAsets((prev) => {
+                  const prevHasDup = findDuplicateRegisters(prev).length > 0;
                   if (
+                    !prevHasDup &&
                     prev.length === serverData.asets.length &&
                     serverData.updatedAt &&
                     serverData.updatedAt === lastServerUpdatedAt
@@ -788,7 +941,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     return prev; // Same object identity: avoids photo reload/flicker!
                   }
                   lastServerUpdatedAt = serverData.updatedAt || '';
-                  const cleanSSE = deduplicateAsets(serverData.asets, deletedAssetIds);
+                  const cleanSSE = normalizeAsetRegisters(deduplicateAsets(serverData.asets, deletedAssetIds), desas).asets;
                   persistAsetsSafely(cleanSSE);
                   return cleanSSE;
                 });
@@ -872,14 +1025,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [persistAsetsSafely, deletedAssetIds]);
 
   // Automatic Real-Time Pulse for cPanel Web Hosting (Always Realtime without manual pull)
-  const lastKnownCpanelCount = useRef<number>(asets.length);
-  const lastKnownCpanelUpdated = useRef<string>('');
-  const pausePulseUntil = useRef<number>(0);
-
-  useEffect(() => {
-    lastKnownCpanelCount.current = asets.length;
-  }, [asets.length]);
-
   useEffect(() => {
     let isChecking = false;
 
@@ -891,8 +1036,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const ping = await pingCpanel();
         if (ping.success && typeof ping.totalAset === 'number') {
           // Detect changes in cPanel database (total assets or update timestamp)
-          // If cPanel only has partial snapshot (< 50 units while local has > 300), do NOT trigger continuous re-render
-          const isCpanelPartial = ping.totalAset < 50 && asets.length > 300;
+          const isCpanelPartial = ping.totalAset < 50 && asetsRef.current.length > 300;
           const countDiffers = !isCpanelPartial && ping.totalAset !== lastKnownCpanelCount.current;
           const timeDiffers = Boolean(ping.updatedAt && lastKnownCpanelUpdated.current && ping.updatedAt !== lastKnownCpanelUpdated.current);
 
@@ -961,10 +1105,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } else if (payload.updatedAset) {
       const incoming = payload.updatedAset;
       setAsets((prev) => {
-        const next = prev.map((a) => (a.id === incoming.id ? { ...a, ...incoming } : a));
-        if (!prev.some((a) => a.id === incoming.id)) {
-          next.unshift(incoming);
-        }
+        const exists = prev.some((a) => a.id === incoming.id);
+        const locked = exists
+          ? ensureUniqueRegisterOnUpdate(
+              { ...(prev.find((a) => a.id === incoming.id)!), ...incoming },
+              prev,
+              desas
+            )
+          : ensureUniqueRegistersForNewAsets([incoming], prev, desas)[0];
+        const next = exists
+          ? prev.map((a) => (a.id === incoming.id ? locked : a))
+          : [locked, ...prev];
         persistAsetsSafely(next);
         return next;
       });
@@ -983,7 +1134,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             existingMap.set(incoming.id, { ...incoming, fotoAset, fotoBast });
           }
         });
-        const merged = deduplicateAsets(Array.from(existingMap.values()), currentDeleted);
+        const merged = normalizeAsetRegisters(deduplicateAsets(Array.from(existingMap.values()), currentDeleted), desas).asets;
         persistAsetsSafely(merged);
         return merged;
       });
@@ -1069,28 +1220,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [asets, verifikasiList, pengesahanList, desas, users, kecamatanProfile, importSyncPayload]);
 
-  // Hydrate full photo assets from IndexedDB if offline or on fresh page load
+  // Hydrate full photo & offline assets from IndexedDB on fresh page load
   useEffect(() => {
-    loadAsetsFromIndexedDB().then((idbAsets) => {
-      if (Array.isArray(idbAsets) && idbAsets.length > 0) {
-        setAsets((current) => {
-          if (current.length === 0) return deduplicateAsets(idbAsets, deletedAssetIds);
-          // Never resurrect deleted items from IndexedDB cache!
-          // Google Cloud Firestore is the authoritative source of truth.
-          // Only hydrate photo blobs for assets that are actively in current state.
-          let didHydrate = false;
-          const updated = current.map((c) => {
-            const matched = idbAsets.find((item) => item && item.id === c.id);
-            if (matched && (!c.fotoAset || c.fotoAset.length === 0) && matched.fotoAset && matched.fotoAset.length > 0) {
-              didHydrate = true;
-              return { ...c, fotoAset: matched.fotoAset, fotoBast: matched.fotoBast || c.fotoBast };
+    loadAsetsFromIndexedDB()
+      .then((idbAsets) => {
+        if (Array.isArray(idbAsets) && idbAsets.length > 0) {
+          setAsets((current) => {
+            if (current.length === 0) return deduplicateAsets(idbAsets, deletedAssetIds);
+            const map = new Map<string, Aset>(current.map((c) => [c.id, c]));
+            let didChange = false;
+            for (const matched of idbAsets) {
+              if (!matched || !matched.id || matched.id === 'ast-test-1' || deletedAssetIds.has(matched.id)) continue;
+              const c = map.get(matched.id);
+              if (!c) {
+                map.set(matched.id, matched);
+                didChange = true;
+              } else {
+                const cTime = new Date(c.updatedAt || 0).getTime();
+                const mTime = new Date(matched.updatedAt || 0).getTime();
+                if (mTime > cTime) {
+                  map.set(matched.id, {
+                    ...c,
+                    ...matched,
+                    fotoAset: matched.fotoAset && matched.fotoAset.length > 0 ? matched.fotoAset : c.fotoAset,
+                    fotoBast: matched.fotoBast || c.fotoBast,
+                  });
+                  didChange = true;
+                } else if ((!c.fotoAset || c.fotoAset.length === 0) && matched.fotoAset && matched.fotoAset.length > 0) {
+                  map.set(matched.id, { ...c, fotoAset: matched.fotoAset, fotoBast: matched.fotoBast || c.fotoBast });
+                  didChange = true;
+                }
+              }
             }
-            return c;
+            return didChange ? normalizeAsetRegisters(Array.from(map.values()), desas).asets : current;
           });
-          return didHydrate ? updated : current;
-        });
-      }
-    }).catch(() => {});
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // One-time check for hybrid local server if present.
@@ -1109,10 +1275,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .then((serverData) => {
         if (serverData && Array.isArray(serverData.asets) && serverData.asets.length > 0) {
           setAsets((current) => {
-            // If current is stuck at 100 or less, immediately upgrade to server's 315!
+            const hasDups = findDuplicateRegisters(current).length > 0;
+            // If current is incomplete or has duplicate registers, normalize cleanly
             if (current.length < serverData.asets.length || current.length <= 100) {
-              const clean = deduplicateAsets(serverData.asets);
+              const clean = deduplicateAsets(serverData.asets, deletedAssetIds);
               const { asets: normalized } = normalizeAsetRegisters(clean, desas);
+              safeLocalStorageSetItem(STORAGE_KEYS.ASETS, JSON.stringify(normalized));
+              saveAsetsToIndexedDB(normalized).catch(() => {});
+              return normalized;
+            }
+            if (hasDups) {
+              const { asets: normalized } = normalizeAsetRegisters(current, desas);
               safeLocalStorageSetItem(STORAGE_KEYS.ASETS, JSON.stringify(normalized));
               saveAsetsToIndexedDB(normalized).catch(() => {});
               return normalized;
@@ -1287,24 +1460,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true };
   };
 
-  // Direct Client-Side cPanel Sync Helper (Permits standalone execution on cPanel without Node server)
-  const syncDirectToCpanel = useCallback((action: 'save_aset' | 'delete_aset', body: any) => {
-    try {
-      const endpoint = localStorage.getItem('SIPADES_CPANEL_ENDPOINT') || 
-        (typeof window !== 'undefined' && window.location.hostname.includes('sipadessirombu') ? '/cpanel-api.php' : 'https://sipadessirombu.my.id/cpanel-api.php');
-      fetch(`${endpoint}?action=${action}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }).catch(() => {});
-    } catch {}
-  }, []);
-
   // Asset Management
   const addAsetBatch = async (items: Omit<Aset, 'id' | 'createdAt' | 'updatedAt' | 'status'>[]) => {
     if (!items || items.length === 0) return { success: false, count: 0 };
     const now = new Date().toISOString();
-    const newAsets: Aset[] = items.map((data, idx) => {
+    pausePulseUntil.current = Date.now() + 15000;
+    const rawNewAsets: Aset[] = items.map((data, idx) => {
       const desa = desas.find((d) => d && d.id === data.desaId);
       return {
         ...data,
@@ -1317,27 +1478,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     });
 
+    // KUNCI ANTI-DUPLIKAT: Pastikan seluruh nomor register baru & kodeAset 100% unik terhadap seluruh aset desa/tahun di state
+    const basePool = asetsRef.current.length > 0 ? asetsRef.current : asets;
+    const newAsets = ensureUniqueRegistersForNewAsets(rawNewAsets, basePool, desas);
+    const updatedSnapshot = [...newAsets, ...basePool];
+    asetsRef.current = updatedSnapshot;
+
     setAsets((prev) => {
-      const merged = [...newAsets, ...prev];
+      const lockedForPrev = ensureUniqueRegistersForNewAsets(newAsets, prev, desas);
+      const merged = [...lockedForPrev, ...prev];
       persistAsetsSafely(merged);
       return merged;
     });
 
-    // Push all directly to cPanel Hosting in parallel
-    Promise.all(newAsets.map((item) => saveAsetToCpanel(item))).catch((err) =>
-      console.warn('[cPanel] Batch aset save failed:', err)
-    );
-
-    // Sync directly to cPanel endpoint
-    newAsets.forEach((a) => syncDirectToCpanel('save_aset', a));
-
     // Broadcast via WebRTC P2P and Cloud Relay for instant cross-laptop synchronization
-    const combinedAsets = [...newAsets, ...asets];
     syncManager.broadcastChange({
       version: 2,
       timestamp: now,
       senderId: 'client',
-      asets: combinedAsets,
+      asets: updatedSnapshot,
       verifikasiList,
       pengesahanList,
       desas,
@@ -1345,21 +1504,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       kecamatanProfile,
     });
 
-    // Sync to local server
-    fetch('/api/asets/batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ asets: newAsets }),
-    }).catch(() => {
-      // Fallback single post if batch endpoint is not available
-      newAsets.forEach((a) => {
-        fetch('/api/asets', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(a),
-        }).catch(() => {});
-      });
-    });
+    // Atomic single-request batch sync to cPanel Hosting (avoids concurrent save_aset race conditions)
+    await saveBatchToCpanel(newAsets).catch((err) =>
+      console.warn('[cPanel] Batch aset save failed:', err)
+    );
 
     return { success: true, count: newAsets.length };
   };
@@ -1378,16 +1526,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
+    const currentPool = asetsRef.current.length > 0 ? asetsRef.current : asets;
     if (unitCount > 1) {
       const totalNilai = Number(data.nilaiPerolehan || 0);
-      const unitPrice = Math.round(totalNilai / unitCount);
+      const priceDist = distributeTotalPrice(totalNilai, unitCount);
       const targetYear = Number(data.tahunPerolehan) || new Date().getFullYear();
-      const codes = generateSequentialKodeAset(data.desaId, data.klasifikasi, unitCount, asets, desas, undefined, targetYear);
-      const batchItems = codes.map((codeInfo) => ({
+      const codes = generateSequentialKodeAset(data.desaId, data.klasifikasi, unitCount, currentPool, desas, undefined, targetYear);
+      const batchItems = codes.map((codeInfo, idx) => ({
         ...data,
         kodeAset: codeInfo.kodeAset,
         nomorRegister: codeInfo.nomorRegister,
-        nilaiPerolehan: unitPrice,
+        nilaiPerolehan: priceDist.prices[idx],
         volume: '1 Unit',
       }));
       addAsetBatch(batchItems);
@@ -1397,14 +1546,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateAset = (id: string, data: Partial<Aset>) => {
+    const basePool = asetsRef.current.length > 0 ? asetsRef.current : asets;
+    const existing = basePool.find((a) => a.id === id);
+    const now = new Date().toISOString();
+    pausePulseUntil.current = Date.now() + 15000;
+
+    let lockedTarget: Aset | null = null;
+    if (existing) {
+      const candidate: Aset = {
+        ...existing,
+        ...data,
+        updatedAt: now,
+      };
+      lockedTarget = ensureUniqueRegisterOnUpdate(candidate, basePool, desas);
+      const nextSnapshot = basePool.map((a) => (a.id === id ? lockedTarget! : a));
+      asetsRef.current = nextSnapshot;
+    }
+
     setAsets((prev) => {
       const updated = prev.map((a) => {
         if (a.id === id) {
-          return {
+          const candidate: Aset = {
             ...a,
             ...data,
-            updatedAt: new Date().toISOString(),
+            updatedAt: now,
           };
+          const locked = ensureUniqueRegisterOnUpdate(candidate, prev, desas);
+          lockedTarget = locked;
+          return locked;
         }
         return a;
       });
@@ -1413,21 +1582,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       persistAsetsSafely(updated);
       saveAsetsToIndexedDB(updated).catch(() => {});
 
-      const target = updated.find((a) => a.id === id);
+      const target = lockedTarget || updated.find((a) => a.id === id);
       if (target) {
         saveAsetToCpanel(target).catch((err) => console.warn('[cPanel] Aset update failed:', err));
-        syncDirectToCpanel('save_aset', target);
         syncManager.broadcastAsetUpdate(target);
-        fetch(`/api/asets/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(target),
-        }).catch((e) => console.warn('[Sync] Asset update failed:', e));
       }
 
       syncManager.broadcastChange({
         version: 2,
-        timestamp: new Date().toISOString(),
+        timestamp: now,
         senderId: 'client',
         asets: updated,
         verifikasiList,
@@ -1441,6 +1604,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const perbaikiSemuaNomorRegister = useCallback(async (): Promise<{ fixedCount: number; message: string }> => {
+    const currentPool = asetsRef.current.length > 0 ? asetsRef.current : asets;
+    const { asets: normalizedRaw, changedIds, fixedCount } = normalizeAsetRegisters(currentPool, desas);
+
+    if (fixedCount === 0) {
+      return {
+        fixedCount: 0,
+        message: 'Seluruh nomor register aset sudah unik dan berurutan rapi (tidak ada duplikat).',
+      };
+    }
+
+    const now = new Date().toISOString();
+    const changedSet = new Set(changedIds);
+    const updatedList = normalizedRaw.map((item) =>
+      changedSet.has(item.id) ? { ...item, updatedAt: now } : item
+    );
+    const repairedItems = updatedList.filter((item) => changedSet.has(item.id));
+
+    pausePulseUntil.current = Date.now() + 15000;
+    asetsRef.current = updatedList;
+    setAsets(updatedList);
+    persistAsetsSafely(updatedList);
+    saveAsetsToIndexedDB(updatedList).catch(() => {});
+
+    await saveBatchToCpanel(repairedItems).catch((err) =>
+      console.warn('[cPanel] Auto-repair register sync notice:', err)
+    );
+    syncManager.broadcastChange({
+      version: 2,
+      timestamp: now,
+      senderId: 'client',
+      asets: updatedList,
+      verifikasiList,
+      pengesahanList,
+      desas,
+      users,
+      kecamatanProfile,
+    });
+
+    return {
+      fixedCount,
+      message: `Berhasil memperbaiki dan mengunci ${fixedCount} aset agar seluruh nomor register unik dan berurutan.`,
+    };
+  }, [asets, desas, kecamatanProfile, pengesahanList, persistAsetsSafely, users, verifikasiList]);
+
   const deleteAset = (id: string) => {
     const target = asets.find((a) => a.id === id);
     if (!target) return { success: false, message: 'Aset tidak ditemukan!' };
@@ -1450,6 +1658,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         message: 'Aset sedang dalam proses permohonan verifikasi Kecamatan, tidak dapat dihapus langsung!',
       };
     }
+
+    pausePulseUntil.current = Date.now() + 15000;
 
     // 1. Record ID in permanent tombstone set
     setDeletedAssetIds((prev) => {
@@ -1462,6 +1672,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 2. Remove from local state & storage immediately
     const filtered = asets.filter((a) => a.id !== id);
+    asetsRef.current = filtered;
     setAsets(filtered);
     persistAsetsSafely(filtered);
     saveAsetsToIndexedDB(filtered).catch(() => {});
@@ -1471,10 +1682,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 4. Delete directly from cPanel Hosting & server database
     deleteAsetFromCpanel(id).catch((err) => console.warn('[cPanel] Aset delete failed:', err));
-    syncDirectToCpanel('delete_aset', { id });
-    fetch(`/api/asets/${id}`, {
-      method: 'DELETE',
-    }).catch((e) => console.warn('[Sync] Asset delete failed:', e));
 
     return { success: true, message: 'Data aset berhasil dihapus permanen.' };
   };
@@ -1542,13 +1749,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
 
       if (verifiedAset) {
-        saveAsetToCpanel(verifiedAset).catch((err) => console.warn('[cPanel] Verifikasi save error:', err));
+        await saveAsetToCpanel(verifiedAset).catch((err) => console.warn('[cPanel] Verifikasi save error:', err));
         syncManager.broadcastAsetUpdate(verifiedAset);
-        fetch(`/api/asets/${asetId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(verifiedAset),
-        }).catch(() => {});
       }
 
       return {
@@ -1588,18 +1790,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
           return a;
         });
+        asetsRef.current = next;
         persistAsetsSafely(next);
         return next;
       });
 
       if (rejectedAset) {
-        saveAsetToCpanel(rejectedAset).catch((err) => console.warn('[cPanel] Tolak verifikasi save error:', err));
+        await saveAsetToCpanel(rejectedAset).catch((err) => console.warn('[cPanel] Tolak verifikasi save error:', err));
         syncManager.broadcastAsetUpdate(rejectedAset);
-        fetch(`/api/asets/${asetId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(rejectedAset),
-        }).catch(() => {});
       }
 
       return {
@@ -1638,18 +1836,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
           return a;
         });
+        asetsRef.current = next;
         persistAsetsSafely(next);
         return next;
       });
 
       if (unverifiedAset) {
-        saveAsetToCpanel(unverifiedAset).catch((err) => console.warn('[cPanel] Batalkan verifikasi error:', err));
+        await saveAsetToCpanel(unverifiedAset).catch((err) => console.warn('[cPanel] Batalkan verifikasi error:', err));
         syncManager.broadcastAsetUpdate(unverifiedAset);
-        fetch(`/api/asets/${asetId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(unverifiedAset),
-        }).catch(() => {});
       }
 
       return {
@@ -1676,35 +1870,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const now = new Date().toISOString();
       pausePulseUntil.current = Date.now() + 15000;
       const idSet = new Set(asetIds);
+      const baseList = asetsRef.current.length > 0 ? asetsRef.current : asets;
       const updatedBatch: Aset[] = [];
 
-      setAsets((prev) => {
-        const next = prev.map((a) => {
-          if (idSet.has(a.id)) {
-            const item: Aset = {
-              ...a,
-              statusVerifikasi: 'sedang_diproses',
-              diverifikasiOleh: undefined,
-              tanggalVerifikasi: undefined,
-              catatanVerifikasi: undefined,
-              nomorSKVerifikasi: undefined,
-              updatedAt: now,
-            };
-            updatedBatch.push(item);
-            return item;
-          }
-          return a;
-        });
-        persistAsetsSafely(next);
-        return next;
+      const updatedList = baseList.map((a) => {
+        if (idSet.has(a.id)) {
+          const item: Aset = {
+            ...a,
+            statusVerifikasi: 'sedang_diproses',
+            diverifikasiOleh: undefined,
+            tanggalVerifikasi: undefined,
+            catatanVerifikasi: undefined,
+            nomorSKVerifikasi: undefined,
+            updatedAt: now,
+          };
+          updatedBatch.push(item);
+          return item;
+        }
+        return a;
       });
 
-      Promise.all(updatedBatch.map((a) => saveAsetToCpanel(a))).catch(() => {});
-      fetch('/api/asets/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ asets: updatedBatch }),
-      }).catch(() => {});
+      asetsRef.current = updatedList;
+      setAsets(updatedList);
+      persistAsetsSafely(updatedList);
+
+      await saveBatchToCpanel(updatedBatch).catch((err) =>
+        console.warn('[cPanel] Batch batalkan pengesahan failed:', err)
+      );
 
       return {
         success: true,
@@ -1712,7 +1904,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         message: `Berhasil membatalkan pengesahan ${updatedBatch.length} aset.`,
       };
     },
-    [currentUser, persistAsetsSafely]
+    [asets, currentUser, persistAsetsSafely]
   );
 
   const verifikasiAsetBatch = useCallback(
@@ -1733,8 +1925,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const verifierName = currentUser.name || 'Admin Kecamatan Sirombu';
       pausePulseUntil.current = Date.now() + 15000;
 
+      const baseList = asetsRef.current.length > 0 ? asetsRef.current : asets;
       const updatedBatch: Aset[] = [];
-      const updatedList = asets.map((a) => {
+      const updatedList = baseList.map((a) => {
         if (asetIds.includes(a.id)) {
           const item: Aset = {
             ...a,
@@ -1751,15 +1944,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return a;
       });
 
+      asetsRef.current = updatedList;
       setAsets(updatedList);
       persistAsetsSafely(updatedList);
 
-      Promise.all(updatedBatch.map((a) => saveAsetToCpanel(a))).catch(() => {});
-      fetch('/api/asets/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ asets: updatedBatch }),
-      }).catch(() => {});
+      await saveBatchToCpanel(updatedBatch).catch((err) =>
+        console.warn('[cPanel] Batch verifikasi failed:', err)
+      );
 
       return {
         success: true,
@@ -1783,7 +1974,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const verifierName = currentUser.name || 'Admin Kecamatan Sirombu';
     pausePulseUntil.current = Date.now() + 15000;
 
-    const pendingIds = asets
+    const baseList = asetsRef.current.length > 0 ? asetsRef.current : asets;
+    const pendingIds = baseList
       .filter(
         (a) =>
           a.status !== 'terhapus' &&
@@ -1803,7 +1995,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }
 
-    const updatedList = asets.map((a) => {
+    const updatedList = baseList.map((a) => {
       if (pendingIds.includes(a.id)) {
         return {
           ...a,
@@ -1818,17 +2010,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return a;
     });
 
+    asetsRef.current = updatedList;
     setAsets(updatedList);
     persistAsetsSafely(updatedList);
 
     const verifiedBatch = updatedList.filter((a) => pendingIds.includes(a.id));
-    Promise.all(verifiedBatch.map((a) => saveAsetToCpanel(a))).catch(() => {});
-
-    fetch('/api/asets/batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ asets: verifiedBatch }),
-    }).catch(() => {});
+    await saveBatchToCpanel(verifiedBatch).catch((err) =>
+      console.warn('[cPanel] Verifikasi semua batch failed:', err)
+    );
 
     return {
       success: true,
@@ -2297,7 +2486,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setAsets(updatedAsets);
         persistAsetsSafely(updatedAsets);
         saveAsetsToIndexedDB(updatedAsets);
-        incomingDesaAsets.forEach((a: Aset) => saveAsetToCpanel(a).catch(() => {}));
+        saveBatchToCpanel(incomingDesaAsets).catch(() => {});
 
         // 2. Verifikasi: Replace only this village's verifikasi
         const incomingVerifikasi = (Array.isArray(payload.verifikasiList) ? payload.verifikasiList : [])
@@ -2383,7 +2572,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       if (Array.isArray(payload.asets)) {
         const existingMap = new Map<string, Aset>(asets.map((a) => [a.id, a]));
-        const mergedAsets = payload.asets.map((incoming: Aset) => {
+        const rawMergedAsets = payload.asets.map((incoming: Aset) => {
           const exist = existingMap.get(incoming.id);
           let fotoAset = incoming.fotoAset;
           if ((!fotoAset || fotoAset.length === 0) && exist?.fotoAset && exist.fotoAset.length > 0) {
@@ -2396,6 +2585,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             fotoBast,
           };
         });
+        const mergedAsets = normalizeAsetRegisters(deduplicateAsets(rawMergedAsets, deletedAssetIds), desas).asets;
 
         setAsets(mergedAsets);
         persistAsetsSafely(mergedAsets);
@@ -2600,6 +2790,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addAsetBatch,
         updateAset,
         deleteAset,
+        perbaikiSemuaNomorRegister,
         verifikasiAset,
         verifikasiSemuaAsetPending,
         verifikasiAsetBatch,

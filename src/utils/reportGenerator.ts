@@ -52,6 +52,57 @@ export const formatTanggalIndonesia = (dateInput?: string | Date): string => {
   return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
 };
 
+export const formatTanggalWaktuIndonesia = (
+  dateInput?: string | Date,
+  compact: boolean = false
+): string => {
+  if (!dateInput) return '-';
+  const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  if (isNaN(date.getTime())) {
+    return String(dateInput);
+  }
+
+  const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const monthsFull = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+  ];
+
+  // Format in Asia/Jakarta (WIB) consistently so server & client align clearly
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Jakarta',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(date);
+
+    const get = (type: string) => parts.find((p) => p.type === type)?.value || '';
+    const dayNum = parseInt(get('day'), 10);
+    const monthIdx = Math.max(0, Math.min(11, parseInt(get('month'), 10) - 1));
+    const year = get('year');
+    const hour = get('hour');
+    const minute = get('minute');
+
+    if (compact) {
+      return `${dayNum} ${monthsShort[monthIdx]} ${year} • ${hour}:${minute}`;
+    }
+    return `${dayNum} ${monthsFull[monthIdx]} ${year}, Pukul ${hour}:${minute} WIB`;
+  } catch {
+    const d = date.getDate();
+    const m = date.getMonth();
+    const y = date.getFullYear();
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    return compact
+      ? `${d} ${monthsShort[m]} ${y} • ${hh}:${mm}`
+      : `${d} ${monthsFull[m]} ${y}, Pukul ${hh}:${mm}`;
+  }
+};
+
 /**
  * Format nama desa ke bentuk Title Case yang rapi (contoh: "DESA LAHAWA" -> "Lahawa")
  */
@@ -155,6 +206,32 @@ export interface GeneratedKodeAsetInfo {
  * Sehingga jika desa menginput tahun 2026 terlebih dahulu lalu menginput tahun 2025,
  * nomor register tahun 2025 tetap mulai dari 0001 dan tidak terusan dari tahun lain.
  */
+export function getDesaCodeNumber(desaId: string, desasList: Desa[] = []): string {
+  const matchedDesa = desasList.find((d) => d && d.id === desaId);
+  if (matchedDesa && matchedDesa.code) {
+    const parts = matchedDesa.code.split('.');
+    const last = parts[parts.length - 1];
+    return last.length >= 2 ? last.slice(-2) : last.padStart(2, '0');
+  }
+  if (desaId && desaId.startsWith('desa-')) {
+    return desaId.replace('desa-', '').padStart(2, '0');
+  }
+  return '01';
+}
+
+export function buildKodeAset(
+  klasifikasi: KlasAset,
+  desaId: string,
+  tahunPerolehan: number,
+  nomorRegister: string,
+  desasList: Desa[] = []
+): string {
+  const prefix = KLASIFIKASI_KODE_PREFIX[klasifikasi] || '01.01.01';
+  const desaCodeNumber = getDesaCodeNumber(desaId, desasList);
+  const regPadded = String(parseInt(nomorRegister || '1', 10) || 1).padStart(4, '0');
+  return `${prefix}.${desaCodeNumber}.${tahunPerolehan}.${regPadded}`;
+}
+
 export const generateSequentialKodeAset = (
   desaId: string,
   klasifikasi: KlasAset,
@@ -165,16 +242,7 @@ export const generateSequentialKodeAset = (
   tahunPerolehan?: number
 ): GeneratedKodeAsetInfo[] => {
   const prefix = KLASIFIKASI_KODE_PREFIX[klasifikasi] || '01.01.01';
-
-  let desaCodeNumber = '01';
-  const matchedDesa = desasList.find((d) => d && d.id === desaId);
-  if (matchedDesa && matchedDesa.code) {
-    const parts = matchedDesa.code.split('.');
-    const last = parts[parts.length - 1];
-    desaCodeNumber = last.length >= 2 ? last.slice(-2) : last.padStart(2, '0');
-  } else if (desaId && desaId.startsWith('desa-')) {
-    desaCodeNumber = desaId.replace('desa-', '').padStart(2, '0');
-  }
+  const desaCodeNumber = getDesaCodeNumber(desaId, desasList);
 
   const effectiveYear =
     tahunPerolehan && Number(tahunPerolehan) >= 1970
@@ -183,7 +251,9 @@ export const generateSequentialKodeAset = (
 
   const basePattern = `${prefix}.${desaCodeNumber}.${effectiveYear}.`;
 
+  const usedSeqs = new Set<number>();
   let maxSeq = 0;
+
   for (const a of existingAsets) {
     if (a && a.desaId === desaId && a.status !== 'terhapus') {
       const aYear = a.tahunPerolehan ? Number(a.tahunPerolehan) : null;
@@ -191,8 +261,9 @@ export const generateSequentialKodeAset = (
       if (aYear === effectiveYear) {
         if (a.nomorRegister) {
           const regNum = parseInt(a.nomorRegister, 10);
-          if (!isNaN(regNum) && regNum > maxSeq) {
-            maxSeq = regNum;
+          if (!isNaN(regNum) && regNum > 0) {
+            usedSeqs.add(regNum);
+            if (regNum > maxSeq) maxSeq = regNum;
           }
         }
         if (a.kodeAset) {
@@ -201,16 +272,18 @@ export const generateSequentialKodeAset = (
             const parts = trimmed.split('.');
             const lastPart = parts[parts.length - 1];
             const num = parseInt(lastPart, 10);
-            if (!isNaN(num) && num > maxSeq) {
-              maxSeq = num;
+            if (!isNaN(num) && num > 0) {
+              usedSeqs.add(num);
+              if (num > maxSeq) maxSeq = num;
             }
           } else {
-            // If code ends with .XXXX (4 or more digits)
+            // If code ends with .XXXX (3-5 digits)
             const match = trimmed.match(/\.(\d{3,5})$/);
             if (match) {
               const num = parseInt(match[1], 10);
-              if (!isNaN(num) && num > maxSeq) {
-                maxSeq = num;
+              if (!isNaN(num) && num > 0) {
+                usedSeqs.add(num);
+                if (num > maxSeq) maxSeq = num;
               }
             }
           }
@@ -222,22 +295,90 @@ export const generateSequentialKodeAset = (
   const validCount = Math.max(1, Math.min(count, 500));
   const results: GeneratedKodeAsetInfo[] = [];
 
-  const startSeqNumber =
+  let candidateSeq =
     typeof customStartSeq === 'number' && customStartSeq > 0
-      ? customStartSeq
+      ? Math.max(1, Math.floor(customStartSeq))
       : maxSeq + 1;
 
   for (let i = 0; i < validCount; i++) {
-    const nextSeq = startSeqNumber + i;
-    const registerStr = String(nextSeq).padStart(4, '0');
+    // KUNCI ANTI-DUPLIKAT: selalu lewati nomor register yang sudah terpakai
+    while (usedSeqs.has(candidateSeq)) {
+      candidateSeq++;
+    }
+    usedSeqs.add(candidateSeq);
+    const registerStr = String(candidateSeq).padStart(4, '0');
     results.push({
       kodeAset: `${basePattern}${registerStr}`,
       nomorRegister: registerStr,
-      sequenceNumber: nextSeq,
+      sequenceNumber: candidateSeq,
     });
+    candidateSeq++;
   }
 
   return results;
+};
+
+export interface PriceDistributionSummary {
+  prices: number[];
+  basePrice: number;
+  adjustedPrice: number;
+  baseCount: number;
+  adjustedCount: number;
+  remainder: number;
+  totalRounded: number;
+}
+
+/**
+ * Membagi total harga perolehan secara merata ke N unit aset.
+ * Jika pembagian menghasilkan angka di belakang koma (sisa pembagian > 0),
+ * selisihnya ditambahkan (+Rp 1 per unit) pada unit-unit aset terakhir
+ * sehingga total seluruh unit tetap sama persis dengan total harga pembelian.
+ *
+ * Contoh: Total 48 unit dengan total harga Rp 2.500.000:
+ * - basePrice = Math.floor(2500000 / 48) = 52.083
+ * - remainder = 2500000 % 48 = 16
+ * - 32 unit pertama bernilai Rp 52.083
+ * - 16 unit terakhir bernilai Rp 52.084
+ * - Total = (32 × 52.083) + (16 × 52.084) = 1.666.656 + 833.344 = 2.500.000
+ */
+export const distributeTotalPrice = (
+  totalNilai: number,
+  count: number
+): PriceDistributionSummary => {
+  const safeCount = Math.max(1, Math.floor(Number(count) || 1));
+  const totalRounded = Math.max(0, Math.round(Number(totalNilai) || 0));
+
+  if (safeCount === 1) {
+    return {
+      prices: [totalRounded],
+      basePrice: totalRounded,
+      adjustedPrice: totalRounded,
+      baseCount: 1,
+      adjustedCount: 0,
+      remainder: 0,
+      totalRounded,
+    };
+  }
+
+  const basePrice = Math.floor(totalRounded / safeCount);
+  const remainder = totalRounded - basePrice * safeCount;
+  const baseCount = safeCount - remainder;
+  const adjustedCount = remainder;
+  const adjustedPrice = remainder > 0 ? basePrice + 1 : basePrice;
+
+  const prices = Array.from({ length: safeCount }, (_, idx) =>
+    idx < baseCount ? basePrice : adjustedPrice
+  );
+
+  return {
+    prices,
+    basePrice,
+    adjustedPrice,
+    baseCount,
+    adjustedCount,
+    remainder,
+    totalRounded,
+  };
 };
 
 export const generateAutoKodeAset = (
@@ -265,21 +406,23 @@ export const generateAutoKodeAset = (
 };
 
 /**
- * Normalizes asset registration numbers and codes so that:
- * 1. Each (desaId, tahunPerolehan) group has sequential nomorRegister starting strictly from 0001.
- * 2. Each asset's kodeAset includes the procurement year: [Golongan.Bidang.Kelompok].[KodeDesa].[TahunPerolehan].[NomorRegister]
+ * Normalizes asset registration numbers and codes without shifting existing valid unique registers:
+ * 1. Within each active (desaId, tahunPerolehan) group, keeps the earliest asset for each valid positive nomorRegister.
+ * 2. Only assets with missing/invalid (<= 0) or colliding duplicate nomorRegister are assigned the next free sequential number (maxSeq + 1, ...).
+ * 3. Ensures each asset's kodeAset matches [Golongan.Bidang.Kelompok].[KodeDesa].[TahunPerolehan].[NomorRegister].
  */
 export function normalizeAsetRegisters(
   list: Aset[],
   desasList: Desa[] = []
-): { asets: Aset[]; changed: boolean } {
-  if (!Array.isArray(list)) return { asets: [], changed: false };
+): { asets: Aset[]; changed: boolean; changedIds: string[]; fixedCount: number } {
+  if (!Array.isArray(list)) return { asets: [], changed: false, changedIds: [], fixedCount: 0 };
   let hasChanged = false;
+  const changedIds: string[] = [];
 
-  // Group by desaId, then by tahunPerolehan
+  // Group active assets by desaId, then by tahunPerolehan
   const byDesaYear = new Map<string, Aset[]>();
   list.forEach((item) => {
-    if (!item) return;
+    if (!item || item.status === 'terhapus') return;
     const dId = item.desaId || 'unknown';
     const yr = Number(item.tahunPerolehan) || new Date().getFullYear();
     const key = `${dId}_${yr}`;
@@ -290,37 +433,49 @@ export function normalizeAsetRegisters(
   const updatedMap = new Map<string, Aset>();
 
   byDesaYear.forEach((groupItems) => {
-    // Sort items in group by existing nomorRegister (or createdAt)
+    // Deterministic sort by existing nomorRegister -> createdAt -> id
     const sorted = [...groupItems].sort((a, b) => {
       const regA = parseInt(a.nomorRegister || '0', 10) || 0;
       const regB = parseInt(b.nomorRegister || '0', 10) || 0;
       if (regA !== regB) return regA - regB;
-      return (a.createdAt || '').localeCompare(b.createdAt || '');
+      const cmpCreated = (a.createdAt || '').localeCompare(b.createdAt || '');
+      if (cmpCreated !== 0) return cmpCreated;
+      return (a.id || '').localeCompare(b.id || '');
     });
 
-    sorted.forEach((item, idx) => {
-      const targetSeq = idx + 1;
+    const usedRegs = new Set<number>();
+    let maxReg = 0;
+
+    // First pass: find max valid register in group
+    for (const item of sorted) {
+      const regNum = parseInt(item.nomorRegister || '0', 10);
+      if (!isNaN(regNum) && regNum > maxReg) {
+        maxReg = regNum;
+      }
+    }
+
+    // Second pass: keep first valid owner for each register, reassign only invalid (<= 0) or colliding duplicates
+    sorted.forEach((item) => {
+      let targetSeq = parseInt(item.nomorRegister || '0', 10);
+      if (isNaN(targetSeq) || targetSeq <= 0 || usedRegs.has(targetSeq)) {
+        targetSeq = maxReg + 1;
+        while (usedRegs.has(targetSeq)) {
+          targetSeq++;
+        }
+      }
+      usedRegs.add(targetSeq);
+      if (targetSeq > maxReg) maxReg = targetSeq;
+
       const targetRegStr = String(targetSeq).padStart(4, '0');
       const targetYear = Number(item.tahunPerolehan) || new Date().getFullYear();
-
-      const matchedDesa = desasList.find((d) => d && d.id === item.desaId);
-      let desaCodeNumber = '01';
-      if (matchedDesa && matchedDesa.code) {
-        const parts = matchedDesa.code.split('.');
-        const last = parts[parts.length - 1];
-        desaCodeNumber = last.length >= 2 ? last.slice(-2) : last.padStart(2, '0');
-      } else if (item.desaId && item.desaId.startsWith('desa-')) {
-        desaCodeNumber = item.desaId.replace('desa-', '').padStart(2, '0');
-      }
-
-      const prefix = KLASIFIKASI_KODE_PREFIX[item.klasifikasi] || '01.01.01';
-      const targetKode = `${prefix}.${desaCodeNumber}.${targetYear}.${targetRegStr}`;
+      const targetKode = buildKodeAset(item.klasifikasi, item.desaId, targetYear, targetRegStr, desasList);
 
       const regMatches = item.nomorRegister === targetRegStr;
       const kodeMatches = item.kodeAset === targetKode;
 
       if (!regMatches || !kodeMatches) {
         hasChanged = true;
+        changedIds.push(item.id);
         updatedMap.set(item.id, {
           ...item,
           nomorRegister: targetRegStr,
@@ -332,8 +487,165 @@ export function normalizeAsetRegisters(
     });
   });
 
-  const result = list.map((item) => updatedMap.get(item.id) || item);
-  return { asets: result, changed: hasChanged };
+  const result = list.map((item) => (item ? updatedMap.get(item.id) || item : item));
+  return { asets: result, changed: hasChanged, changedIds, fixedCount: changedIds.length };
+}
+
+/**
+ * Enforce unique nomorRegister & synchronized kodeAset for newly added assets
+ * against existing assets in the same (desaId, tahunPerolehan) as well as sibling items in the batch.
+ */
+export function ensureUniqueRegistersForNewAsets(
+  newItems: Aset[],
+  existingAsets: Aset[],
+  desasList: Desa[] = []
+): Aset[] {
+  const usedByGroup = new Map<string, Set<number>>();
+  const maxByGroup = new Map<string, number>();
+
+  for (const a of existingAsets) {
+    if (!a || a.status === 'terhapus') continue;
+    const yr = Number(a.tahunPerolehan) || new Date().getFullYear();
+    const key = `${a.desaId || 'unknown'}_${yr}`;
+    if (!usedByGroup.has(key)) usedByGroup.set(key, new Set<number>());
+    const set = usedByGroup.get(key)!;
+    const regNum = parseInt(a.nomorRegister || '0', 10);
+    if (!isNaN(regNum) && regNum > 0) {
+      set.add(regNum);
+      if (regNum > (maxByGroup.get(key) || 0)) maxByGroup.set(key, regNum);
+    }
+    const codeMatch = (a.kodeAset || '').trim().match(/\.(\d{3,5})$/);
+    if (codeMatch) {
+      const codeNum = parseInt(codeMatch[1], 10);
+      if (!isNaN(codeNum) && codeNum > 0) {
+        set.add(codeNum);
+        if (codeNum > (maxByGroup.get(key) || 0)) maxByGroup.set(key, codeNum);
+      }
+    }
+  }
+
+  return newItems.map((item) => {
+    const yr = Number(item.tahunPerolehan) || new Date().getFullYear();
+    const key = `${item.desaId || 'unknown'}_${yr}`;
+    if (!usedByGroup.has(key)) usedByGroup.set(key, new Set<number>());
+    const usedSet = usedByGroup.get(key)!;
+    let curMax = maxByGroup.get(key) || 0;
+
+    let reqSeq = parseInt(item.nomorRegister || '0', 10);
+    if (isNaN(reqSeq) || reqSeq <= 0 || usedSet.has(reqSeq)) {
+      reqSeq = curMax + 1;
+      while (usedSet.has(reqSeq)) {
+        reqSeq++;
+      }
+    }
+    usedSet.add(reqSeq);
+    if (reqSeq > curMax) maxByGroup.set(key, reqSeq);
+
+    const regStr = String(reqSeq).padStart(4, '0');
+    const kodeAset = buildKodeAset(item.klasifikasi, item.desaId, yr, regStr, desasList);
+    return {
+      ...item,
+      nomorRegister: regStr,
+      kodeAset,
+    };
+  });
+}
+
+/**
+ * Enforce unique nomorRegister & synchronized kodeAset when updating an existing asset
+ * (prevents collisions when changing tahunPerolehan, desaId, klasifikasi, or kodeAset).
+ */
+export function ensureUniqueRegisterOnUpdate(
+  updatedItem: Aset,
+  allAsets: Aset[],
+  desasList: Desa[] = []
+): Aset {
+  if (updatedItem.status === 'terhapus') return updatedItem;
+
+  const yr = Number(updatedItem.tahunPerolehan) || new Date().getFullYear();
+  const usedSet = new Set<number>();
+  let maxSeq = 0;
+
+  for (const a of allAsets) {
+    if (!a || a.id === updatedItem.id || a.status === 'terhapus') continue;
+    if (a.desaId !== updatedItem.desaId) continue;
+    const aYr = Number(a.tahunPerolehan) || new Date().getFullYear();
+    if (aYr !== yr) continue;
+
+    const regNum = parseInt(a.nomorRegister || '0', 10);
+    if (!isNaN(regNum) && regNum > 0) {
+      usedSet.add(regNum);
+      if (regNum > maxSeq) maxSeq = regNum;
+    }
+    const codeMatch = (a.kodeAset || '').trim().match(/\.(\d{3,5})$/);
+    if (codeMatch) {
+      const codeNum = parseInt(codeMatch[1], 10);
+      if (!isNaN(codeNum) && codeNum > 0) {
+        usedSet.add(codeNum);
+        if (codeNum > maxSeq) maxSeq = codeNum;
+      }
+    }
+  }
+
+  let targetSeq = parseInt(updatedItem.nomorRegister || '0', 10);
+  if (isNaN(targetSeq) || targetSeq <= 0) {
+    const codeMatch = (updatedItem.kodeAset || '').trim().match(/\.(\d{3,5})$/);
+    if (codeMatch) {
+      targetSeq = parseInt(codeMatch[1], 10) || 0;
+    }
+  }
+
+  if (isNaN(targetSeq) || targetSeq <= 0 || usedSet.has(targetSeq)) {
+    targetSeq = maxSeq + 1;
+    while (usedSet.has(targetSeq)) {
+      targetSeq++;
+    }
+  }
+
+  const regStr = String(targetSeq).padStart(4, '0');
+  const kodeAset = buildKodeAset(updatedItem.klasifikasi, updatedItem.desaId, yr, regStr, desasList);
+  return {
+    ...updatedItem,
+    nomorRegister: regStr,
+    kodeAset,
+  };
+}
+
+export interface DuplicateRegisterGroup {
+  key: string;
+  desaId: string;
+  tahun: number;
+  nomorRegister: string;
+  items: Aset[];
+}
+
+export function findDuplicateRegisters(list: Aset[]): DuplicateRegisterGroup[] {
+  const byKey = new Map<string, Aset[]>();
+  for (const item of list) {
+    if (!item || item.status === 'terhapus') continue;
+    const yr = Number(item.tahunPerolehan) || new Date().getFullYear();
+    const reg = String(parseInt(item.nomorRegister || '0', 10) || 0).padStart(4, '0');
+    const key = `${item.desaId || 'unknown'}_${yr}_${reg}`;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key)!.push(item);
+  }
+
+  const duplicates: DuplicateRegisterGroup[] = [];
+  byKey.forEach((items, key) => {
+    const first = items[0];
+    const yr = Number(first.tahunPerolehan) || new Date().getFullYear();
+    const reg = String(parseInt(first.nomorRegister || '0', 10) || 0).padStart(4, '0');
+    if (items.length > 1 || reg === '0000') {
+      duplicates.push({
+        key,
+        desaId: first.desaId,
+        tahun: yr,
+        nomorRegister: reg,
+        items,
+      });
+    }
+  });
+  return duplicates;
 }
 
 export interface PermendagriPdfOptions {

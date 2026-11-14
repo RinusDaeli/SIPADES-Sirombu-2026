@@ -113,12 +113,18 @@ export async function loadAsetsFromIndexedDB(): Promise<Aset[] | null> {
  */
 export function createLightweightAsets(asets: Aset[]): Aset[] {
   return asets.map((a) => {
-    // Keep first photo thumbnail if small (< 20KB), else strip photos from localStorage cache
-    const firstPhoto = a.fotoAset && a.fotoAset[0] && a.fotoAset[0].length < 25000 ? [a.fotoAset[0]] : [];
+    // Keep all lightweight URL paths (/uploads/...) and small thumbnails (< 25KB); only strip heavy base64 images
+    const lightFotos = Array.isArray(a.fotoAset)
+      ? a.fotoAset.filter((p) => typeof p === 'string' && p.length > 0 && (p.startsWith('/uploads/') || p.startsWith('http') || p.length < 25000))
+      : [];
+    const lightBast =
+      typeof a.fotoBast === 'string' && a.fotoBast.length > 0 && (a.fotoBast.startsWith('/uploads/') || a.fotoBast.startsWith('http') || a.fotoBast.length < 25000)
+        ? a.fotoBast
+        : undefined;
     return {
       ...a,
-      fotoAset: firstPhoto,
-      fotoBast: undefined,
+      fotoAset: lightFotos,
+      fotoBast: lightBast,
     };
   });
 }
