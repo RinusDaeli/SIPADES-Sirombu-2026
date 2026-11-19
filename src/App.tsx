@@ -7,12 +7,12 @@ import React, { useState, lazy, Suspense } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/Sidebar';
 import { LoginView } from './components/LoginView';
-import { DashboardView } from './components/DashboardView';
 import { AnnouncementReaderModal } from './components/AnnouncementReaderModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Menu, X, LogOut, Bell } from 'lucide-react';
 
-// Lazy-load secondary heavy modules on demand to ensure lightning-fast initial startup
+// Lazy-load heavy workspace modules on demand to ensure lightning-fast initial startup
+const DashboardView = lazy(() => import('./components/DashboardView').then(m => ({ default: m.DashboardView })));
 const AsetManagementView = lazy(() => import('./components/AsetManagementView').then(m => ({ default: m.AsetManagementView })));
 const VerifikasiView = lazy(() => import('./components/VerifikasiView').then(m => ({ default: m.VerifikasiView })));
 const VerifikasiAsetView = lazy(() => import('./components/VerifikasiAsetView').then(m => ({ default: m.VerifikasiAsetView })));

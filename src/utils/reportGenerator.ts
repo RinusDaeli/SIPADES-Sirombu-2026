@@ -1,5 +1,4 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import type jsPDF from 'jspdf';
 import { Aset, Desa, KlasAset } from '../types';
 import { getNiasBaratLogoDataUrl } from './logoHelper';
 
@@ -682,7 +681,12 @@ export const generatePermendagriPDF = async (options: PermendagriPdfOptions): Pr
     kodePosKecamatan = '22863',
   } = options;
 
-  const doc = new jsPDF({
+  const [{ default: JsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
+
+  const doc = new JsPDF({
     orientation: 'landscape',
     unit: 'mm',
     format: 'a4',

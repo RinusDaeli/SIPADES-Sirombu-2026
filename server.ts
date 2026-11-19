@@ -287,13 +287,30 @@ async function startServer() {
     res.json({ success: true, updatedAt: dbState.updatedAt });
   });
 
+  let cpanelDataCooldownUntil = 0;
+
   async function callCpanelHttp(
     pathWithQuery: string,
     method: string = 'GET',
     postData: string = '',
-    customBaseUrl?: string
+    customBaseUrl?: string,
+    timeoutMs: number = 15000
   ): Promise<{ statusCode: number; body: string }> {
     return new Promise((resolve, reject) => {
+      let settled = false;
+      const finishResolve = (val: { statusCode: number; body: string }) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(hardTimer);
+        resolve(val);
+      };
+      const finishReject = (err: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(hardTimer);
+        reject(err);
+      };
+
       let targetHost = 'sipadessirombu.my.id';
       let targetPath = pathWithQuery.startsWith('/') ? pathWithQuery : '/' + pathWithQuery;
       let targetPort = 443;
@@ -337,18 +354,23 @@ async function startServer() {
         (res: any) => {
           let resBody = '';
           res.on('data', (chunk: any) => (resBody += chunk));
-          res.on('end', () => resolve({ statusCode: res.statusCode || 200, body: resBody }));
+          res.on('end', () => finishResolve({ statusCode: res.statusCode || 200, body: resBody }));
+          res.on('error', (err: any) => finishReject(err));
         }
       );
 
+      const hardTimer = setTimeout(() => {
+        req.destroy();
+        finishReject(new Error(`Koneksi timeout ke cPanel (${Math.round(timeoutMs / 1000)}s)`));
+      }, timeoutMs);
+
       req.on('error', (err: any) => {
-        console.warn('[cPanel HTTPS] Connection error:', err.message);
-        reject(err);
+        finishReject(err);
       });
 
-      req.setTimeout(180000, () => {
+      req.setTimeout(timeoutMs, () => {
         req.destroy();
-        reject(new Error('Koneksi timeout ke cPanel (180s)'));
+        finishReject(new Error(`Koneksi timeout ke cPanel (${Math.round(timeoutMs / 1000)}s)`));
       });
 
       if (postData) {
@@ -517,7 +539,7 @@ async function startServer() {
     const { url } = req.body || {};
     if (!url) return res.status(400).json({ success: false, message: 'URL tidak boleh kosong' });
     try {
-      const response = await callCpanelHttp(`/cpanel-api.php?action=ping&_t=${Date.now()}`, 'GET', '', url);
+      const response = await callCpanelHttp(`/cpanel-api.php?action=ping&_t=${Date.now()}`, 'GET', '', url, 10000);
       let parsed: any = null;
       try {
         parsed = JSON.parse(response.body);
@@ -572,7 +594,7 @@ async function startServer() {
 
       const cpanelPayload = payload && payload.data ? payload : { data: payload || { asets: dbState.asets } };
       const payloadStr = JSON.stringify(cpanelPayload);
-      const response = await callCpanelHttp('/cpanel-api.php?action=upload_all', 'POST', payloadStr, url);
+      const response = await callCpanelHttp('/cpanel-api.php?action=upload_all', 'POST', payloadStr, url, 60000);
       let parsed: any = null;
       try {
         parsed = JSON.parse(response.body);
@@ -644,7 +666,7 @@ async function startServer() {
       saveDatabase(dbState);
 
       const cpanelPayload = bodyObj && bodyObj.data ? bodyObj : { data: d };
-      const response = await callCpanelHttp('/cpanel-api.php?action=batch_sync', 'POST', JSON.stringify(cpanelPayload), url);
+      const response = await callCpanelHttp('/cpanel-api.php?action=batch_sync', 'POST', JSON.stringify(cpanelPayload), url, 60000);
       let parsed: any = null;
       try {
         parsed = JSON.parse(response.body);
@@ -886,8 +908,11 @@ async function startServer() {
 
   // Fetch live database from cPanel hosting via server-to-server HTTPS (bypasses browser CORS & LiteSpeed 406)
   app.get('/api/cpanel/data', async (req, res) => {
+    if (Date.now() < cpanelDataCooldownUntil) {
+      return res.json(dbState);
+    }
     try {
-      const response = await callCpanelHttp(`/cpanel-api.php?action=data&_t=${Date.now()}`, 'GET');
+      const response = await callCpanelHttp(`/cpanel-api.php?action=data&_t=${Date.now()}`, 'GET', '', undefined, 8000);
       if (response.statusCode === 200 && response.body) {
         try {
           const parsed = JSON.parse(response.body);
@@ -967,8 +992,9 @@ async function startServer() {
         }
       }
       return res.json(dbState);
-    } catch (err: any) {
-      console.warn('[cPanel Data Proxy Error]:', err.message);
+    } catch {
+      // Remote cPanel temporarily slow/unreachable: serve synced local dbState immediately and cool down 30s
+      cpanelDataCooldownUntil = Date.now() + 30000;
       return res.json(dbState);
     }
   });

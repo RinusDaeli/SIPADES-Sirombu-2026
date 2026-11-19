@@ -92,7 +92,8 @@
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
     <style>
       #app-loader {
         min-height: 100vh;
@@ -157,11 +158,19 @@
         </p>
         <div id="loader-recovery-btn" style="display:none;margin-top:16px;">
           <button
-            onclick="try{localStorage.clear();sessionStorage.clear();}catch(e){}window.location.reload(true);"
-            style="background:#f59e0b;color:#0b0f19;border:none;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:bold;cursor:pointer;box-shadow:0 4px 12px rgba(245,158,11,0.3);"
+            onclick="window.location.reload();"
+            style="background:#f59e0b;color:#0b0f19;border:none;padding:9px 18px;border-radius:8px;font-size:12px;font-weight:bold;cursor:pointer;box-shadow:0 4px 12px rgba(245,158,11,0.3);"
           >
-            ⚡ Masuk Cepat / Segarkan Halaman
+            🔄 Muat Ulang Halaman
           </button>
+          <div style="margin-top:10px;">
+            <button
+              onclick="try{localStorage.clear();sessionStorage.clear();}catch(e){}window.location.reload();"
+              style="background:transparent;color:#94a3b8;border:none;padding:4px 8px;font-size:11px;text-decoration:underline;cursor:pointer;"
+            >
+              Reset Cache &amp; Login Ulang
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -173,13 +182,19 @@
       </main>
     </noscript>
     <script>
-      // If still loading after 2.5s, display instant refresh button
+      // Gently inform user on slower mobile connections before showing reload option
+      setTimeout(function() {
+        var txt = document.getElementById('loader-status-text');
+        if (txt) txt.textContent = 'Koneksi sedang memuat modul aplikasi, mohon tunggu sebentar...';
+      }, 4500);
+
+      // Only show recovery button if truly stalled beyond 12 seconds
       setTimeout(function() {
         var btn = document.getElementById('loader-recovery-btn');
         if (btn) btn.style.display = 'block';
         var txt = document.getElementById('loader-status-text');
-        if (txt) txt.textContent = 'Menyiapkan modul aplikasi...';
-      }, 2500);
+        if (txt) txt.textContent = 'Koneksi ke server agak lambat. Anda dapat menunggu atau memuat ulang halaman.';
+      }, 12000);
 
       // Global error listener to display error if a script fails to execute
       window.addEventListener('error', function(e) {
