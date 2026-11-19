@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /cpanel-api.php
+Disallow: /sipades_database.json
+
+Sitemap: https://sipadessirombu.my.id/sitemap.xml
