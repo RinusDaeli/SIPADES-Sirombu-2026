@@ -1068,6 +1068,101 @@ async function startServer() {
     immutable: true,
   }));
 
+  // Resilient disk-caching fallback proxy for /uploads/* when photo is on cPanel but not yet cached locally
+  const MAX_CONCURRENT_PHOTO_FETCHES = 4;
+  let activePhotoFetches = 0;
+  const photoFetchQueue: Array<() => void> = [];
+  const inFlightPhotoDownloads = new Map<string, Promise<Buffer | null>>();
+
+  const acquirePhotoSlot = () =>
+    new Promise<void>((resolve) => {
+      if (activePhotoFetches < MAX_CONCURRENT_PHOTO_FETCHES) {
+        activePhotoFetches++;
+        resolve();
+      } else {
+        photoFetchQueue.push(() => {
+          activePhotoFetches++;
+          resolve();
+        });
+      }
+    });
+
+  const releasePhotoSlot = () => {
+    activePhotoFetches = Math.max(0, activePhotoFetches - 1);
+    const next = photoFetchQueue.shift();
+    if (next) next();
+  };
+
+  const downloadRemoteUpload = (folder: string, filename: string): Promise<Buffer | null> => {
+    const cacheKey = `${folder}/${filename}`;
+    const existing = inFlightPhotoDownloads.get(cacheKey);
+    if (existing) return existing;
+
+    const promise = (async (): Promise<Buffer | null> => {
+      await acquirePhotoSlot();
+      try {
+        const remoteUrl = `https://sipadessirombu.my.id/uploads/${folder}/${filename}`;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const response = await fetch(remoteUrl, {
+              headers: {
+                'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                Accept: 'image/*,*/*;q=0.8',
+              },
+              signal: AbortSignal.timeout(18000),
+            });
+            const ct = response.headers.get('content-type') || '';
+            if (response.ok && ct.startsWith('image/')) {
+              const buf = Buffer.from(await response.arrayBuffer());
+              if (buf.length > 100) {
+                try {
+                  const dir = path.join(process.cwd(), 'public/uploads', folder);
+                  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+                  fs.writeFileSync(path.join(dir, filename), buf);
+                } catch {}
+                return buf;
+              }
+            }
+          } catch {
+            // retry once on timeout/transient error
+          }
+        }
+        return null;
+      } finally {
+        releasePhotoSlot();
+        inFlightPhotoDownloads.delete(cacheKey);
+      }
+    })();
+
+    inFlightPhotoDownloads.set(cacheKey, promise);
+    return promise;
+  };
+
+  app.get('/uploads/:folder/:filename', async (req, res) => {
+    const { folder, filename } = req.params;
+    if ((folder !== 'foto-aset' && folder !== 'foto-bast') || !/^[a-zA-Z0-9._-]+$/.test(filename)) {
+      return res.status(404).end();
+    }
+
+    const localPath = path.join(process.cwd(), 'public/uploads', folder, filename);
+    if (fs.existsSync(localPath)) {
+      res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+      return res.sendFile(localPath);
+    }
+
+    const buf = await downloadRemoteUpload(folder, filename);
+    if (buf) {
+      const ext = path.extname(filename).toLowerCase();
+      const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+      res.setHeader('Content-Type', mime);
+      res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+      return res.send(buf);
+    }
+
+    return res.status(404).end();
+  });
+
   // ==================== VITE MIDDLEWARE / SPA SERVING ====================
   const distPath = path.join(process.cwd(), 'dist');
   const indexHtmlPath = path.join(distPath, 'index.html');

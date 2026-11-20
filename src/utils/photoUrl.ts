@@ -32,20 +32,39 @@ export function getPhotoUrl(path?: string | null): string {
 }
 
 /**
- * Image error handler that attempts cPanel remote hosting fallback if local relative path fails
+ * Image error handler with cPanel remote fallback and automatic delayed retry
+ * Recovers cleanly when Cloudflare/origin hosting has a brief cold-cache timeout.
  */
 export function handlePhotoError(e: React.SyntheticEvent<HTMLImageElement, Event>) {
   const target = e.currentTarget;
-  if (target.dataset.hasFailedFallback) {
-    // Already tried fallback, prevent infinite loop
+  const attempts = Number(target.dataset.retryAttempts || '0');
+  if (attempts >= 2) {
     return;
   }
-  target.dataset.hasFailedFallback = 'true';
+  target.dataset.retryAttempts = String(attempts + 1);
 
   const currentSrc = target.src || '';
-  if (currentSrc.includes('/uploads/')) {
-    const uploadIndex = currentSrc.indexOf('/uploads/');
-    const relativePath = currentSrc.substring(uploadIndex);
-    target.src = `https://sipadessirombu.my.id${relativePath}`;
+  if (!currentSrc.includes('/uploads/')) {
+    return;
   }
+
+  const uploadIndex = currentSrc.indexOf('/uploads/');
+  const relativePath = currentSrc.substring(uploadIndex).split('?')[0];
+
+  if (attempts === 0 && !currentSrc.startsWith('https://sipadessirombu.my.id/')) {
+    // First fallback: try direct cPanel/Cloudflare URL
+    setTimeout(() => {
+      if (target.isConnected) {
+        target.src = `https://sipadessirombu.my.id${relativePath}`;
+      }
+    }, 600);
+    return;
+  }
+
+  // Second retry: wait briefly for Cloudflare/origin to finish warming up and retry once
+  setTimeout(() => {
+    if (target.isConnected) {
+      target.src = `https://sipadessirombu.my.id${relativePath}?_r=${attempts + 1}`;
+    }
+  }, 2500);
 }
