@@ -57,6 +57,12 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
   const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
   const [zipProgress, setZipProgress] = useState<string | null>(null);
   const [zipSizeKB, setZipSizeKB] = useState<string | null>(null);
+  const [fullBackupInfo, setFullBackupInfo] = useState<{
+    sizeMB: string;
+    totalAsets: number;
+    totalPhotos: number;
+  } | null>(null);
+  const [fullBackupProgress, setFullBackupProgress] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -65,6 +71,19 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
       .then((info) => {
         if (info && info.exists && typeof info.sizeBytes === 'number') {
           setZipSizeKB((info.sizeBytes / 1024).toFixed(1));
+        }
+      })
+      .catch(() => {});
+
+    fetch('/api/full-backup-info', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((info) => {
+        if (info && info.exists) {
+          setFullBackupInfo({
+            sizeMB: info.sizeMB,
+            totalAsets: info.totalAsets || 0,
+            totalPhotos: info.totalPhotos || 0,
+          });
         }
       })
       .catch(() => {});
@@ -246,6 +265,84 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
       });
     } finally {
       setUploadingToCpanel(false);
+    }
+  };
+
+  const handleDownloadFullBackup = async () => {
+    try {
+      setDownloadingFile('sipades-full-backup-sirombu.zip');
+      setFullBackupProgress('Memeriksa ukuran berkas Full Backup...');
+
+      const infoRes = await fetch('/api/full-backup-info', { cache: 'no-store' });
+      if (!infoRes.ok) throw new Error(`Info backup gagal (HTTP ${infoRes.status})`);
+      const info = await infoRes.json();
+      const totalBytes: number = info.sizeBytes;
+      if (!totalBytes || totalBytes < 100000) {
+        throw new Error('Berkas Full Backup belum tersedia di server.');
+      }
+
+      const CHUNK_SIZE = 4 * 1024 * 1024; // 4 MB per chunk (aman dari batas 32 MB Cloud Run)
+      const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+
+      for (let offset = 0; offset < totalBytes; offset += CHUNK_SIZE) {
+        const len = Math.min(CHUNK_SIZE, totalBytes - offset);
+        let chunkBuf: ArrayBuffer | null = null;
+        let lastErr = '';
+
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const res = await fetch(
+              `/api/download-full-backup-chunk?offset=${offset}&length=${len}&_t=${Date.now()}`,
+              { cache: 'no-store' }
+            );
+            if (!res.ok) {
+              lastErr = `HTTP ${res.status}`;
+            } else {
+              const ab = await res.arrayBuffer();
+              if (ab.byteLength === len) {
+                chunkBuf = ab;
+                break;
+              }
+              lastErr = `Potongan tidak lengkap (${ab.byteLength}/${len} B)`;
+            }
+          } catch (e: any) {
+            lastErr = e?.message || 'Koneksi terputus';
+          }
+          await new Promise((r) => setTimeout(r, 600 * attempt));
+        }
+
+        if (!chunkBuf) {
+          throw new Error(`Gagal mengunduh bagian ke-${chunks.length + 1} (${lastErr})`);
+        }
+
+        chunks.push(new Uint8Array(chunkBuf));
+        received += chunkBuf.byteLength;
+        const curMB = (received / (1024 * 1024)).toFixed(1);
+        const pct = Math.min(100, Math.round((received / totalBytes) * 100));
+        setFullBackupProgress(`Mengunduh Full Backup Migrasi: ${curMB} MB / ${totalMB} MB (${pct}%)`);
+      }
+
+      const blob = new Blob(chunks as any, { type: 'application/zip' });
+      if (blob.size !== totalBytes) {
+        throw new Error(`Ukuran file tidak cocok (${blob.size} vs ${totalBytes} byte). Silakan coba lagi.`);
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'sipades-full-backup-sirombu.zip';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => window.URL.revokeObjectURL(url), 15000);
+      setFullBackupProgress(`✓ Full Backup berhasil diunduh utuh (${(blob.size / (1024 * 1024)).toFixed(2)} MB)!`);
+      setTimeout(() => setFullBackupProgress(null), 10000);
+    } catch (err: any) {
+      setFullBackupProgress(`Gagal mengunduh Full Backup: ${err.message || 'Coba muat ulang halaman'}`);
+    } finally {
+      setDownloadingFile(null);
     }
   };
 
@@ -540,6 +637,44 @@ export const CPanelMigrationModal: React.FC<CPanelMigrationModalProps> = ({ isOp
               ✓ Selesai! Saat membuka <a href="https://sipadessirombu.my.id" target="_blank" rel="noreferrer" className="underline font-bold text-emerald-300">https://sipadessirombu.my.id</a>, antarmuka lengkap aplikasi SIPADES Kecamatan Sirombu langsung berjalan dengan seluruh {asets.length} aset aktif secara real-time!
             </div>
           </div>
+        </div>
+
+        {/* Full Migration Backup Card (App + Database + All Photos) */}
+        <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/70 to-teal-950/70 border border-emerald-500/40 space-y-3 mb-5 shadow-lg">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-2">
+              <Database className="w-4 h-4 text-emerald-400" />
+              Full Backup Siap Pindah Hosting (Aplikasi + Database + Semua Foto)
+            </h3>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-400/30">
+              1x Ekstrak Langsung Jalan
+            </span>
+          </div>
+          <p className="text-xs text-slate-300">
+            Paket cadangan penuh untuk memindahkan seluruh SIPADES ke hosting cPanel baru: sudah berisi <strong>aplikasi web terbaru</strong>, <strong>cpanel-api.php</strong>, <strong>.htaccess</strong>, <strong>robots.txt &amp; sitemap.xml</strong>, <strong>database lengkap ({fullBackupInfo?.totalAsets || asets.length} aset, 25 desa, 27 pengguna)</strong>, dan <strong>seluruh {fullBackupInfo?.totalPhotos || 568} foto aset &amp; BAST</strong>.
+          </p>
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <button
+              type="button"
+              onClick={handleDownloadFullBackup}
+              disabled={downloadingFile === 'sipades-full-backup-sirombu.zip'}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-emerald-900/30 transition-all cursor-pointer"
+            >
+              <Download className={`w-4 h-4 ${downloadingFile === 'sipades-full-backup-sirombu.zip' ? 'animate-bounce' : ''}`} />
+              {downloadingFile === 'sipades-full-backup-sirombu.zip'
+                ? 'Mengunduh Full Backup...'
+                : `Unduh Full Backup Migrasi (.ZIP${fullBackupInfo ? ` ~${fullBackupInfo.sizeMB} MB` : ''})`}
+            </button>
+            <span className="text-[11px] text-slate-400">
+              Simpan di laptop/Google Drive • Cukup ekstrak 1x ke <code className="text-emerald-300">public_html</code> hosting baru
+            </span>
+          </div>
+          {fullBackupProgress && (
+            <div className="p-2.5 rounded-lg bg-emerald-950/80 border border-emerald-500/50 text-emerald-200 text-xs flex items-center gap-2">
+              <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 shrink-0 ${downloadingFile === 'sipades-full-backup-sirombu.zip' ? 'animate-spin' : ''}`} />
+              <span className="font-semibold">{fullBackupProgress}</span>
+            </div>
+          )}
         </div>
 
         {/* Form URL Domain cPanel */}

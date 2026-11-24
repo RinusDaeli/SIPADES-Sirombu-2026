@@ -1052,12 +1052,95 @@ async function startServer() {
     });
   });
 
+  // Full Migration Backup package info and streaming download (App + Database + All Photos)
+  app.get('/api/full-backup-info', (req, res) => {
+    const zipPath = path.join(process.cwd(), 'public/sipades-full-backup-sirombu.zip');
+    if (!fs.existsSync(zipPath)) {
+      return res.status(404).json({ exists: false, error: 'Berkas Full Backup belum dibuat' });
+    }
+    const stat = fs.statSync(zipPath);
+    let meta: any = {};
+    try {
+      const metaPath = path.join(process.cwd(), 'public/full-backup-meta.json');
+      if (fs.existsSync(metaPath)) {
+        meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+      }
+    } catch {}
+    res.json({
+      exists: true,
+      filename: 'sipades-full-backup-sirombu.zip',
+      sizeBytes: stat.size,
+      sizeMB: (stat.size / (1024 * 1024)).toFixed(2),
+      modified: stat.mtime.toISOString(),
+      totalAsets: meta.totalAsets ?? dbState.asets.length,
+      totalPhotos: meta.totalPhotos ?? 0,
+      totalFiles: meta.totalFiles ?? 0,
+    });
+  });
+
+  app.get('/api/download-full-backup', (req, res) => {
+    const zipPath = path.join(process.cwd(), 'public/sipades-full-backup-sirombu.zip');
+    if (!fs.existsSync(zipPath)) {
+      return res.status(404).json({ error: 'Berkas sipades-full-backup-sirombu.zip tidak ditemukan di server' });
+    }
+    const stat = fs.statSync(zipPath);
+    res.writeHead(200, {
+      'Content-Type': 'application/zip',
+      'Content-Length': stat.size,
+      'Content-Disposition': 'attachment; filename="sipades-full-backup-sirombu.zip"',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Expose-Headers': 'Content-Length, Content-Disposition',
+    });
+    const fileStream = fs.createReadStream(zipPath);
+    fileStream.pipe(res);
+  });
+
+  // Chunked binary endpoint (max 8MB per request) to stay well within Cloud Run's 32MB HTTP response limit
+  app.get('/api/download-full-backup-chunk', (req, res) => {
+    const zipPath = path.join(process.cwd(), 'public/sipades-full-backup-sirombu.zip');
+    if (!fs.existsSync(zipPath)) {
+      return res.status(404).json({ error: 'Berkas sipades-full-backup-sirombu.zip tidak ditemukan di server' });
+    }
+    const stat = fs.statSync(zipPath);
+    const totalSize = stat.size;
+    const offset = Math.max(0, parseInt(String(req.query.offset || '0'), 10) || 0);
+    const requestedLen = parseInt(String(req.query.length || String(4 * 1024 * 1024)), 10) || (4 * 1024 * 1024);
+    const maxChunk = 8 * 1024 * 1024;
+    const length = Math.min(Math.max(1, requestedLen), maxChunk, Math.max(0, totalSize - offset));
+
+    if (offset >= totalSize || length <= 0) {
+      return res.status(416).json({ error: 'Offset melebihi ukuran file', totalSize });
+    }
+
+    const buf = Buffer.allocUnsafe(length);
+    const fd = fs.openSync(zipPath, 'r');
+    try {
+      const bytesRead = fs.readSync(fd, buf, 0, length, offset);
+      const slice = bytesRead === length ? buf : buf.subarray(0, bytesRead);
+      res.writeHead(200, {
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': slice.length,
+        'X-Total-Size': String(totalSize),
+        'X-Chunk-Offset': String(offset),
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Expose-Headers': 'Content-Length, X-Total-Size, X-Chunk-Offset',
+      });
+      res.end(slice);
+    } finally {
+      fs.closeSync(fd);
+    }
+  });
+
   // Serve static public assets explicitly (ensures zip file and static assets download cleanly)
   app.use(express.static(path.join(process.cwd(), 'public'), {
     setHeaders: (res, pathStr) => {
       if (pathStr.endsWith('.zip')) {
         res.setHeader('Content-Type', 'application/zip');
-        res.setHeader('Content-Disposition', 'attachment; filename="sipades-web-sirombu.zip"');
+        res.setHeader('Content-Disposition', `attachment; filename="${path.basename(pathStr)}"`);
       }
     }
   }));

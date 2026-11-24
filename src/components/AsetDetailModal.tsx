@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Aset } from '../types';
-import { getAsetVerificationStatus, AsetVerificationBadge } from '../utils/verificationHelper';
+import { getAsetVerificationStatus, AsetVerificationBadge, isAsetLockedByVerification } from '../utils/verificationHelper';
 import { formatTanggalWaktuIndonesia } from '../utils/reportGenerator';
 import {
   X,
@@ -19,6 +19,7 @@ import {
   Download,
   Sparkles,
   RotateCcw,
+  Lock,
 } from 'lucide-react';
 import { getPhotoUrl, handlePhotoError } from '../utils/photoUrl';
 
@@ -27,6 +28,7 @@ interface AsetDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenBarcode: (aset: Aset) => void;
+  onEditPhoto?: (aset: Aset) => void;
 }
 
 export const AsetDetailModal: React.FC<AsetDetailModalProps> = ({
@@ -34,8 +36,9 @@ export const AsetDetailModal: React.FC<AsetDetailModalProps> = ({
   isOpen,
   onClose,
   onOpenBarcode,
+  onEditPhoto,
 }) => {
-  const { currentUser, batalkanVerifikasiAset } = useApp();
+  const { currentUser, verifikasiList, pengesahanList, batalkanVerifikasiAset } = useApp();
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number>(0);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null);
   const [showBatalConfirm, setShowBatalConfirm] = useState<boolean>(false);
@@ -44,7 +47,7 @@ export const AsetDetailModal: React.FC<AsetDetailModalProps> = ({
   if (!isOpen || !aset) return null;
 
   const isSuperAdmin = currentUser?.role === 'super_admin' || currentUser?.role === 'admin_kecamatan';
-  const isVerified = aset.statusVerifikasi === 'sudah_diverifikasi' || (!aset.statusVerifikasi && aset.status === 'aktif');
+  const isVerified = isAsetLockedByVerification(aset, verifikasiList, pengesahanList);
 
   const photos = aset.fotoAset && aset.fotoAset.length > 0 ? aset.fotoAset : [];
   const activePhoto = photos[selectedPhotoIndex] || photos[0];
@@ -372,6 +375,12 @@ export const AsetDetailModal: React.FC<AsetDetailModalProps> = ({
                           &quot;{aset.catatanVerifikasi}&quot;
                         </div>
                       )}
+                      {isVerified && (
+                        <div className="mt-1.5 pt-1.5 border-t border-slate-800/80 flex items-center gap-1.5 text-[10px] text-amber-300 font-semibold">
+                          <Lock className="w-3 h-3 text-amber-400 shrink-0" />
+                          <span>Data pokok &amp; hapus terkunci (hanya foto aset/BAST dapat diubah)</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Riwayat Tanggal & Jam Entri / Update Aset */}
@@ -457,8 +466,22 @@ export const AsetDetailModal: React.FC<AsetDetailModalProps> = ({
                   )}
                 </div>
 
-                {/* Print Barcode Action Button */}
+                {/* Print Barcode & Edit Photo Action Buttons */}
                 <div className="pt-4 border-t border-slate-800 space-y-2">
+                  {onEditPhoto &&
+                    aset.status !== 'terhapus' &&
+                    aset.status !== 'mutasi_diajukan' &&
+                    aset.status !== 'terhapus_diajukan' && (
+                      <button
+                        type="button"
+                        onClick={() => onEditPhoto(aset)}
+                        className="w-full py-2 px-4 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/50 text-cyan-200 hover:text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                      >
+                        <Camera className="w-4 h-4 text-cyan-400" />
+                        <span>{isVerified ? 'Ganti / Tambah Foto Aset' : 'Edit Data & Foto Aset'}</span>
+                      </button>
+                    )}
+
                   <button
                     type="button"
                     onClick={() => onOpenBarcode(aset)}

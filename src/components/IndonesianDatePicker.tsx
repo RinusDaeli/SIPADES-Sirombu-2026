@@ -25,6 +25,7 @@ interface IndonesianDatePickerProps {
   placeholder?: string;
   className?: string;
   align?: 'left' | 'right';
+  disabled?: boolean;
 }
 
 export const IndonesianDatePicker: React.FC<IndonesianDatePickerProps> = ({
@@ -33,6 +34,7 @@ export const IndonesianDatePicker: React.FC<IndonesianDatePickerProps> = ({
   placeholder = 'Pilih tanggal...',
   className = '',
   align = 'right',
+  disabled = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -412,24 +414,32 @@ export const IndonesianDatePicker: React.FC<IndonesianDatePickerProps> = ({
       <div className="relative flex items-center">
         <input
           type="text"
+          disabled={disabled}
           placeholder={placeholder}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onClick={() => setIsOpen(true)}
-          className={`w-full bg-slate-900 border border-slate-700 hover:border-slate-600 focus:border-amber-400 rounded-lg px-2.5 py-1.5 pr-8 text-white text-xs font-medium focus:outline-none transition-colors ${className}`}
+          onChange={(e) => {
+            if (!disabled) onChange(e.target.value);
+          }}
+          onClick={() => {
+            if (!disabled) setIsOpen(true);
+          }}
+          className={`w-full bg-slate-900 border border-slate-700 hover:border-slate-600 focus:border-amber-400 rounded-lg px-2.5 py-1.5 pr-8 text-white text-xs font-medium focus:outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/70 ${className}`}
         />
         <button
           type="button"
-          onClick={() => setIsOpen((prev) => !prev)}
-          className="absolute right-2 text-slate-400 hover:text-amber-300 p-0.5 rounded transition-colors cursor-pointer"
-          title="Buka kalender pilihan tanggal (MIN - SAB)"
+          disabled={disabled}
+          onClick={() => {
+            if (!disabled) setIsOpen((prev) => !prev);
+          }}
+          className="absolute right-2 text-slate-400 hover:text-amber-300 p-0.5 rounded transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          title={disabled ? 'Tanggal terkunci (aset sudah disahkan)' : 'Buka kalender pilihan tanggal (MIN - SAB)'}
         >
           <CalendarIcon className="w-4 h-4" />
         </button>
       </div>
 
       {/* Portal popover into document.body so it NEVER gets cut off by modal overflow */}
-      {typeof document !== 'undefined' && isOpen && createPortal(popoverContent, document.body)}
+      {typeof document !== 'undefined' && !disabled && isOpen && createPortal(popoverContent, document.body)}
     </div>
   );
 };

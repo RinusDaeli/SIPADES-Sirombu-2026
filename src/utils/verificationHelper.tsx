@@ -140,6 +140,20 @@ export function getAsetVerificationStatus(
   };
 }
 
+/**
+ * Menentukan apakah aset terkunci karena sudah diverifikasi/disahkan.
+ * Aset yang terkunci tidak dapat diedit data pokoknya ataupun dihapus langsung
+ * (kecuali mengganti/menambah foto), sampai Admin membatalkan pengesahan terlebih dahulu.
+ */
+export function isAsetLockedByVerification(
+  aset: Aset | null | undefined,
+  verifikasiList: PermohonanVerifikasi[] = [],
+  pengesahanList: PengesahanLaporan[] = []
+): boolean {
+  if (!aset || aset.status === 'terhapus') return false;
+  return getAsetVerificationStatus(aset, verifikasiList, pengesahanList).status === 'sudah_diverifikasi';
+}
+
 interface AsetVerificationBadgeProps {
   statusInfo: VerificationStatusInfo;
   className?: string;

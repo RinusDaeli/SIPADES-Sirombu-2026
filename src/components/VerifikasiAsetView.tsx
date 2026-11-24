@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { Aset, KlasAset } from '../types';
 import { formatRupiah, formatTanggalIndonesia, formatTanggalWaktuIndonesia } from '../utils/reportGenerator';
-import { getAsetVerificationStatus, AsetVerificationBadge } from '../utils/verificationHelper';
+import { getAsetVerificationStatus, AsetVerificationBadge, isAsetLockedByVerification } from '../utils/verificationHelper';
 import { AsetDetailModal } from './AsetDetailModal';
 import { NiasBaratLogo } from './NiasBaratLogo';
 import { getPhotoUrl, handlePhotoError } from '../utils/photoUrl';
@@ -249,16 +249,16 @@ export const VerifikasiAsetView: React.FC = () => {
   const selectedVerifiedCount = useMemo(() => {
     return selectedAssetIds.filter((id) => {
       const a = asets.find((item) => item.id === id);
-      return a && (a.statusVerifikasi === 'sudah_diverifikasi' || (!a.statusVerifikasi && a.status === 'aktif'));
+      return Boolean(a && isAsetLockedByVerification(a, verifikasiList, pengesahanList));
     }).length;
-  }, [selectedAssetIds, asets]);
+  }, [selectedAssetIds, asets, verifikasiList, pengesahanList]);
 
   const selectedPendingCount = useMemo(() => {
     return selectedAssetIds.filter((id) => {
       const a = asets.find((item) => item.id === id);
-      return a && a.statusVerifikasi !== 'sudah_diverifikasi';
+      return Boolean(a && !isAsetLockedByVerification(a, verifikasiList, pengesahanList));
     }).length;
-  }, [selectedAssetIds, asets]);
+  }, [selectedAssetIds, asets, verifikasiList, pengesahanList]);
 
   // Open Single Verification Modal
   const handleOpenVerifyModal = (aset: Aset) => {
@@ -371,7 +371,7 @@ export const VerifikasiAsetView: React.FC = () => {
   const handleConfirmBatalkanBulk = async () => {
     const verifiedIds = selectedAssetIds.filter((id) => {
       const a = asets.find((item) => item.id === id);
-      return a && a.statusVerifikasi === 'sudah_diverifikasi';
+      return Boolean(a && isAsetLockedByVerification(a, verifikasiList, pengesahanList));
     });
     if (verifiedIds.length === 0) return;
     setIsSubmittingBatal(true);
@@ -843,7 +843,7 @@ export const VerifikasiAsetView: React.FC = () => {
                     item.statusVerifikasi === 'belum_diverifikasi' ||
                     item.status === 'mutasi_diajukan' ||
                     item.status === 'terhapus_diajukan';
-                  const isVerified = item.statusVerifikasi === 'sudah_diverifikasi';
+                  const isVerified = isAsetLockedByVerification(item, verifikasiList, pengesahanList);
                   const isPerluPerbaikan = item.statusVerifikasi === 'perlu_perbaikan';
                   const hasPhoto = item.fotoAset && item.fotoAset.length > 0;
 

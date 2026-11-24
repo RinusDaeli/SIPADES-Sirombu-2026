@@ -48,6 +48,7 @@ import {
 import {
   FirestoreQuotaStatus,
 } from '../lib/firestoreService';
+import { isAsetLockedByVerification } from '../utils/verificationHelper';
 import { SystemAnnouncement } from '../types';
 
 export interface AuthSession {
@@ -108,7 +109,11 @@ interface AppContextType {
   // Assets
   addAset: (data: Omit<Aset, 'id' | 'createdAt' | 'updatedAt' | 'status'>) => void;
   addAsetBatch: (items: Omit<Aset, 'id' | 'createdAt' | 'updatedAt' | 'status'>[]) => Promise<{ success: boolean; count: number }>;
-  updateAset: (id: string, data: Partial<Aset>) => void;
+  updateAset: (
+    id: string,
+    data: Partial<Aset>,
+    options?: { bypassVerificationLock?: boolean }
+  ) => { success: boolean; message?: string; photoOnly?: boolean };
   deleteAset: (id: string) => { success: boolean; message?: string };
   perbaikiSemuaNomorRegister: () => Promise<{ fixedCount: number; message: string }>;
   
@@ -1545,33 +1550,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const updateAset = (id: string, data: Partial<Aset>) => {
+  const updateAset = (
+    id: string,
+    data: Partial<Aset>,
+    options?: { bypassVerificationLock?: boolean }
+  ): { success: boolean; message?: string; photoOnly?: boolean } => {
     const basePool = asetsRef.current.length > 0 ? asetsRef.current : asets;
     const existing = basePool.find((a) => a.id === id);
+    if (!existing) {
+      return { success: false, message: 'Aset tidak ditemukan!' };
+    }
+
+    const isLocked =
+      !options?.bypassVerificationLock &&
+      isAsetLockedByVerification(existing, verifikasiList, pengesahanList);
+
+    let effectiveData: Partial<Aset> = data;
+    if (isLocked) {
+      const photoOnlyData: Partial<Aset> = {};
+      if ('fotoAset' in data) photoOnlyData.fotoAset = data.fotoAset;
+      if ('fotoBast' in data) photoOnlyData.fotoBast = data.fotoBast;
+
+      const hasPhotoFields = Object.keys(photoOnlyData).length > 0;
+      if (!hasPhotoFields) {
+        return {
+          success: false,
+          message:
+            'Aset terkunci karena sudah diverifikasi/disahkan! Hanya perubahan foto aset yang diizinkan. Admin harus membatalkan pengesahan terlebih dahulu untuk mengedit data pokok.',
+        };
+      }
+      effectiveData = photoOnlyData;
+    }
+
     const now = new Date().toISOString();
     pausePulseUntil.current = Date.now() + 15000;
 
     let lockedTarget: Aset | null = null;
-    if (existing) {
-      const candidate: Aset = {
-        ...existing,
-        ...data,
-        updatedAt: now,
-      };
-      lockedTarget = ensureUniqueRegisterOnUpdate(candidate, basePool, desas);
-      const nextSnapshot = basePool.map((a) => (a.id === id ? lockedTarget! : a));
-      asetsRef.current = nextSnapshot;
-    }
+    const candidate: Aset = {
+      ...existing,
+      ...effectiveData,
+      updatedAt: now,
+    };
+    lockedTarget = isLocked ? candidate : ensureUniqueRegisterOnUpdate(candidate, basePool, desas);
+    const nextSnapshot = basePool.map((a) => (a.id === id ? lockedTarget! : a));
+    asetsRef.current = nextSnapshot;
 
     setAsets((prev) => {
       const updated = prev.map((a) => {
         if (a.id === id) {
-          const candidate: Aset = {
+          const itemCandidate: Aset = {
             ...a,
-            ...data,
+            ...effectiveData,
             updatedAt: now,
           };
-          const locked = ensureUniqueRegisterOnUpdate(candidate, prev, desas);
+          const locked = isLocked ? itemCandidate : ensureUniqueRegisterOnUpdate(itemCandidate, prev, desas);
           lockedTarget = locked;
           return locked;
         }
@@ -1602,6 +1634,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       return updated;
     });
+
+    return {
+      success: true,
+      photoOnly: isLocked,
+      message: isLocked ? 'Foto aset berhasil diperbarui.' : 'Data aset berhasil diperbarui.',
+    };
   };
 
   const perbaikiSemuaNomorRegister = useCallback(async (): Promise<{ fixedCount: number; message: string }> => {
@@ -1656,6 +1694,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return {
         success: false,
         message: 'Aset sedang dalam proses permohonan verifikasi Kecamatan, tidak dapat dihapus langsung!',
+      };
+    }
+    if (isAsetLockedByVerification(target, verifikasiList, pengesahanList)) {
+      return {
+        success: false,
+        message:
+          'Aset terkunci karena sudah diverifikasi/disahkan! Admin harus membatalkan pengesahan (ubah status) terlebih dahulu sebelum dapat menghapus aset ini.',
       };
     }
 
@@ -2057,7 +2102,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       saveVerifikasiToCpanel(nextList).catch((err) => console.warn('[cPanel] Verifikasi save failed:', err));
       return nextList;
     });
-    updateAset(asetId, { status: 'mutasi_diajukan' });
+    updateAset(asetId, { status: 'mutasi_diajukan' }, { bypassVerificationLock: true });
 
     fetch('/api/verifikasi', {
       method: 'POST',
@@ -2094,7 +2139,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       saveVerifikasiToCpanel(nextList).catch((err) => console.warn('[cPanel] Verifikasi save failed:', err));
       return nextList;
     });
-    updateAset(asetId, { status: 'terhapus_diajukan' });
+    updateAset(asetId, { status: 'terhapus_diajukan' }, { bypassVerificationLock: true });
 
     fetch('/api/verifikasi', {
       method: 'POST',
@@ -2150,10 +2195,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (status === 'disetujui') {
       if (verif.tipe === 'penghapusan') {
-        updateAset(verif.asetId, {
-          status: 'terhapus',
-          keterangan: `${prefixKet}Telah dihapus pada tanggal ${tanggalFormatted} (SK Kecamatan Sirombu No. ${finalSK || 'SK-KEC-SRB'}. Alasan: ${verif.alasan})`,
-        });
+        updateAset(
+          verif.asetId,
+          {
+            status: 'terhapus',
+            keterangan: `${prefixKet}Telah dihapus pada tanggal ${tanggalFormatted} (SK Kecamatan Sirombu No. ${finalSK || 'SK-KEC-SRB'}. Alasan: ${verif.alasan})`,
+          },
+          { bypassVerificationLock: true }
+        );
       } else if (verif.tipe === 'mutasi') {
         const tujuanClean = (verif.tujuanMutasi || '').trim();
         const keteranganMutasi = `${prefixKet}Telah dilakukan mutasi dari ${verif.desaName} ke ${tujuanClean} pada tanggal ${tanggalFormatted} (SK Kecamatan Sirombu No. ${finalSK || 'SK-KEC-SRB'})`;
@@ -2170,24 +2219,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
 
         if (targetDesa && targetDesa.id !== verif.desaId) {
-          updateAset(verif.asetId, {
-            desaId: targetDesa.id,
-            desaName: targetDesa.name,
-            status: 'aktif',
-            keterangan: keteranganMutasi,
-          });
+          updateAset(
+            verif.asetId,
+            {
+              desaId: targetDesa.id,
+              desaName: targetDesa.name,
+              status: 'aktif',
+              keterangan: keteranganMutasi,
+            },
+            { bypassVerificationLock: true }
+          );
         } else {
-          updateAset(verif.asetId, {
-            status: 'terhapus',
-            keterangan: keteranganMutasi,
-          });
+          updateAset(
+            verif.asetId,
+            {
+              status: 'terhapus',
+              keterangan: keteranganMutasi,
+            },
+            { bypassVerificationLock: true }
+          );
         }
       }
     } else {
-      updateAset(verif.asetId, {
-        status: 'aktif',
-        keterangan: `${verif.asetSnapshot.keterangan || ''} (Pengajuan ${verif.tipe} ditolak Kecamatan: ${catatanKecamatan})`,
-      });
+      updateAset(
+        verif.asetId,
+        {
+          status: 'aktif',
+          keterangan: `${verif.asetSnapshot.keterangan || ''} (Pengajuan ${verif.tipe} ditolak Kecamatan: ${catatanKecamatan})`,
+        },
+        { bypassVerificationLock: true }
+      );
     }
   };
 
@@ -2349,10 +2410,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     const newStatus = target.tipe === 'mutasi' ? 'mutasi_diajukan' : 'terhapus_diajukan';
-    updateAset(target.asetId, {
-      status: newStatus,
-      keterangan: `${target.asetSnapshot.keterangan || ''} (Revisi permohonan telah diajukan kembali ke Kecamatan Sirombu)`,
-    });
+    updateAset(
+      target.asetId,
+      {
+        status: newStatus,
+        keterangan: `${target.asetSnapshot.keterangan || ''} (Revisi permohonan telah diajukan kembali ke Kecamatan Sirombu)`,
+      },
+      { bypassVerificationLock: true }
+    );
 
     fetch(`/api/verifikasi/${verifikasiId}`, {
       method: 'PUT',
@@ -2376,9 +2441,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const relatedAset = asets.find((a) => a.id === target.asetId);
     if (relatedAset && (relatedAset.status === 'mutasi_diajukan' || relatedAset.status === 'terhapus_diajukan')) {
-      updateAset(target.asetId, {
-        status: 'aktif',
-      });
+      updateAset(
+        target.asetId,
+        {
+          status: 'aktif',
+        },
+        { bypassVerificationLock: true }
+      );
     }
 
     setVerifikasiList((prev) => {

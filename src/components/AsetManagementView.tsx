@@ -26,6 +26,7 @@ import { fileToCompressedDataUrl } from '../utils/imageCompressor';
 import {
   getAsetVerificationStatus,
   AsetVerificationBadge,
+  isAsetLockedByVerification,
 } from '../utils/verificationHelper';
 import { getPhotoUrl, handlePhotoError } from '../utils/photoUrl';
 import {
@@ -65,6 +66,7 @@ import {
   Server,
   RotateCcw,
   Lock,
+  Unlock,
 } from 'lucide-react';
 
 export const AsetManagementView: React.FC = () => {
@@ -137,6 +139,18 @@ export const AsetManagementView: React.FC = () => {
   const [batalModalAset, setBatalModalAset] = useState<Aset | null>(null);
   const [isSubmittingBatal, setIsSubmittingBatal] = useState<boolean>(false);
   const [deleteDirectTarget, setDeleteDirectTarget] = useState<{ id: string; name: string } | null>(null);
+  const [confirmUnlockInEdit, setConfirmUnlockInEdit] = useState<boolean>(false);
+  const [isUnlockingInEdit, setIsUnlockingInEdit] = useState<boolean>(false);
+
+  const liveSelectedAset = useMemo(() => {
+    if (!selectedAset) return null;
+    return asets.find((a) => a.id === selectedAset.id) || selectedAset;
+  }, [selectedAset, asets]);
+
+  const isEditingLockedAsset = useMemo(() => {
+    if (!liveSelectedAset) return false;
+    return isAsetLockedByVerification(liveSelectedAset, verifikasiList, pengesahanList);
+  }, [liveSelectedAset, verifikasiList, pengesahanList]);
 
   // Form states
   const [formData, setFormData] = useState({
@@ -474,6 +488,7 @@ export const AsetManagementView: React.FC = () => {
   const handleOpenEdit = (item: Aset) => {
     setSelectedAset(item);
     setPhotoError('');
+    setConfirmUnlockInEdit(false);
     const existingPhotos = item.fotoAset ? [...item.fotoAset] : [];
     while (existingPhotos.length < 5) {
       existingPhotos.push('');
@@ -640,7 +655,29 @@ export const AsetManagementView: React.FC = () => {
   // Handle submit edit
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAset) return;
+    const targetAset = liveSelectedAset || selectedAset;
+    if (!targetAset) return;
+
+    const validPhotos = formData.fotoAset.filter((p) => p && p.trim().length > 0);
+
+    // Jika aset sudah diverifikasi/disahkan -> KUNCI data pokok, hanya izinkan simpan perubahan foto aset & BAST
+    if (isAsetLockedByVerification(targetAset, verifikasiList, pengesahanList)) {
+      if (validPhotos.length === 0) {
+        setPhotoError('Wajib mempertahankan minimal 1 Foto Fisik Aset!');
+        return;
+      }
+      const res = updateAset(targetAset.id, {
+        fotoAset: validPhotos,
+        fotoBast: formData.fotoBast || '',
+      });
+      if (!res.success) {
+        showToast(res.message || 'Gagal memperbarui foto aset.');
+        return;
+      }
+      showToast(`Foto aset "${targetAset.namaAset}" berhasil diperbarui (data pokok tetap terkunci & sah).`);
+      setShowEditModal(false);
+      return;
+    }
 
     if (!formData.merk || !formData.merk.trim()) {
       showToast('Merk barang wajib diisi!');
@@ -655,29 +692,28 @@ export const AsetManagementView: React.FC = () => {
       return;
     }
 
-    const validPhotos = formData.fotoAset.filter((p) => p && p.trim().length > 0);
     const desa = desas.find((d) => d.id === formData.desaId);
     const rawVal = String(formData.nilaiPerolehan ?? '0').replace(/[^0-9]/g, '');
     const nilaiClean = parseInt(rawVal, 10) || 0;
     const tahunClean = Number(formData.tahunPerolehan) || new Date().getFullYear();
     const lockedEdit = ensureUniqueRegisterOnUpdate(
       {
-        ...selectedAset,
+        ...targetAset,
         desaId: formData.desaId,
         klasifikasi: formData.klasifikasi,
         tahunPerolehan: tahunClean,
         kodeAset: formData.kodeAset,
-        nomorRegister: selectedAset.tahunPerolehan === tahunClean && selectedAset.desaId === formData.desaId
-          ? selectedAset.nomorRegister
+        nomorRegister: targetAset.tahunPerolehan === tahunClean && targetAset.desaId === formData.desaId
+          ? targetAset.nomorRegister
           : undefined,
       },
       asets,
       desas
     );
 
-    updateAset(selectedAset.id, {
+    const res = updateAset(targetAset.id, {
       desaId: formData.desaId,
-      desaName: desa?.name || selectedAset.desaName,
+      desaName: desa?.name || targetAset.desaName,
       klasifikasi: formData.klasifikasi,
       namaAset: formData.namaAset,
       kodeAset: lockedEdit.kodeAset,
@@ -700,6 +736,10 @@ export const AsetManagementView: React.FC = () => {
       fotoAset: validPhotos,
       fotoBast: formData.fotoBast || '',
     });
+    if (!res.success) {
+      showToast(res.message || 'Gagal memperbarui data aset.');
+      return;
+    }
     showToast(`Data aset berhasil diperbarui (${lockedEdit.kodeAset} • No. Reg: ${lockedEdit.nomorRegister})!`);
     setShowEditModal(false);
   };
@@ -758,6 +798,13 @@ export const AsetManagementView: React.FC = () => {
 
   // Handle delete directly (Modal driven - No window.confirm)
   const handleDeleteDirect = (id: string, name: string) => {
+    const target = asets.find((a) => a.id === id);
+    if (target && isAsetLockedByVerification(target, verifikasiList, pengesahanList)) {
+      showToast(
+        'Aset terkunci karena sudah diverifikasi/disahkan! Admin harus membatalkan pengesahan (ubah status) terlebih dahulu sebelum dapat menghapus aset ini.'
+      );
+      return;
+    }
     setDeleteDirectTarget({ id, name });
   };
 
@@ -1256,6 +1303,7 @@ export const AsetManagementView: React.FC = () => {
                       const isMutasiDiajukan = item.status === 'mutasi_diajukan';
                       const isHapusDiajukan = item.status === 'terhapus_diajukan';
                       const isTerhapus = item.status === 'terhapus';
+                      const isVerifiedLocked = isAsetLockedByVerification(item, verifikasiList, pengesahanList);
 
                       return (
                         <tr
@@ -1383,10 +1431,21 @@ export const AsetManagementView: React.FC = () => {
                                 Terhapus
                               </span>
                             ) : (
-                              <AsetVerificationBadge
-                                statusInfo={getAsetVerificationStatus(item, verifikasiList, pengesahanList)}
-                                size="sm"
-                              />
+                              <div className="flex flex-col items-center gap-0.5">
+                                <AsetVerificationBadge
+                                  statusInfo={getAsetVerificationStatus(item, verifikasiList, pengesahanList)}
+                                  size="sm"
+                                />
+                                {isVerifiedLocked && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-amber-300/90"
+                                    title="Data pokok & hapus terkunci karena sudah disahkan (hanya foto bisa diganti)"
+                                  >
+                                    <Lock className="w-2.5 h-2.5 text-amber-400" />
+                                    Terkunci
+                                  </span>
+                                )}
+                              </div>
                             )}
                             <div className="mt-1 space-y-0.5 text-[9px] font-mono leading-tight text-slate-400">
                               <div title={`Waktu Entri: ${formatTanggalWaktuIndonesia(item.createdAt)}`}>
@@ -1438,14 +1497,26 @@ export const AsetManagementView: React.FC = () => {
 
                               {!isTerhapus && (
                                 <>
-                                  {/* Edit button */}
+                                  {/* Edit / Ganti Foto button */}
                                   <button
                                     onClick={() => handleOpenEdit(item)}
                                     disabled={isMutasiDiajukan || isHapusDiajukan}
-                                    className="p-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                    title="Edit Data Aset"
+                                    className={`p-1 rounded-md disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer ${
+                                      isVerifiedLocked
+                                        ? 'bg-cyan-950/70 hover:bg-cyan-800 border border-cyan-500/40 text-cyan-300 hover:text-white'
+                                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'
+                                    }`}
+                                    title={
+                                      isVerifiedLocked
+                                        ? 'Ganti / Tambah Foto Aset (Data pokok terkunci karena sudah diverifikasi/disahkan)'
+                                        : 'Edit Data Aset'
+                                    }
                                   >
-                                    <Edit2 className="w-3.5 h-3.5" />
+                                    {isVerifiedLocked ? (
+                                      <Camera className="w-3.5 h-3.5" />
+                                    ) : (
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    )}
                                   </button>
 
                                   {/* Mutasi button */}
@@ -1468,12 +1539,16 @@ export const AsetManagementView: React.FC = () => {
                                     <FileMinus className="w-3.5 h-3.5" />
                                   </button>
 
-                                  {/* Direct delete (if active & draft) */}
+                                  {/* Direct delete (terkunci jika sudah diverifikasi/disahkan) */}
                                   <button
                                     onClick={() => handleDeleteDirect(item.id, item.namaAset)}
-                                    disabled={isMutasiDiajukan || isHapusDiajukan}
+                                    disabled={isMutasiDiajukan || isHapusDiajukan || isVerifiedLocked}
                                     className="p-1 rounded-md bg-red-950/60 hover:bg-red-900 border border-red-500/30 text-red-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                    title="Hapus Data Aset Langsung"
+                                    title={
+                                      isVerifiedLocked
+                                        ? 'Terkunci: Aset sudah diverifikasi/disahkan. Admin harus membatalkan pengesahan terlebih dahulu untuk menghapus aset ini.'
+                                        : 'Hapus Data Aset Langsung'
+                                    }
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -1589,6 +1664,7 @@ export const AsetManagementView: React.FC = () => {
                                 const isMutasiDiajukan = item.status === 'mutasi_diajukan';
                                 const isHapusDiajukan = item.status === 'terhapus_diajukan';
                                 const isTerhapus = item.status === 'terhapus';
+                                const isVerifiedLocked = isAsetLockedByVerification(item, verifikasiList, pengesahanList);
 
                                 return (
                                   <tr
@@ -1723,10 +1799,21 @@ export const AsetManagementView: React.FC = () => {
                                           Terhapus
                                         </span>
                                       ) : (
-                                        <AsetVerificationBadge
-                                          statusInfo={getAsetVerificationStatus(item, verifikasiList, pengesahanList)}
-                                          size="sm"
-                                        />
+                                        <div className="flex flex-col items-center gap-0.5">
+                                          <AsetVerificationBadge
+                                            statusInfo={getAsetVerificationStatus(item, verifikasiList, pengesahanList)}
+                                            size="sm"
+                                          />
+                                          {isVerifiedLocked && (
+                                            <span
+                                              className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-amber-300/90"
+                                              title="Data pokok & hapus terkunci (batalkan pengesahan untuk edit/hapus; foto tetap dapat diedit/ditambah)"
+                                            >
+                                              <Lock className="w-2.5 h-2.5 text-amber-400" />
+                                              Terkunci
+                                            </span>
+                                          )}
+                                        </div>
                                       )}
                                       <div className="mt-1 space-y-0.5 text-[9px] font-mono leading-tight text-slate-400">
                                         <div title={`Waktu Entri: ${formatTanggalWaktuIndonesia(item.createdAt)}`}>
@@ -1763,26 +1850,38 @@ export const AsetManagementView: React.FC = () => {
 
                                         {!isTerhapus && (
                                           <>
-                                            {/* Batalkan Pengesahan button (khusus Super Admin / Admin Kecamatan jika aset sudah disahkan) */}
-                                            {isAdminOrSuper && item.statusVerifikasi === 'sudah_diverifikasi' && (
+                                            {/* Batalkan Pengesahan button (khusus Super Admin / Admin Kecamatan untuk membuka kunci edit/hapus aset yang sudah disahkan) */}
+                                            {isAdminOrSuper && isVerifiedLocked && (
                                               <button
                                                 type="button"
                                                 onClick={() => handleOpenBatalSah(item)}
                                                 className="p-1 rounded-md bg-rose-950/70 hover:bg-rose-900 border border-rose-500/40 text-rose-300 hover:text-white transition-colors cursor-pointer"
-                                                title="Batalkan Pengesahan Aset Ini (Kembalikan ke antrean verifikasi)"
+                                                title="Batalkan Pengesahan Aset Ini (Ubah status agar aset bisa diedit / dihapus)"
                                               >
                                                 <RotateCcw className="w-3.5 h-3.5" />
                                               </button>
                                             )}
 
-                                            {/* Edit button */}
+                                            {/* Edit / Ganti Foto button */}
                                             <button
                                               onClick={() => handleOpenEdit(item)}
                                               disabled={isMutasiDiajukan || isHapusDiajukan}
-                                              className="p-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                              title="Edit Data Aset"
+                                              className={`p-1 rounded-md disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer ${
+                                                isVerifiedLocked
+                                                  ? 'bg-cyan-950/70 hover:bg-cyan-800 border border-cyan-500/40 text-cyan-300 hover:text-white'
+                                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'
+                                              }`}
+                                              title={
+                                                isVerifiedLocked
+                                                  ? 'Edit & Tambah Foto Aset (Data pokok terkunci — batalkan pengesahan dulu untuk edit data pokok)'
+                                                  : 'Edit Data Aset'
+                                              }
                                             >
-                                              <Edit2 className="w-3.5 h-3.5" />
+                                              {isVerifiedLocked ? (
+                                                <Camera className="w-3.5 h-3.5" />
+                                              ) : (
+                                                <Edit2 className="w-3.5 h-3.5" />
+                                              )}
                                             </button>
 
                                             {/* Mutasi button */}
@@ -1805,12 +1904,16 @@ export const AsetManagementView: React.FC = () => {
                                               <FileMinus className="w-3.5 h-3.5" />
                                             </button>
 
-                                            {/* Direct delete (if active & draft) */}
+                                            {/* Direct delete (terkunci jika sudah diverifikasi/disahkan) */}
                                             <button
                                               onClick={() => handleDeleteDirect(item.id, item.namaAset)}
-                                              disabled={isMutasiDiajukan || isHapusDiajukan}
+                                              disabled={isMutasiDiajukan || isHapusDiajukan || isVerifiedLocked}
                                               className="p-1 rounded-md bg-red-950/60 hover:bg-red-900 border border-red-500/30 text-red-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                              title="Hapus Data Aset Langsung"
+                                              title={
+                                                isVerifiedLocked
+                                                  ? 'Terkunci: Aset sudah diverifikasi/disahkan. Batalkan pengesahan (ubah status) terlebih dahulu untuk menghapus aset ini.'
+                                                  : 'Hapus Data Aset Langsung'
+                                              }
                                             >
                                               <Trash2 className="w-3.5 h-3.5" />
                                             </button>
@@ -2628,8 +2731,8 @@ export const AsetManagementView: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL: Edit Aset */}
-      {showEditModal && selectedAset && (
+      {/* MODAL: Edit Aset / Ganti Foto Aset Terkunci */}
+      {showEditModal && liveSelectedAset && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-[#0E1526] border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <button
@@ -2639,25 +2742,118 @@ export const AsetManagementView: React.FC = () => {
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-2 mb-4">
-              <span className="p-2 rounded-xl bg-blue-500/20 text-blue-300">
-                <Edit2 className="w-5 h-5" />
+            <div className="flex items-center gap-2.5 mb-4 pr-8">
+              <span
+                className={`p-2 rounded-xl shrink-0 ${
+                  isEditingLockedAsset
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                    : 'bg-blue-500/20 text-blue-300'
+                }`}
+              >
+                {isEditingLockedAsset ? <Camera className="w-5 h-5" /> : <Edit2 className="w-5 h-5" />}
               </span>
               <div>
-                <h3 className="text-base font-bold text-white">
-                  Edit Data Aset Tetap Desa
-                </h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base font-bold text-white">
+                    {isEditingLockedAsset
+                      ? 'Ganti & Tambah Foto Aset (Data Terkunci)'
+                      : 'Edit Data Aset Tetap Desa'}
+                  </h3>
+                  {isEditingLockedAsset && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 inline-flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5" />
+                      Sudah Disahkan
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-slate-400 font-mono">
-                  ID: {selectedAset.id} • {selectedAset.desaName}
+                  ID: {liveSelectedAset.id} • {liveSelectedAset.desaName}
                 </p>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-slate-400 font-mono mt-0.5">
-                  <span>Entri: {formatTanggalWaktuIndonesia(selectedAset.createdAt, true)}</span>
+                  <span>Entri: {formatTanggalWaktuIndonesia(liveSelectedAset.createdAt, true)}</span>
                   <span className="text-cyan-300">
-                    Update terakhir: {formatTanggalWaktuIndonesia(selectedAset.updatedAt || selectedAset.createdAt, true)}
+                    Update terakhir: {formatTanggalWaktuIndonesia(liveSelectedAset.updatedAt || liveSelectedAset.createdAt, true)}
                   </span>
                 </div>
               </div>
             </div>
+
+            {/* Banner Kunci Pengesahan */}
+            {isEditingLockedAsset && (
+              <div className="mb-4 p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/50 text-xs space-y-2.5">
+                <div className="flex items-start gap-2.5">
+                  <Lock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1 text-amber-100/95 leading-relaxed">
+                    <div className="font-bold text-amber-300">
+                      Data Pokok Aset Terkunci (Sudah Diverifikasi / Disahkan)
+                    </div>
+                    <p className="text-[11px] text-amber-100/85">
+                      {isAdminOrSuper
+                        ? 'Karena aset ini sudah disahkan, seluruh data pokok dikunci dan tidak dapat diedit maupun dihapus. Anda tetap dapat mengedit, mengganti, atau menambah Foto Fisik Aset & Foto BAST di bagian bawah. Untuk mengedit data pokok atau menghapus aset, batalkan pengesahan terlebih dahulu.'
+                        : 'Aset ini sudah diverifikasi & disahkan oleh Kecamatan sehingga data pokok terkunci dan tidak dapat diedit maupun dihapus. Anda hanya diperbolehkan mengganti atau menambah Foto Fisik Aset & Foto BAST di bagian bawah. Hubungi Admin Kecamatan jika perlu membuka kunci status pengesahan.'}
+                    </p>
+                  </div>
+                </div>
+
+                {isAdminOrSuper && (
+                  <div className="pt-2 border-t border-amber-500/30 flex flex-wrap items-center justify-between gap-2">
+                    {!confirmUnlockInEdit ? (
+                      <>
+                        <span className="text-[10px] text-amber-200/80">
+                          Ingin mengedit data pokok aset ini? Ubah status pengesahan terlebih dahulu:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmUnlockInEdit(true)}
+                          className="px-3 py-1.5 rounded-lg bg-rose-600/90 hover:bg-rose-500 text-white text-[11px] font-bold flex items-center gap-1.5 shadow cursor-pointer transition-colors"
+                        >
+                          <Unlock className="w-3.5 h-3.5" />
+                          <span>Batalkan Pengesahan &amp; Buka Kunci Edit</span>
+                        </button>
+                      </>
+                    ) : (
+                      <div className="w-full flex flex-wrap items-center justify-between gap-2 bg-rose-950/70 border border-rose-500/50 rounded-lg p-2.5">
+                        <span className="text-[11px] text-rose-200 font-semibold">
+                          Batalkan pengesahan aset ini ke status &quot;Sedang Diproses&quot; agar data bisa diedit/dihapus?
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={isUnlockingInEdit}
+                            onClick={() => setConfirmUnlockInEdit(false)}
+                            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold cursor-pointer"
+                          >
+                            Batal
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isUnlockingInEdit}
+                            onClick={async () => {
+                              setIsUnlockingInEdit(true);
+                              try {
+                                const res = await batalkanVerifikasiAset(liveSelectedAset.id);
+                                if (res.success) {
+                                  setConfirmUnlockInEdit(false);
+                                  showToast(`Pengesahan aset "${liveSelectedAset.namaAset}" dibatalkan. Kunci edit & hapus kini terbuka.`);
+                                } else {
+                                  showToast(res.message);
+                                }
+                              } finally {
+                                setIsUnlockingInEdit(false);
+                              }
+                            }}
+                            className="px-3 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                          >
+                            <RotateCcw className={`w-3 h-3 ${isUnlockingInEdit ? 'animate-spin' : ''}`} />
+                            <span>{isUnlockingInEdit ? 'Membuka Kunci...' : 'Ya, Buka Kunci'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2666,13 +2862,14 @@ export const AsetManagementView: React.FC = () => {
                     Klasifikasi Aset
                   </label>
                   <select
+                    disabled={isEditingLockedAsset}
                     value={formData.klasifikasi}
                     onChange={(e) => {
                       const newKlas = e.target.value as KlasAset;
-                      const yr = Number(formData.tahunPerolehan) || selectedAset.tahunPerolehan;
+                      const yr = Number(formData.tahunPerolehan) || liveSelectedAset.tahunPerolehan;
                       const locked = ensureUniqueRegisterOnUpdate(
                         {
-                          ...selectedAset,
+                          ...liveSelectedAset,
                           desaId: formData.desaId,
                           klasifikasi: newKlas,
                           tahunPerolehan: yr,
@@ -2682,7 +2879,7 @@ export const AsetManagementView: React.FC = () => {
                       );
                       setFormData({ ...formData, klasifikasi: newKlas, kodeAset: locked.kodeAset });
                     }}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/70"
                   >
                     {KLASIFIKASI_LIST.map((k) => (
                       <option key={k} value={k}>
@@ -2698,10 +2895,11 @@ export const AsetManagementView: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    required
+                    required={!isEditingLockedAsset}
+                    disabled={isEditingLockedAsset}
                     value={formData.namaAset}
                     onChange={(e) => setFormData({ ...formData, namaAset: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/70"
                   />
                 </div>
               </div>
@@ -2716,18 +2914,20 @@ export const AsetManagementView: React.FC = () => {
                     <label className="block text-slate-400 mb-1">Jenis Bukti</label>
                     <input
                       type="text"
+                      disabled={isEditingLockedAsset}
                       value={formData.buktiJenis}
                       onChange={(e) => setFormData({ ...formData, buktiJenis: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/70"
                     />
                   </div>
                   <div>
                     <label className="block text-slate-400 mb-1">Nomor Bukti</label>
                     <input
                       type="text"
+                      disabled={isEditingLockedAsset}
                       value={formData.buktiNomor}
                       onChange={(e) => setFormData({ ...formData, buktiNomor: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/70"
                     />
                   </div>
                   <div>
@@ -2736,6 +2936,7 @@ export const AsetManagementView: React.FC = () => {
                       <span className="text-[10px] text-amber-400/90 font-medium">MIN • SEN • SEL • RAB • KAM • JUM • SAB</span>
                     </label>
                     <IndonesianDatePicker
+                      disabled={isEditingLockedAsset}
                       value={formData.buktiTanggal}
                       onChange={(val) => setFormData({ ...formData, buktiTanggal: val })}
                       placeholder="Pilih tanggal bukti..."
@@ -2770,41 +2971,44 @@ export const AsetManagementView: React.FC = () => {
                     <label className="block font-semibold text-slate-300 text-xs">
                       Tahun Perolehan
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const curYear = new Date().getFullYear();
-                        const otherAsets = asets.filter((a) => a.id !== selectedAset.id);
-                        const locked =
-                          curYear === selectedAset.tahunPerolehan && formData.desaId === selectedAset.desaId
-                            ? ensureUniqueRegisterOnUpdate(
-                                { ...selectedAset, klasifikasi: formData.klasifikasi, tahunPerolehan: curYear },
-                                asets,
-                                desas
-                              ).kodeAset
-                            : generateAutoKodeAset(formData.desaId, formData.klasifikasi, otherAsets, desas, undefined, curYear);
-                        setFormData({ ...formData, tahunPerolehan: curYear, kodeAset: locked });
-                      }}
-                      className="text-[10px] text-amber-400 hover:text-amber-300 font-semibold hover:underline cursor-pointer"
-                      title="Set ke tahun sekarang"
-                    >
-                      Tahun Ini ({new Date().getFullYear()})
-                    </button>
+                    {!isEditingLockedAsset && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const curYear = new Date().getFullYear();
+                          const otherAsets = asets.filter((a) => a.id !== liveSelectedAset.id);
+                          const locked =
+                            curYear === liveSelectedAset.tahunPerolehan && formData.desaId === liveSelectedAset.desaId
+                              ? ensureUniqueRegisterOnUpdate(
+                                  { ...liveSelectedAset, klasifikasi: formData.klasifikasi, tahunPerolehan: curYear },
+                                  asets,
+                                  desas
+                                ).kodeAset
+                              : generateAutoKodeAset(formData.desaId, formData.klasifikasi, otherAsets, desas, undefined, curYear);
+                          setFormData({ ...formData, tahunPerolehan: curYear, kodeAset: locked });
+                        }}
+                        className="text-[10px] text-amber-400 hover:text-amber-300 font-semibold hover:underline cursor-pointer"
+                        title="Set ke tahun sekarang"
+                      >
+                        Tahun Ini ({new Date().getFullYear()})
+                      </button>
+                    )}
                   </div>
                   <input
                     type="number"
                     min="1970"
                     max="2035"
+                    disabled={isEditingLockedAsset}
                     value={formData.tahunPerolehan}
                     onChange={(e) => {
                       const val = parseInt(e.target.value, 10);
                       const targetYear = isNaN(val) ? ('' as any) : val;
-                      const otherAsets = asets.filter((a) => a.id !== selectedAset.id);
+                      const otherAsets = asets.filter((a) => a.id !== liveSelectedAset.id);
                       const autoKode =
                         !isNaN(val) && val >= 1970
-                          ? val === selectedAset.tahunPerolehan && formData.desaId === selectedAset.desaId
+                          ? val === liveSelectedAset.tahunPerolehan && formData.desaId === liveSelectedAset.desaId
                             ? ensureUniqueRegisterOnUpdate(
-                                { ...selectedAset, klasifikasi: formData.klasifikasi, tahunPerolehan: val },
+                                { ...liveSelectedAset, klasifikasi: formData.klasifikasi, tahunPerolehan: val },
                                 asets,
                                 desas
                               ).kodeAset
@@ -2812,7 +3016,7 @@ export const AsetManagementView: React.FC = () => {
                           : formData.kodeAset;
                       setFormData({ ...formData, tahunPerolehan: targetYear, kodeAset: autoKode });
                     }}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold focus:outline-none focus:border-amber-400"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold focus:outline-none focus:border-amber-400 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/70"
                   />
                 </div>
                 <div>
@@ -2821,13 +3025,14 @@ export const AsetManagementView: React.FC = () => {
                   </label>
                   <input
                     type="number"
+                    disabled={isEditingLockedAsset}
                     value={formData.nilaiPerolehan === 0 ? '' : formData.nilaiPerolehan}
                     placeholder="0"
                     onChange={(e) => {
                       const val = e.target.value === '' ? 0 : Number(e.target.value);
                       setFormData({ ...formData, nilaiPerolehan: val });
                     }}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono font-bold"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono font-bold disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/70"
                   />
                   <span className="text-[10px] text-emerald-400 mt-1 block">
                     {formatRupiah(formData.nilaiPerolehan)}
@@ -2842,9 +3047,10 @@ export const AsetManagementView: React.FC = () => {
                     Kondisi Aset Tetap
                   </label>
                   <select
+                    disabled={isEditingLockedAsset}
                     value={formData.kondisi}
                     onChange={(e) => setFormData({ ...formData, kondisi: e.target.value as KondisiAset })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/70"
                   >
                     <option value="Baik">Baik (B)</option>
                     <option value="Rusak Ringan">Rusak Ringan (RR)</option>
@@ -2856,9 +3062,10 @@ export const AsetManagementView: React.FC = () => {
                     Sumber Dana
                   </label>
                   <select
+                    disabled={isEditingLockedAsset}
                     value={formData.sumberDana}
                     onChange={(e) => setFormData({ ...formData, sumberDana: e.target.value as SumberDana })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold text-amber-300"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold text-amber-300 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/70"
                   >
                     <option value="DDS">Dana Desa (DDS)</option>
                     <option value="ADD">Alokasi Dana Desa (ADD)</option>
@@ -2872,9 +3079,10 @@ export const AsetManagementView: React.FC = () => {
                   </label>
                   <input
                     type="text"
+                    disabled={isEditingLockedAsset}
                     value={formData.volume}
                     onChange={(e) => setFormData({ ...formData, volume: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/70"
                   />
                 </div>
               </div>
@@ -2896,11 +3104,12 @@ export const AsetManagementView: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      required
+                      required={!isEditingLockedAsset}
+                      disabled={isEditingLockedAsset}
                       placeholder="Contoh: Honda, Epson, Asus, dll"
                       value={formData.merk}
                       onChange={(e) => setFormData({ ...formData, merk: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-amber-400"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-amber-400 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/70"
                     />
                   </div>
                   <div>
@@ -2909,11 +3118,12 @@ export const AsetManagementView: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      required
+                      required={!isEditingLockedAsset}
+                      disabled={isEditingLockedAsset}
                       placeholder="Contoh: Vario 125, L3210, dll"
                       value={formData.tipe}
                       onChange={(e) => setFormData({ ...formData, tipe: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-amber-400"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-amber-400 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/70"
                     />
                   </div>
                   <div>
@@ -2922,11 +3132,12 @@ export const AsetManagementView: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      required
+                      required={!isEditingLockedAsset}
+                      disabled={isEditingLockedAsset}
                       placeholder="No. Seri / Rangka / Mesin"
                       value={formData.nomorSeri}
                       onChange={(e) => setFormData({ ...formData, nomorSeri: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono focus:outline-none focus:border-amber-400"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono focus:outline-none focus:border-amber-400 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/70"
                     />
                   </div>
                 </div>
@@ -2940,10 +3151,11 @@ export const AsetManagementView: React.FC = () => {
                   </label>
                   <input
                     type="text"
+                    disabled={isEditingLockedAsset}
                     placeholder="Contoh: Dusun I Desa Sirombu"
                     value={formData.lokasi}
                     onChange={(e) => setFormData({ ...formData, lokasi: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/70"
                   />
                 </div>
                 <div>
@@ -2952,16 +3164,23 @@ export const AsetManagementView: React.FC = () => {
                   </label>
                   <input
                     type="text"
+                    disabled={isEditingLockedAsset}
                     placeholder="Keterangan peruntukan aset"
                     value={formData.keterangan}
                     onChange={(e) => setFormData({ ...formData, keterangan: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/70"
                   />
                 </div>
               </div>
 
-              {/* Foto Fisik Aset: Sediakan 5 foto */}
-              <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-3">
+              {/* Foto Fisik Aset: Sediakan 5 foto (Tetap Aktif untuk Ganti/Tambah Foto meskipun aset sudah disahkan) */}
+              <div
+                className={`p-4 rounded-xl border space-y-3 ${
+                  isEditingLockedAsset
+                    ? 'bg-cyan-950/20 border-cyan-500/60 shadow-lg shadow-cyan-950/30'
+                    : 'bg-slate-900/90 border-slate-700/80'
+                }`}
+              >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                   <label className="font-bold text-white text-xs flex items-center gap-1.5 flex-wrap">
                     <Camera className="w-4 h-4 text-amber-400" />
@@ -2969,11 +3188,23 @@ export const AsetManagementView: React.FC = () => {
                     <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/30">
                       Kualitas HD 1600px
                     </span>
+                    {isEditingLockedAsset && (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                        Bisa Ganti / Tambah Foto
+                      </span>
+                    )}
                   </label>
                   <span className="text-[11px] text-amber-300/90 font-medium">
                     Terisi: {formData.fotoAset.filter((p) => p && p.trim().length > 0).length} dari 5 Foto
                   </span>
                 </div>
+
+                {photoError && (
+                  <div className="p-2.5 rounded-lg bg-red-950/70 border border-red-500/50 text-red-200 text-[11px] font-semibold flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                    <span>{photoError}</span>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                   {[0, 1, 2, 3, 4].map((slotIdx) => {
@@ -2983,12 +3214,12 @@ export const AsetManagementView: React.FC = () => {
                     return (
                       <div
                         key={slotIdx}
-                        className={`relative rounded-xl border-2 border-dashed p-2 flex flex-col items-center justify-center min-h-[110px] text-center transition-all ${
+                        className={`relative rounded-xl border-2 border-dashed p-2 flex flex-col items-center justify-center min-h-[118px] text-center transition-all ${
                           isSlotLoading
                             ? 'border-cyan-500 bg-cyan-950/30 animate-pulse'
                             : photoUrl
                             ? 'border-emerald-500/80 bg-slate-950'
-                            : 'border-slate-700/80 bg-slate-950/30 hover:bg-slate-950/60'
+                            : 'border-slate-700/80 bg-slate-950/30 hover:bg-slate-950/60 hover:border-cyan-500/50'
                         }`}
                       >
                         {isSlotLoading ? (
@@ -3004,9 +3235,26 @@ export const AsetManagementView: React.FC = () => {
                               onError={handlePhotoError}
                               className="w-full h-16 object-cover rounded-lg mb-1 border border-slate-800"
                             />
-                            <span className="text-[10px] font-bold text-emerald-400">
-                              Foto {slotIdx + 1}
-                            </span>
+                            <div className="flex items-center justify-center gap-1.5 w-full">
+                              <span className="text-[10px] font-bold text-emerald-400">
+                                Foto {slotIdx + 1}
+                              </span>
+                              <label
+                                className="px-1.5 py-0.5 rounded bg-cyan-600/80 hover:bg-cyan-500 text-white text-[9px] font-bold cursor-pointer transition-colors"
+                                title="Ganti foto ini dengan foto baru"
+                              >
+                                Ganti
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) handlePhotoUpload(slotIdx, file);
+                                  }}
+                                />
+                              </label>
+                            </div>
                             <button
                               type="button"
                               onClick={() => handleRemovePhoto(slotIdx)}
@@ -3027,12 +3275,12 @@ export const AsetManagementView: React.FC = () => {
                                 if (file) handlePhotoUpload(slotIdx, file);
                               }}
                             />
-                            <Camera className="w-5 h-5 mb-1 text-slate-500" />
-                            <span className="text-[10px] font-bold text-slate-400">
-                              Foto {slotIdx + 1}
+                            <Camera className="w-5 h-5 mb-1 text-slate-400" />
+                            <span className="text-[10px] font-bold text-slate-300">
+                              + Foto {slotIdx + 1}
                             </span>
                             <span className="text-[9px] text-slate-500">
-                              (Slot {slotIdx + 1} - HD)
+                              (Tambah HD)
                             </span>
                           </label>
                         )}
@@ -3041,14 +3289,20 @@ export const AsetManagementView: React.FC = () => {
                   })}
                 </div>
                 <p className="text-[10px] text-slate-400">
-                  Perbarui atau lengkapi foto fisik aset. Foto diproses otomatis dalam resolusi tinggi (HD 1600px).
+                  Klik tombol <strong className="text-cyan-300">Ganti</strong> pada foto yang ada atau klik slot kosong untuk menambah foto baru (resolusi otomatis HD 1600px).
                 </p>
               </div>
 
               {/* Foto BAST Aset Kepada Pengguna */}
-              <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-2.5">
+              <div
+                className={`p-4 rounded-xl border space-y-2.5 ${
+                  isEditingLockedAsset
+                    ? 'bg-cyan-950/20 border-cyan-500/60'
+                    : 'bg-slate-900/90 border-slate-700/80'
+                }`}
+              >
                 <div className="flex items-center justify-between">
-                  <label className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <label className="font-bold text-white text-xs flex items-center gap-1.5 flex-wrap">
                     <FileCheck2 className="w-4 h-4 text-emerald-400" />
                     <span>Foto BAST Aset Kepada Pengguna (Berita Acara Serah Terima)</span>
                     <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/30">
@@ -3066,7 +3320,7 @@ export const AsetManagementView: React.FC = () => {
                     <span>Sedang memproses dokumen BAST beresolusi HD...</span>
                   </div>
                 ) : formData.fotoBast ? (
-                  <div className="relative w-full p-2.5 bg-slate-950 rounded-xl border border-emerald-500/60 flex items-center gap-3">
+                  <div className="relative w-full p-2.5 bg-slate-950 rounded-xl border border-emerald-500/60 flex items-center gap-3 flex-wrap sm:flex-nowrap">
                     <img
                       src={getPhotoUrl(formData.fotoBast)}
                       alt="Foto BAST"
@@ -3081,13 +3335,27 @@ export const AsetManagementView: React.FC = () => {
                         Tulisan dan tanda tangan terbaca jelas oleh Admin Desa dan Kecamatan
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleRemoveBast}
-                      className="px-2.5 py-1.5 rounded-lg bg-red-950/80 hover:bg-red-900 border border-red-500/40 text-red-300 text-xs font-bold transition-colors cursor-pointer"
-                    >
-                      Hapus BAST
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <label className="px-2.5 py-1.5 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 text-xs font-bold transition-colors cursor-pointer">
+                        Ganti BAST
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleBastUpload(file);
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleRemoveBast}
+                        className="px-2.5 py-1.5 rounded-lg bg-red-950/80 hover:bg-red-900 border border-red-500/40 text-red-300 text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        Hapus BAST
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <label className="border-2 border-dashed border-slate-700 hover:border-emerald-500/60 bg-slate-950/40 hover:bg-slate-950/70 rounded-xl p-3 flex items-center justify-center gap-3 cursor-pointer transition-all">
@@ -3117,15 +3385,20 @@ export const AsetManagementView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold"
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-600/20"
+                  className={`px-5 py-2 rounded-xl font-bold shadow-lg flex items-center gap-1.5 cursor-pointer ${
+                    isEditingLockedAsset
+                      ? 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-600/20'
+                      : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20'
+                  }`}
                 >
-                  Perbarui Data
+                  {isEditingLockedAsset && <Camera className="w-4 h-4" />}
+                  <span>{isEditingLockedAsset ? 'Simpan Perubahan Foto' : 'Perbarui Data'}</span>
                 </button>
               </div>
             </form>
@@ -3340,12 +3613,16 @@ export const AsetManagementView: React.FC = () => {
       {/* MODAL: Detail Aset & Foto */}
       {showDetailModal && detailAset && (
         <AsetDetailModal
-          aset={detailAset}
+          aset={asets.find((a) => a.id === detailAset.id) || detailAset}
           isOpen={showDetailModal}
           onClose={() => setShowDetailModal(false)}
           onOpenBarcode={(aset) => {
             setShowDetailModal(false);
             handleOpenBarcode(aset);
+          }}
+          onEditPhoto={(aset) => {
+            setShowDetailModal(false);
+            handleOpenEdit(aset);
           }}
         />
       )}

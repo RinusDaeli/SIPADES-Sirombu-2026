@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   X,
   Download,
@@ -45,6 +45,30 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ isOpen, 
   const [downloadingZip, setDownloadingZip] = useState(false);
   const [zipProgress, setZipProgress] = useState<string | null>(null);
   const [zipSuccess, setZipSuccess] = useState<boolean>(false);
+  const [fullBackupInfo, setFullBackupInfo] = useState<{
+    sizeMB: string;
+    totalAsets: number;
+    totalPhotos: number;
+  } | null>(null);
+  const [downloadingFullBackup, setDownloadingFullBackup] = useState(false);
+  const [fullBackupProgress, setFullBackupProgress] = useState<string | null>(null);
+  const [fullBackupSuccess, setFullBackupSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    fetch('/api/full-backup-info', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((info) => {
+        if (info && info.exists) {
+          setFullBackupInfo({
+            sizeMB: info.sizeMB,
+            totalAsets: info.totalAsets || 0,
+            totalPhotos: info.totalPhotos || 0,
+          });
+        }
+      })
+      .catch(() => {});
+  }, [isOpen]);
   
   // Backup state
   const [backupScope, setBackupScope] = useState<'all' | 'desa'>('all');
@@ -314,6 +338,92 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ isOpen, 
     }
   };
 
+  const handleDownloadFullBackupZip = async () => {
+    setDownloadingFullBackup(true);
+    setFullBackupProgress('Memeriksa ukuran berkas Full Backup...');
+    setFullBackupSuccess(false);
+    setErrorMessage(null);
+    try {
+      const infoRes = await fetch('/api/full-backup-info', { cache: 'no-store' });
+      if (!infoRes.ok) {
+        throw new Error(`Server merespon HTTP ${infoRes.status}`);
+      }
+      const info = await infoRes.json();
+      const totalBytes: number = info.sizeBytes;
+      if (!totalBytes || totalBytes < 100000) {
+        throw new Error('Berkas Full Backup belum tersedia di server.');
+      }
+
+      const CHUNK_SIZE = 4 * 1024 * 1024; // 4 MB per chunk (aman dari batas 32 MB Cloud Run)
+      const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
+      const chunks: Uint8Array[] = [];
+      let receivedBytes = 0;
+
+      for (let offset = 0; offset < totalBytes; offset += CHUNK_SIZE) {
+        const len = Math.min(CHUNK_SIZE, totalBytes - offset);
+        let chunkBuf: ArrayBuffer | null = null;
+        let lastErr = '';
+
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const res = await fetch(
+              `/api/download-full-backup-chunk?offset=${offset}&length=${len}&_t=${Date.now()}`,
+              { cache: 'no-store' }
+            );
+            if (!res.ok) {
+              lastErr = `HTTP ${res.status}`;
+            } else {
+              const ab = await res.arrayBuffer();
+              if (ab.byteLength === len) {
+                chunkBuf = ab;
+                break;
+              }
+              lastErr = `Potongan tidak lengkap (${ab.byteLength}/${len} B)`;
+            }
+          } catch (e: any) {
+            lastErr = e?.message || 'Koneksi terputus';
+          }
+          await new Promise((r) => setTimeout(r, 600 * attempt));
+        }
+
+        if (!chunkBuf) {
+          throw new Error(`Gagal mengunduh bagian ke-${chunks.length + 1} (${lastErr})`);
+        }
+
+        chunks.push(new Uint8Array(chunkBuf));
+        receivedBytes += chunkBuf.byteLength;
+        const currentMB = (receivedBytes / (1024 * 1024)).toFixed(1);
+        const percent = Math.min(100, Math.round((receivedBytes / totalBytes) * 100));
+        setFullBackupProgress(
+          `Mengunduh Full Backup (Aplikasi + DB + Semua Foto): ${currentMB} MB / ${totalMB} MB (${percent}%)`
+        );
+      }
+
+      const blob = new Blob(chunks as any, { type: 'application/zip' });
+      if (blob.size !== totalBytes) {
+        throw new Error(`Ukuran file tidak cocok (${blob.size} vs ${totalBytes} byte). Silakan coba lagi.`);
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'sipades-full-backup-sirombu.zip';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => window.URL.revokeObjectURL(url), 15000);
+
+      setFullBackupProgress(null);
+      setFullBackupSuccess(true);
+      setTimeout(() => setFullBackupSuccess(false), 10000);
+    } catch (err: any) {
+      setErrorMessage(`Gagal mengunduh Full Backup: ${err.message}`);
+      setFullBackupProgress(null);
+    } finally {
+      setDownloadingFullBackup(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -413,6 +523,50 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({ isOpen, 
         {/* ============================================================== */}
         {activeSubTab === 'backup' && (
           <div className="space-y-5">
+            {/* Full Migration Backup Card (App + Database + All Photos) */}
+            <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/70 to-teal-950/60 border border-emerald-500/50 space-y-3 shadow-lg">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-xs font-bold text-emerald-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <Server className="w-4 h-4 text-emerald-400" />
+                  Full Backup Pindah Hosting (Lengkap + Semua Foto)
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-400/30">
+                  Aplikasi + DB + {fullBackupInfo?.totalPhotos || 568} Foto
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Satu file arsip lengkap (<strong>sipades-full-backup-sirombu.zip</strong>) berisi seluruh aplikasi web, <code>cpanel-api.php</code>, <code>.htaccess</code>, <code>sipades_database.json</code> ({fullBackupInfo?.totalAsets || asets.length} aset), seluruh folder <code>uploads/</code> (foto aset &amp; BAST), serta panduan pindah ke hosting cPanel lain.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleDownloadFullBackupZip}
+                  disabled={downloadingFullBackup}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg cursor-pointer transition-all disabled:opacity-50"
+                >
+                  <Download className={`w-4 h-4 ${downloadingFullBackup ? 'animate-bounce' : ''}`} />
+                  {downloadingFullBackup
+                    ? 'Sedang Mengunduh Full Backup...'
+                    : `Unduh Full Backup Lengkap (.ZIP${fullBackupInfo ? ` ~${fullBackupInfo.sizeMB} MB` : ''})`}
+                </button>
+                <span className="text-[11px] text-slate-400">
+                  Siap ekstrak langsung ke <code className="text-emerald-300">public_html</code> hosting baru
+                </span>
+              </div>
+              {fullBackupProgress && (
+                <div className="p-2.5 rounded-xl bg-emerald-950/90 border border-emerald-500/50 text-emerald-200 text-xs flex items-center gap-2">
+                  <RefreshCw className="w-3.5 h-3.5 text-emerald-400 animate-spin shrink-0" />
+                  <span className="font-semibold">{fullBackupProgress}</span>
+                </div>
+              )}
+              {fullBackupSuccess && (
+                <div className="p-2.5 rounded-xl bg-emerald-950/90 border border-emerald-400 text-emerald-200 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span><strong>Berhasil Terunduh!</strong> Simpan file <em>sipades-full-backup-sirombu.zip</em> di tempat aman (laptop/Google Drive).</span>
+                </div>
+              )}
+            </div>
+
             {/* Scope Selection: Seluruh Desa vs Per Desa */}
             <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
               <div className="flex items-center justify-between">
