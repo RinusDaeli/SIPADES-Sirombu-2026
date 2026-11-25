@@ -354,6 +354,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [currentUser]);
 
   const deleteAnnouncement = useCallback(async (id: string) => {
+    const isAllowed = currentUser?.role === 'super_admin' || currentUser?.role === 'admin_kecamatan';
+    if (!isAllowed) return;
     setAnnouncements((prev) => {
       const next = prev.filter((a) => a.id !== id);
       try { localStorage.setItem('SIPADES_ANNOUNCEMENTS', JSON.stringify(next)); } catch {}
@@ -1373,6 +1375,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // User Management
   const addUser = (data: Omit<User, 'id' | 'createdAt'>) => {
+    if (!currentUser || (currentUser.role !== 'super_admin' && currentUser.role !== 'admin_kecamatan')) {
+      return { success: false, message: 'Anda tidak memiliki hak akses untuk menambah pengguna!' };
+    }
     if (data.role === 'super_admin' && currentUser?.role !== 'super_admin') {
       return { success: false, message: 'Hanya Super Admin yang berhak menambahkan akun Super Admin!' };
     }
@@ -1398,6 +1403,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateUser = (id: string, data: Partial<User>) => {
+    if (!currentUser || (currentUser.role !== 'super_admin' && currentUser.role !== 'admin_kecamatan')) {
+      return { success: false, message: 'Anda tidak memiliki hak akses untuk mengubah akun pengguna!' };
+    }
     const target = users.find((u) => u.id === id);
     if (target?.role === 'super_admin' && currentUser?.role !== 'super_admin') {
       return { success: false, message: 'Hanya Super Admin yang berhak mengubah akun Super Admin!' };
@@ -1467,6 +1475,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Asset Management
   const addAsetBatch = async (items: Omit<Aset, 'id' | 'createdAt' | 'updatedAt' | 'status'>[]) => {
+    if (!currentUser || currentUser.role === 'inspektorat') {
+      return { success: false, count: 0 };
+    }
     if (!items || items.length === 0) return { success: false, count: 0 };
     const now = new Date().toISOString();
     pausePulseUntil.current = Date.now() + 15000;
@@ -1518,6 +1529,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addAset = (data: Omit<Aset, 'id' | 'createdAt' | 'updatedAt' | 'status'>) => {
+    if (!currentUser || currentUser.role === 'inspektorat') return;
     // Jika aset yang diisi lebih dari 1 (misal volume: "5 Unit", "10 Buah", atau volume angka > 1),
     // langsung gandakan aset tersebut dengan nomor registrasi yang berbeda-beda secara otomatis
     let unitCount = 1;
@@ -1555,6 +1567,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     data: Partial<Aset>,
     options?: { bypassVerificationLock?: boolean }
   ): { success: boolean; message?: string; photoOnly?: boolean } => {
+    if (!currentUser || currentUser.role === 'inspektorat') {
+      return {
+        success: false,
+        message: 'Akun Inspektorat/Pemantau hanya memiliki akses melihat data dan tidak dapat mengubah aset.',
+      };
+    }
     const basePool = asetsRef.current.length > 0 ? asetsRef.current : asets;
     const existing = basePool.find((a) => a.id === id);
     if (!existing) {
@@ -1643,6 +1661,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const perbaikiSemuaNomorRegister = useCallback(async (): Promise<{ fixedCount: number; message: string }> => {
+    if (!currentUser || (currentUser.role !== 'super_admin' && currentUser.role !== 'admin_kecamatan')) {
+      return {
+        fixedCount: 0,
+        message: 'Hanya Admin Kecamatan atau Super Admin yang berhak memperbaiki nomor register.',
+      };
+    }
     const currentPool = asetsRef.current.length > 0 ? asetsRef.current : asets;
     const { asets: normalizedRaw, changedIds, fixedCount } = normalizeAsetRegisters(currentPool, desas);
 
@@ -1688,6 +1712,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [asets, desas, kecamatanProfile, pengesahanList, persistAsetsSafely, users, verifikasiList]);
 
   const deleteAset = (id: string) => {
+    if (!currentUser || currentUser.role === 'inspektorat') {
+      return {
+        success: false,
+        message: 'Akun Inspektorat/Pemantau hanya memiliki akses melihat data dan tidak dapat menghapus aset.',
+      };
+    }
     const target = asets.find((a) => a.id === id);
     if (!target) return { success: false, message: 'Aset tidak ditemukan!' };
     if (target.status === 'mutasi_diajukan' || target.status === 'terhapus_diajukan') {
@@ -2079,6 +2109,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     dokumenPendukung: string,
     tujuanMutasi: string
   ) => {
+    if (!currentUser || currentUser.role === 'inspektorat') return;
     const target = asets.find((a) => a.id === asetId);
     if (!target) return;
 
@@ -2117,6 +2148,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     nomorSuratDesa: string,
     dokumenPendukung: string
   ) => {
+    if (!currentUser || currentUser.role === 'inspektorat') return;
     const target = asets.find((a) => a.id === asetId);
     if (!target) return;
 
@@ -2154,6 +2186,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     catatanKecamatan: string,
     nomorSKKecamatan?: string
   ) => {
+    if (!currentUser || (currentUser.role !== 'super_admin' && currentUser.role !== 'admin_kecamatan')) return;
     const verif = verifikasiList.find((v) => v.id === verifikasiId);
     if (!verif) return;
 
@@ -2253,6 +2286,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const ajukanPengesahan = (desaId: string, tahun: number) => {
+    if (!currentUser || currentUser.role === 'inspektorat') return;
     const desa = desas.find((d) => d.id === desaId);
     const desaName = desa ? desa.name : 'DESA';
     const existing = pengesahanList.find((p) => p.desaId === desaId && p.tahun === tahun);
@@ -2283,6 +2317,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     status: 'disetujui' | 'perlu_perbaikan',
     catatan: string
   ) => {
+    if (!currentUser || (currentUser.role !== 'super_admin' && currentUser.role !== 'admin_kecamatan')) return;
     const existing = pengesahanList.find((p) => p.desaId === desaId && p.tahun === tahun);
     const verifierName = currentUser?.name || 'Dodi Tribuana (Admin Kecamatan Sirombu)';
     const now = new Date().toISOString();
@@ -2317,6 +2352,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateDesa = async (id: string, data: Partial<Desa>): Promise<{ success: boolean; message: string }> => {
+    if (!currentUser || currentUser.role === 'inspektorat') {
+      return { success: false, message: 'Akun Inspektorat/Pemantau hanya memiliki akses melihat data (read-only).' };
+    }
     let updatedDesa: Desa | null = null;
     let finalDesas: Desa[] = [];
 
@@ -2386,6 +2424,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       tujuanMutasi?: string;
     }
   ) => {
+    if (!currentUser || currentUser.role === 'inspektorat') {
+      return { success: false, message: 'Akun Inspektorat/Pemantau hanya memiliki akses melihat data!' };
+    }
     const target = verifikasiList.find((v) => v.id === verifikasiId);
     if (!target) return { success: false, message: 'Permohonan mutasi tidak ditemukan!' };
 
@@ -2436,6 +2477,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteVerifikasi = (verifikasiId: string) => {
+    if (!currentUser || (currentUser.role !== 'super_admin' && currentUser.role !== 'admin_kecamatan')) {
+      return { success: false, message: 'Hanya Admin Kecamatan atau Super Admin yang berhak menghapus data permohonan!' };
+    }
     const target = verifikasiList.find((v) => v.id === verifikasiId);
     if (!target) return { success: false, message: 'Data permohonan tidak ditemukan!' };
 
@@ -2494,6 +2538,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const restoreBackupData = (backupJson: any, targetDesaId?: string) => {
+    if (!currentUser || (currentUser.role !== 'super_admin' && currentUser.role !== 'admin_kecamatan')) {
+      return { success: false, message: 'Hanya Admin Kecamatan atau Super Admin yang berhak memulihkan cadangan data!' };
+    }
     try {
       if (!backupJson || typeof backupJson !== 'object') {
         return { success: false, message: 'Format berkas JSON cadangan tidak valid!' };
@@ -2723,6 +2770,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateKecamatanProfile = async (data: Partial<KecamatanProfile>): Promise<{ success: boolean; message: string }> => {
+    if (!currentUser || (currentUser.role !== 'super_admin' && currentUser.role !== 'admin_kecamatan')) {
+      return { success: false, message: 'Hanya Admin Kecamatan atau Super Admin yang berhak mengubah profil Kecamatan!' };
+    }
     let updated: KecamatanProfile = kecamatanProfile;
     setKecamatanProfile((prev) => {
       updated = { ...prev, ...data };
@@ -2762,6 +2812,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     users?: User[];
     asets?: Aset[];
   }): Promise<{ success: boolean; message: string }> => {
+    if (!currentUser || currentUser.role === 'inspektorat') {
+      return { success: false, message: 'Akun Inspektorat/Pemantau hanya memiliki akses melihat data!' };
+    }
     try {
       const payloadDesas = overrides?.desas || desas;
       const payloadKecamatan = overrides?.kecamatanProfile || kecamatanProfile;
@@ -2807,6 +2860,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const saveMasterToSourceCode = saveAllToCloudFirebase;
 
   const resetToDefault = () => {
+    if (currentUser?.role !== 'super_admin') return;
     localStorage.clear();
     fetch('/api/reset', { method: 'POST' }).catch(() => {});
     setDesas(INITIAL_DESA_LIST);

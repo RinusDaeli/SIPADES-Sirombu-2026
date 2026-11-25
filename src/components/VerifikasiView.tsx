@@ -21,6 +21,7 @@ import {
   Edit3,
   HelpCircle,
   Check,
+  Eye,
 } from 'lucide-react';
 
 export const VerifikasiView: React.FC = () => {
@@ -37,6 +38,7 @@ export const VerifikasiView: React.FC = () => {
   const isKecamatan = currentUser?.role === 'admin_kecamatan';
   const canVerify = isSuperAdmin || isKecamatan;
   const isDesa = currentUser?.role === 'admin_desa';
+  const isInspektorat = currentUser?.role === 'inspektorat';
 
   const [activeStatusTab, setActiveStatusTab] = useState<'all' | 'menunggu_verifikasi' | 'disetujui' | 'ditolak'>('all');
   const [filterTipe, setFilterTipe] = useState<'all' | 'mutasi' | 'penghapusan'>('all');
@@ -99,6 +101,7 @@ export const VerifikasiView: React.FC = () => {
   }).length;
 
   const handleOpenAction = (verif: PermohonanVerifikasi, type: 'approve' | 'reject') => {
+    if (!canVerify) return;
     setSelectedVerif(verif);
     setActionType(type);
     if (type === 'approve') {
@@ -114,7 +117,7 @@ export const VerifikasiView: React.FC = () => {
 
   const handleConfirmAction = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedVerif || !actionType) return;
+    if (!canVerify || !selectedVerif || !actionType) return;
 
     prosesVerifikasi(
       selectedVerif.id,
@@ -136,6 +139,7 @@ export const VerifikasiView: React.FC = () => {
 
   // Open Revision Modal
   const handleOpenRevisi = (verif: PermohonanVerifikasi) => {
+    if (!canVerify && !isDesa) return;
     setRevisiModalVerif(verif);
     setRevisiAlasan(verif.alasan || '');
     setRevisiNomorSurat(verif.nomorSuratDesa || '');
@@ -145,7 +149,7 @@ export const VerifikasiView: React.FC = () => {
 
   const handleConfirmRevisi = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!revisiModalVerif) return;
+    if ((!canVerify && !isDesa) || !revisiModalVerif) return;
 
     const res = revisiMutasi(revisiModalVerif.id, {
       alasan: revisiAlasan,
@@ -162,7 +166,7 @@ export const VerifikasiView: React.FC = () => {
 
   // Admin Delete Confirmation
   const handleConfirmDelete = () => {
-    if (!deleteModalVerif) return;
+    if (!canVerify || !deleteModalVerif) return;
     const res = deleteVerifikasi(deleteModalVerif.id);
     setDeleteModalVerif(null);
     if (res.success) {
@@ -206,6 +210,16 @@ export const VerifikasiView: React.FC = () => {
               <span className="font-bold block">Hak Otoritas Kecamatan Aktif</span>
               <span className="text-[11px] text-slate-400">
                 Anda dapat menyetujui, menolak, atau menghapus permohonan mutasi desa.
+              </span>
+            </div>
+          </div>
+        ) : isInspektorat ? (
+          <div className="p-3 rounded-xl bg-cyan-950/40 border border-cyan-500/30 text-cyan-200 text-xs flex items-center gap-2">
+            <Eye className="w-4 h-4 text-cyan-400 shrink-0" />
+            <div>
+              <span className="font-bold block">Mode Inspektorat / Pemantau (Hanya Lihat)</span>
+              <span className="text-[11px] text-slate-400">
+                Anda dapat memantau riwayat mutasi & penghapusan seluruh desa tanpa wewenang mengesahkan atau mengubah.
               </span>
             </div>
           </div>

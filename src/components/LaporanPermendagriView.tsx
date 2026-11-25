@@ -45,6 +45,7 @@ export const LaporanPermendagriView: React.FC = () => {
 
   const isDesaUser = currentUser?.role === 'admin_desa';
   const isKecamatanOrSuper = currentUser?.role === 'admin_kecamatan' || currentUser?.role === 'super_admin';
+  const canViewAllDesa = isKecamatanOrSuper || currentUser?.role === 'inspektorat';
 
   // Filter default aset di Rekap Aset Desa adalah 0 ("(Seluruh tahun anggaran)") baik di akun admin maupun desa.
   // State lokal ini menjaga agar pilihan filter tahun (misal 2025) tidak kembali ke 2026 dalam beberapa detik akibat poller latar belakang.
@@ -52,8 +53,8 @@ export const LaporanPermendagriView: React.FC = () => {
   const [tanggalCetak, setTanggalCetak] = useState('2026-12-31');
   const [showPdfPreview, setShowPdfPreview] = useState(false);
 
-  // All desa mode is active when an admin selects "all"
-  const isAllDesaMode = isKecamatanOrSuper && selectedDesaFilter === 'all';
+  // All desa mode is active when an admin or inspektorat selects "all"
+  const isAllDesaMode = canViewAllDesa && selectedDesaFilter === 'all';
 
   // Active village selection: If desa user, locked to their own village
   const currentDesaId = isDesaUser
@@ -129,7 +130,7 @@ export const LaporanPermendagriView: React.FC = () => {
         isAllDesaMode,
         year: selectedYear,
         asets: reportAsets,
-        isPrintedByAdmin: isKecamatanOrSuper,
+        isPrintedByAdmin: canViewAllDesa,
         tanggalCetak,
         camatName,
         camatPangkat,
@@ -284,7 +285,7 @@ export const LaporanPermendagriView: React.FC = () => {
               title="Atur Tanggal Cetak yang Tertera pada Tanda Tangan"
             />
             <span className="text-[11px] text-amber-400/90 font-medium hidden sm:inline">
-              ({isKecamatanOrSuper ? 'Tetesua' : formatNamaDesaTitleCase(currentDesa?.name)}, {formatTanggalIndonesia(tanggalCetak)})
+              ({canViewAllDesa ? 'Tetesua' : formatNamaDesaTitleCase(currentDesa?.name)}, {formatTanggalIndonesia(tanggalCetak)})
             </span>
           </div>
         </div>
@@ -370,7 +371,7 @@ export const LaporanPermendagriView: React.FC = () => {
           <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
             <span className="text-slate-400 block mb-0.5">Penandatangan Laporan:</span>
             <span className="text-sm font-bold text-amber-400">
-              {isKecamatanOrSuper ? `CAMAT SIROMBU (${camatName})` : `KEPALA DESA (${currentDesa.kepalaDesa})`}
+              {canViewAllDesa ? `CAMAT SIROMBU (${camatName})` : `KEPALA DESA (${currentDesa.kepalaDesa})`}
             </span>
           </div>
         </div>
@@ -689,8 +690,8 @@ export const LaporanPermendagriView: React.FC = () => {
         {/* Tanda Tangan Resmi Pengesahan Permendagri 20/2018 (Diposisikan di Sebelah Kanan Sesuai Permintaan) */}
         <div className="pt-6 border-t border-slate-800 flex justify-end">
           <div className="text-center min-w-[280px] space-y-1">
-            {isKecamatanOrSuper ? (
-              // AKUN ADMIN / SUPER ADMIN: CAMAT SIROMBU DI SEBELAH KANAN
+            {canViewAllDesa ? (
+              // AKUN ADMIN / INSPEKTORAT: CAMAT SIROMBU DI SEBELAH KANAN
               <>
                 <p className="text-slate-400 text-xs">
                   {tempatSurat}, {formatTanggalIndonesia(tanggalCetak)}
@@ -758,7 +759,7 @@ export const LaporanPermendagriView: React.FC = () => {
         isAllDesaMode={isAllDesaMode}
         year={selectedYear}
         asets={reportAsets}
-        isPrintedByAdmin={isKecamatanOrSuper}
+        isPrintedByAdmin={canViewAllDesa}
         tanggalCetak={tanggalCetak}
         onTanggalCetakChange={setTanggalCetak}
         camatName={camatName}

@@ -13,7 +13,8 @@ import {
   KeyRound,
   X,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  Eye
 } from 'lucide-react';
 
 export const UserManagementView: React.FC = () => {
@@ -183,8 +184,8 @@ export const UserManagementView: React.FC = () => {
           </h2>
           <p className="text-xs text-slate-400">
             {isSuperAdmin
-              ? 'Kelola akun Super Admin, Admin Kontrol Kecamatan, dan Admin Pendataan 25 Desa.'
-              : 'Daftar data pengguna dan akun administrator Kecamatan dan 25 Desa di Sirombu.'}
+              ? 'Kelola akun Super Admin, Admin Kecamatan, Admin 25 Desa, dan Inspektorat / Pemantau (Hanya Lihat).'
+              : 'Daftar data pengguna dan akun administrator Kecamatan, 25 Desa, serta Inspektorat di Sirombu.'}
           </p>
         </div>
 
@@ -226,6 +227,7 @@ export const UserManagementView: React.FC = () => {
               {isSuperAdmin && <option value="super_admin">Super Admin</option>}
               <option value="admin_kecamatan">Admin Kecamatan</option>
               <option value="admin_desa">Admin Desa</option>
+              <option value="inspektorat">Inspektorat, dll (Hanya Lihat)</option>
             </select>
           </div>
         </div>
@@ -254,6 +256,7 @@ export const UserManagementView: React.FC = () => {
               {filteredUsers.map((u, idx) => {
                 const isSuper = u.role === 'super_admin';
                 const isKec = u.role === 'admin_kecamatan';
+                const isInspektorat = u.role === 'inspektorat';
 
                 return (
                   <tr key={u.id} className="hover:bg-slate-800/40 transition-colors">
@@ -283,6 +286,10 @@ export const UserManagementView: React.FC = () => {
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-950/80 border border-amber-500/40 text-amber-300 font-bold text-[10px]">
                           <Building2 className="w-3 h-3" /> Admin Kecamatan
                         </span>
+                      ) : isInspektorat ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 font-bold text-[10px]">
+                          <Eye className="w-3 h-3" /> Inspektorat, dll (Hanya Lihat)
+                        </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-bold text-[10px]">
                           <Users className="w-3 h-3" /> Admin Desa
@@ -290,7 +297,9 @@ export const UserManagementView: React.FC = () => {
                       )}
                     </td>
                     <td className="py-3 px-3 text-slate-400">
-                      {u.desaName || 'Tingkat Kecamatan Sirombu'}
+                      {isInspektorat
+                        ? 'Seluruh Kecamatan (Akses Hanya Lihat)'
+                        : u.desaName || 'Tingkat Kecamatan Sirombu'}
                     </td>
                     <td className="py-3 px-3 text-center">
                       <div className="flex items-center justify-center gap-1.5">
@@ -414,9 +423,22 @@ export const UserManagementView: React.FC = () => {
                 >
                   <option value="admin_desa">Admin Desa (Penginput Aset)</option>
                   <option value="admin_kecamatan">Admin Kecamatan (Kontrol & Verifikasi)</option>
+                  <option value="inspektorat">Inspektorat, dll (Hanya Login &amp; Lihat Aset)</option>
                   <option value="super_admin">Super Admin (Kontrol Penuh)</option>
                 </select>
               </div>
+
+              {formData.role === 'inspektorat' && (
+                <div className="p-3 rounded-xl bg-cyan-950/50 border border-cyan-500/40 text-cyan-200 text-[11px] flex items-start gap-2">
+                  <Eye className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold text-cyan-300">Hak Akses Hanya Lihat (Read-Only)</div>
+                    <p className="text-cyan-100/80 mt-0.5">
+                      Akun Inspektorat / Auditor / Pemantau hanya dapat login dan melihat seluruh data aset, foto, serta laporan rekap 25 desa. Tidak dapat menginput, mengedit, menghapus aset, maupun melakukan pengesahan/verifikasi.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {formData.role === 'admin_desa' && (
                 <div>
@@ -542,9 +564,22 @@ export const UserManagementView: React.FC = () => {
                 >
                   <option value="admin_desa">Admin Desa (Penginput Aset)</option>
                   {isSuperAdmin && <option value="admin_kecamatan">Admin Kecamatan (Kontrol & Verifikasi)</option>}
+                  {isSuperAdmin && <option value="inspektorat">Inspektorat, dll (Hanya Login &amp; Lihat Aset)</option>}
                   {isSuperAdmin && <option value="super_admin">Super Admin (Kontrol Penuh)</option>}
                 </select>
               </div>
+
+              {formData.role === 'inspektorat' && (
+                <div className="p-3 rounded-xl bg-cyan-950/50 border border-cyan-500/40 text-cyan-200 text-[11px] flex items-start gap-2">
+                  <Eye className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold text-cyan-300">Hak Akses Hanya Lihat (Read-Only)</div>
+                    <p className="text-cyan-100/80 mt-0.5">
+                      Hanya dapat melihat data aset & laporan 25 desa. Tidak bisa menginput, mengedit, menghapus, atau memverifikasi aset.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {formData.role === 'admin_desa' && (
                 <div>

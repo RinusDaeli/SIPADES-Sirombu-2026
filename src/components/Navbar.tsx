@@ -19,6 +19,7 @@ import {
   Database,
   Server,
   Megaphone,
+  Eye,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -70,6 +71,12 @@ export const Navbar: React.FC = () => {
           icon: <Building2 className="w-3.5 h-3.5 text-amber-300" />,
           classes: 'bg-amber-950/70 border-amber-500/40 text-amber-200',
         };
+      case 'inspektorat':
+        return {
+          label: 'Inspektorat / Pemantau',
+          icon: <Eye className="w-3.5 h-3.5 text-cyan-300" />,
+          classes: 'bg-cyan-950/70 border-cyan-500/40 text-cyan-200',
+        };
       default:
         return {
           label: 'Admin Desa',
@@ -116,18 +123,20 @@ export const Navbar: React.FC = () => {
             <RefreshCw className="w-3 h-3 text-slate-400" />
           </button>
 
-          {/* Tombol Kirim Pesan Siaran (Broadcast ke Semua User) */}
-          <button
-            onClick={() => setShowBroadcastModal(true)}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border border-emerald-400/50 text-[11px] font-bold text-white transition-all cursor-pointer shadow-sm shadow-emerald-950/60"
-            title="Kirim Pesan Siaran / Pengumuman Realtime ke Semua User"
-          >
-            <Megaphone className="w-3.5 h-3.5 text-emerald-200" />
-            <span className="hidden sm:inline">Kirim Pesan</span>
-            <span className="text-[10px] px-1 py-0.2 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 font-black uppercase">
-              Siaran
-            </span>
-          </button>
+          {/* Tombol Kirim Pesan Siaran (Khusus Admin / Super Admin) */}
+          {isAdminOrSuper && (
+            <button
+              onClick={() => setShowBroadcastModal(true)}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border border-emerald-400/50 text-[11px] font-bold text-white transition-all cursor-pointer shadow-sm shadow-emerald-950/60"
+              title="Kirim Pesan Siaran / Pengumuman Realtime ke Semua User"
+            >
+              <Megaphone className="w-3.5 h-3.5 text-emerald-200" />
+              <span className="hidden sm:inline">Kirim Pesan</span>
+              <span className="text-[10px] px-1 py-0.2 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 font-black uppercase">
+                Siaran
+              </span>
+            </button>
+          )}
 
           {/* Tombol Hosting cPanel (Bebas Batasan Kuota) */}
           {isAdminOrSuper && (
@@ -339,16 +348,20 @@ export const Navbar: React.FC = () => {
                   )}
 
                   <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
-                    <button
-                      onClick={() => {
-                        setShowSwitchMenu(false);
-                        setShowResetConfirm(true);
-                      }}
-                      className="text-[11px] text-slate-400 hover:text-amber-400 flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      Reset Data Awal
-                    </button>
+                    {isSuperAdmin ? (
+                      <button
+                        onClick={() => {
+                          setShowSwitchMenu(false);
+                          setShowResetConfirm(true);
+                        }}
+                        className="text-[11px] text-slate-400 hover:text-amber-400 flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Reset Data Awal
+                      </button>
+                    ) : (
+                      <span />
+                    )}
 
                     <button
                       onClick={() => {
@@ -368,8 +381,8 @@ export const Navbar: React.FC = () => {
         </div>
       </div>
 
-      {/* Reset Confirmation Dialog */}
-      {showResetConfirm && (
+      {/* Reset Confirmation Dialog (Khusus Super Admin) */}
+      {isSuperAdmin && showResetConfirm && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
           <div className="bg-[#111827] border border-slate-700 rounded-xl max-w-sm w-full p-5 shadow-2xl">
             <h4 className="text-base font-bold text-white mb-2 flex items-center gap-2">
@@ -417,16 +430,20 @@ export const Navbar: React.FC = () => {
       )}
 
       {/* CPanel Migration & Hosting Modal */}
-      <CPanelMigrationModal
-        isOpen={showCPanelModal}
-        onClose={() => setShowCPanelModal(false)}
-      />
+      {isAdminOrSuper && (
+        <CPanelMigrationModal
+          isOpen={showCPanelModal}
+          onClose={() => setShowCPanelModal(false)}
+        />
+      )}
 
       {/* Broadcast Message Modal */}
-      <BroadcastMessageModal
-        isOpen={showBroadcastModal}
-        onClose={() => setShowBroadcastModal(false)}
-      />
+      {isAdminOrSuper && (
+        <BroadcastMessageModal
+          isOpen={showBroadcastModal}
+          onClose={() => setShowBroadcastModal(false)}
+        />
+      )}
     </header>
   );
 };

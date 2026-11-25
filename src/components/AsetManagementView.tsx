@@ -111,6 +111,7 @@ export const AsetManagementView: React.FC = () => {
   }, []);
 
   const isDesaUser = currentUser?.role === 'admin_desa';
+  const isInspektorat = currentUser?.role === 'inspektorat';
   const isAdminOrSuper = currentUser?.role === 'super_admin' || currentUser?.role === 'admin_kecamatan';
   const defaultDesaId = isDesaUser ? currentUser.desaId || 'desa-21' : 'all';
 
@@ -449,6 +450,7 @@ export const AsetManagementView: React.FC = () => {
 
   // Open add modal
   const handleOpenAdd = () => {
+    if (isInspektorat) return;
     setPhotoError('');
     setJumlahUnit(1);
     setTipeHarga('satuan');
@@ -486,6 +488,7 @@ export const AsetManagementView: React.FC = () => {
 
   // Open edit modal
   const handleOpenEdit = (item: Aset) => {
+    if (isInspektorat) return;
     setSelectedAset(item);
     setPhotoError('');
     setConfirmUnlockInEdit(false);
@@ -520,6 +523,7 @@ export const AsetManagementView: React.FC = () => {
   // Handle submit add
   const handleSaveAdd = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isInspektorat) return;
     const validPhotos = formData.fotoAset.filter((p) => p && p.trim().length > 0);
     if (validPhotos.length === 0) {
       setPhotoError('Wajib mengunggah minimal 1 Foto Fisik Aset!');
@@ -655,6 +659,7 @@ export const AsetManagementView: React.FC = () => {
   // Handle submit edit
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isInspektorat) return;
     const targetAset = liveSelectedAset || selectedAset;
     if (!targetAset) return;
 
@@ -746,6 +751,7 @@ export const AsetManagementView: React.FC = () => {
 
   // Handle open Mutasi Modal
   const handleOpenMutasi = (item: Aset) => {
+    if (isInspektorat) return;
     setSelectedAset(item);
     const cleanDesa = (item.desaName || '').replace('DESA ', '') || 'DESA';
     setMutasiForm({
@@ -760,7 +766,7 @@ export const AsetManagementView: React.FC = () => {
   // Submit Mutasi
   const handleSaveMutasi = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAset) return;
+    if (isInspektorat || !selectedAset) return;
     ajukanMutasi(
       selectedAset.id,
       mutasiForm.alasan,
@@ -773,6 +779,7 @@ export const AsetManagementView: React.FC = () => {
 
   // Handle open Penghapusan Modal
   const handleOpenHapus = (item: Aset) => {
+    if (isInspektorat) return;
     setSelectedAset(item);
     const cleanDesa = (item.desaName || '').replace('DESA ', '') || 'DESA';
     setHapusForm({
@@ -786,7 +793,7 @@ export const AsetManagementView: React.FC = () => {
   // Submit Penghapusan
   const handleSaveHapus = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAset) return;
+    if (isInspektorat || !selectedAset) return;
     ajukanPenghapusan(
       selectedAset.id,
       hapusForm.alasan,
@@ -798,6 +805,7 @@ export const AsetManagementView: React.FC = () => {
 
   // Handle delete directly (Modal driven - No window.confirm)
   const handleDeleteDirect = (id: string, name: string) => {
+    if (isInspektorat) return;
     const target = asets.find((a) => a.id === id);
     if (target && isAsetLockedByVerification(target, verifikasiList, pengesahanList)) {
       showToast(
@@ -809,7 +817,7 @@ export const AsetManagementView: React.FC = () => {
   };
 
   const handleConfirmDeleteDirect = () => {
-    if (!deleteDirectTarget) return;
+    if (isInspektorat || !deleteDirectTarget) return;
     const res = deleteAset(deleteDirectTarget.id);
     if (!res.success) {
       setToastMessage(res.message || 'Gagal menghapus aset');
@@ -821,6 +829,7 @@ export const AsetManagementView: React.FC = () => {
 
   // Handle batalkan pengesahan (Single - Super Admin)
   const handleOpenBatalSah = (aset: Aset) => {
+    if (!isAdminOrSuper) return;
     setBatalModalAset(aset);
   };
 
@@ -862,10 +871,16 @@ export const AsetManagementView: React.FC = () => {
       {/* Header & Actions */}
       <div className="bg-[#0E1526] border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
               Modul Inventarisasi
             </span>
+            {isInspektorat && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/40">
+                <Eye className="w-3 h-3" />
+                Mode Inspektorat / Pemantau (Hanya Lihat)
+              </span>
+            )}
             <span className="text-xs text-slate-400">
               Kecamatan Sirombu • Nias Barat
             </span>
@@ -874,7 +889,9 @@ export const AsetManagementView: React.FC = () => {
             {isDesaUser ? `Inventaris Aset ${currentUser.desaName}` : 'Data Seluruh Aset Desa se-Kecamatan'}
           </h2>
           <p className="text-xs text-slate-400">
-            Pencatatan rincian aset tetap desa menurut bukti kepemilikan, perolehan, kondisi, dan sumber dana.
+            {isInspektorat
+              ? 'Pantau seluruh rincian, foto, dan status verifikasi aset tetap 25 desa (akses hanya lihat — tidak dapat menginput, mengedit, menghapus, atau mengesahkan aset).'
+              : 'Pencatatan rincian aset tetap desa menurut bukti kepemilikan, perolehan, kondisi, dan sumber dana.'}
           </p>
         </div>
 
@@ -987,13 +1004,15 @@ export const AsetManagementView: React.FC = () => {
             </button>
           )}
 
-          <button
-            onClick={handleOpenAdd}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Tambah Aset Baru</span>
-          </button>
+          {!isInspektorat && (
+            <button
+              onClick={handleOpenAdd}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tambah Aset Baru</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1269,9 +1288,11 @@ export const AsetManagementView: React.FC = () => {
                   <td colSpan={7} className="py-16 text-center text-slate-500">
                     <Boxes className="w-10 h-10 mx-auto mb-2 text-slate-600 opacity-60" />
                     <p className="font-semibold text-slate-400">Belum ada data aset tercatat.</p>
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      Klik tombol <strong className="text-amber-400">"Tambah Aset Baru"</strong> di atas untuk mengentri data aset secara manual.
-                    </p>
+                    {!isInspektorat && (
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        Klik tombol <strong className="text-amber-400">&quot;Tambah Aset Baru&quot;</strong> di atas untuk mengentri data aset secara manual.
+                      </p>
+                    )}
                   </td>
                 </tr>
               ) : isDesaUser ? (
@@ -1495,7 +1516,7 @@ export const AsetManagementView: React.FC = () => {
                                 <Eye className="w-3.5 h-3.5" />
                               </button>
 
-                              {!isTerhapus && (
+                              {!isTerhapus && !isInspektorat && (
                                 <>
                                   {/* Edit / Ganti Foto button */}
                                   <button
@@ -1848,7 +1869,7 @@ export const AsetManagementView: React.FC = () => {
                                           <Eye className="w-3.5 h-3.5" />
                                         </button>
 
-                                        {!isTerhapus && (
+                                        {!isTerhapus && !isInspektorat && (
                                           <>
                                             {/* Batalkan Pengesahan button (khusus Super Admin / Admin Kecamatan untuk membuka kunci edit/hapus aset yang sudah disahkan) */}
                                             {isAdminOrSuper && isVerifiedLocked && (
@@ -1938,7 +1959,7 @@ export const AsetManagementView: React.FC = () => {
       </div>
 
       {/* MODAL: Tambah Aset Baru */}
-      {showAddModal && (
+      {!isInspektorat && showAddModal && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-[#0E1526] border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <button
@@ -2732,7 +2753,7 @@ export const AsetManagementView: React.FC = () => {
       )}
 
       {/* MODAL: Edit Aset / Ganti Foto Aset Terkunci */}
-      {showEditModal && liveSelectedAset && (
+      {!isInspektorat && showEditModal && liveSelectedAset && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-[#0E1526] border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <button
@@ -3407,7 +3428,7 @@ export const AsetManagementView: React.FC = () => {
       )}
 
       {/* MODAL: Permohonan Mutasi Aset */}
-      {showMutasiModal && selectedAset && (
+      {!isInspektorat && showMutasiModal && selectedAset && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
           <div className="bg-[#0E1526] border border-blue-500/40 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
             <button
@@ -3516,7 +3537,7 @@ export const AsetManagementView: React.FC = () => {
       )}
 
       {/* MODAL: Permohonan Penghapusan Aset */}
-      {showHapusModal && selectedAset && (
+      {!isInspektorat && showHapusModal && selectedAset && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
           <div className="bg-[#0E1526] border border-red-500/40 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
             <button
@@ -3620,10 +3641,14 @@ export const AsetManagementView: React.FC = () => {
             setShowDetailModal(false);
             handleOpenBarcode(aset);
           }}
-          onEditPhoto={(aset) => {
-            setShowDetailModal(false);
-            handleOpenEdit(aset);
-          }}
+          onEditPhoto={
+            !isInspektorat
+              ? (aset) => {
+                  setShowDetailModal(false);
+                  handleOpenEdit(aset);
+                }
+              : undefined
+          }
         />
       )}
 
@@ -3637,10 +3662,12 @@ export const AsetManagementView: React.FC = () => {
       )}
 
       {/* MODAL: Sinkronisasi Antar Perangkat Real-Time */}
-      <SyncDevicesModal
-        isOpen={showSyncModal}
-        onClose={() => setShowSyncModal(false)}
-      />
+      {isAdminOrSuper && (
+        <SyncDevicesModal
+          isOpen={showSyncModal}
+          onClose={() => setShowSyncModal(false)}
+        />
+      )}
 
       {/* MODAL: Backup & Restore Data (Dipindahkan ke bilah atas DATA ASET) */}
       {isAdminOrSuper && (
@@ -3651,10 +3678,12 @@ export const AsetManagementView: React.FC = () => {
       )}
 
       {/* MODAL: Hosting cPanel (Bebas Batasan Kuota) */}
-      <CPanelMigrationModal
-        isOpen={showCPanelModal}
-        onClose={() => setShowCPanelModal(false)}
-      />
+      {currentUser?.role === 'super_admin' && (
+        <CPanelMigrationModal
+          isOpen={showCPanelModal}
+          onClose={() => setShowCPanelModal(false)}
+        />
+      )}
 
       {/* MODAL: Status & Cek Kuota Langsung Firestore (Khusus Super Admin) */}
       {currentUser?.role === 'super_admin' && (
@@ -3671,7 +3700,7 @@ export const AsetManagementView: React.FC = () => {
       />
 
       {/* MODAL: Konfirmasi Batalkan Pengesahan Aset (Super Admin) */}
-      {batalModalAset && (
+      {isAdminOrSuper && batalModalAset && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
           <div className="bg-[#0E1526] border border-rose-500/40 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative text-slate-100 animate-scale-up">
             <button
@@ -3745,7 +3774,7 @@ export const AsetManagementView: React.FC = () => {
       )}
 
       {/* MODAL: Konfirmasi Hapus Data Aset Langsung */}
-      {deleteDirectTarget && (
+      {!isInspektorat && deleteDirectTarget && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
           <div className="bg-[#0E1526] border border-red-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl relative text-slate-100 animate-scale-up">
             <button

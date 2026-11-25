@@ -748,6 +748,10 @@ async function startServer() {
       return res.status(400).json({ error: 'Data pengguna tidak lengkap' });
     }
 
+    if (requestRole === 'inspektorat' || requestRole === 'admin_desa') {
+      return res.status(403).json({ error: 'Anda tidak memiliki hak akses untuk menambah akun pengguna' });
+    }
+
     if (user.role === 'super_admin' && requestRole !== 'super_admin') {
       return res.status(403).json({ error: 'Hanya Super Admin yang berhak membuat akun Super Admin' });
     }
@@ -766,6 +770,10 @@ async function startServer() {
   app.put('/api/users/:id', (req, res) => {
     const { id } = req.params;
     const { data, requestRole } = req.body;
+    if (requestRole === 'inspektorat' || requestRole === 'admin_desa') {
+      return res.status(403).json({ error: 'Anda tidak memiliki hak akses untuk mengubah akun pengguna' });
+    }
+
     const idx = dbState.users.findIndex((u) => u.id === id);
     if (idx === -1) {
       return res.status(404).json({ error: 'Pengguna tidak ditemukan' });

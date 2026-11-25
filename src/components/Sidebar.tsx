@@ -141,6 +141,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
                     ? (currentUser.desaName || 'ADMIN DESA')
                     : currentUser?.role === 'super_admin'
                     ? 'SUPER ADMIN'
+                    : currentUser?.role === 'inspektorat'
+                    ? 'INSPEKTORAT / PEMANTAU'
                     : 'ADMIN KECAMATAN'}
                 </h1>
                 <p className="text-[11px] text-emerald-200/70 font-medium truncate">
@@ -250,6 +252,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQRScanner, onClose }) =>
                   ? 'Super Admin'
                   : currentUser?.role === 'admin_kecamatan'
                   ? 'Admin Kecamatan'
+                  : currentUser?.role === 'inspektorat'
+                  ? 'Inspektorat / Pemantau (Hanya Lihat)'
                   : 'Admin Desa'}
               </div>
             </div>

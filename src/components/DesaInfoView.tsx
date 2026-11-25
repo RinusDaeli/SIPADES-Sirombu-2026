@@ -26,6 +26,7 @@ import {
   Briefcase,
   Cloud,
   RefreshCw,
+  Eye,
 } from 'lucide-react';
 import { Desa, KecamatanProfile } from '../types';
 
@@ -45,11 +46,13 @@ export const DesaInfoView: React.FC = () => {
   } = useApp();
 
   const isDesaUser = currentUser?.role === 'admin_desa';
+  const isInspektorat = currentUser?.role === 'inspektorat';
   const isKecamatanOrSuper = currentUser?.role === 'admin_kecamatan' || currentUser?.role === 'super_admin';
+  const canViewAllProfiles = isKecamatanOrSuper || isInspektorat;
 
-  // Sub-tab navigation for Admin / Super Admin: 'camat' or 'desa'
+  // Sub-tab navigation for Admin / Super Admin / Inspektorat: 'camat' or 'desa'
   const [activeSubTab, setActiveSubTab] = useState<'camat' | 'desa'>(
-    isKecamatanOrSuper ? 'camat' : 'desa'
+    canViewAllProfiles ? 'camat' : 'desa'
   );
 
   // ===========================================================================
@@ -65,6 +68,7 @@ export const DesaInfoView: React.FC = () => {
   }, [kecamatanProfile, isCamatDirty]);
 
   const handleCamatInputChange = (field: keyof KecamatanProfile, value: string) => {
+    if (isInspektorat) return;
     setIsCamatDirty(true);
     setCamatFormData((prev) => ({ ...prev, [field]: value }));
   };
@@ -72,6 +76,7 @@ export const DesaInfoView: React.FC = () => {
   const [isSavingMaster, setIsSavingMaster] = useState(false);
 
   const handleManualSyncMaster = async () => {
+    if (isInspektorat) return;
     setIsSavingMaster(true);
     const res = await saveAllToCloudFirebase();
     setIsSavingMaster(false);
@@ -83,6 +88,7 @@ export const DesaInfoView: React.FC = () => {
 
   const handleSaveCamat = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isInspektorat) return;
     setIsSavingMaster(true);
     const cleaned = {
       ...camatFormData,
@@ -167,12 +173,14 @@ export const DesaInfoView: React.FC = () => {
   }, [activeDesaId, desas, isDesaDirty]);
 
   const handleInputChange = (field: string, value: string) => {
+    if (isInspektorat) return;
     setIsDesaDirty(true);
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSaveDesa = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isInspektorat) return;
     setIsSavingMaster(true);
     const cleanedDesa = {
       kepalaDesa: formData.kepalaDesa.trim(),
@@ -201,7 +209,7 @@ export const DesaInfoView: React.FC = () => {
   const desaVal = desaAsets.reduce((sum, item) => sum + (item.nilaiPerolehan || 0), 0);
 
   // PDF Export Trigger
-  const handleDownloadPDF = async (asAdminFormat: boolean = isKecamatanOrSuper) => {
+  const handleDownloadPDF = async (asAdminFormat: boolean = canViewAllProfiles) => {
     setIsGeneratingPDF(true);
     try {
       await exportToPermendagriPDF({
@@ -274,16 +282,18 @@ export const DesaInfoView: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleManualSyncMaster}
-            disabled={isSavingMaster}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-amber-300 border border-amber-500/40 font-semibold text-xs transition-all shadow cursor-pointer disabled:opacity-50"
-            title="Simpan seluruh data saat ini ke Google Cloud Firebase agar permanen dan tersinkronisasi lintas perangkat"
-          >
-            <Cloud className={`w-3.5 h-3.5 ${isSavingMaster ? 'animate-spin text-amber-300' : 'text-amber-400'}`} />
-            <span>{isSavingMaster ? 'Menyimpan...' : 'Simpan Semua ke Firebase'}</span>
-          </button>
+          {!isInspektorat && (
+            <button
+              type="button"
+              onClick={handleManualSyncMaster}
+              disabled={isSavingMaster}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-amber-300 border border-amber-500/40 font-semibold text-xs transition-all shadow cursor-pointer disabled:opacity-50"
+              title="Simpan seluruh data saat ini ke Google Cloud Firebase agar permanen dan tersinkronisasi lintas perangkat"
+            >
+              <Cloud className={`w-3.5 h-3.5 ${isSavingMaster ? 'animate-spin text-amber-300' : 'text-amber-400'}`} />
+              <span>{isSavingMaster ? 'Menyimpan...' : 'Simpan Semua ke Firebase'}</span>
+            </button>
+          )}
 
           {activeSubTab === 'camat' ? (
             <button
@@ -296,7 +306,7 @@ export const DesaInfoView: React.FC = () => {
             </button>
           ) : (
             <button
-              onClick={() => handleDownloadPDF(isKecamatanOrSuper)}
+              onClick={() => handleDownloadPDF(canViewAllProfiles)}
               disabled={isGeneratingPDF}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
             >
@@ -324,8 +334,18 @@ export const DesaInfoView: React.FC = () => {
         </div>
       )}
 
-      {/* Sub-tab Navigation (Camat vs Desa) for Admin & Super Admin */}
-      {isKecamatanOrSuper && (
+      {/* Read-only notice for Inspektorat */}
+      {isInspektorat && (
+        <div className="bg-cyan-950/40 border border-cyan-500/40 rounded-xl px-4 py-2.5 flex items-center gap-2.5 text-cyan-200 text-xs">
+          <Eye className="w-4 h-4 text-cyan-400 shrink-0" />
+          <span>
+            <strong>Mode Inspektorat / Pemantau (Hanya Lihat):</strong> Anda dapat melihat profil Kecamatan & seluruh 25 Desa serta mencetak PDF, namun tidak diperbolehkan mengubah data profil.
+          </span>
+        </div>
+      )}
+
+      {/* Sub-tab Navigation (Camat vs Desa) for Admin, Super Admin & Inspektorat */}
+      {canViewAllProfiles && (
         <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
           <button
             onClick={() => setActiveSubTab('camat')}
@@ -368,9 +388,9 @@ export const DesaInfoView: React.FC = () => {
       )}
 
       {/* ===================================================================== */}
-      {/* VIEW 1: DATA CAMAT & KANTOR KECAMATAN SIROMBU (ADMIN / SUPER ADMIN)   */}
+      {/* VIEW 1: DATA CAMAT & KANTOR KECAMATAN SIROMBU (ADMIN / INSPEKTORAT)   */}
       {/* ===================================================================== */}
-      {activeSubTab === 'camat' && isKecamatanOrSuper && (
+      {activeSubTab === 'camat' && canViewAllProfiles && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Form Edit Camat (7 Cols) */}
           <div className="lg:col-span-7 bg-[#0E1526] border border-slate-800 rounded-2xl p-5 shadow-xl space-y-5">
@@ -391,6 +411,7 @@ export const DesaInfoView: React.FC = () => {
             </div>
 
             <form onSubmit={handleSaveCamat} className="space-y-4 text-xs">
+              <fieldset disabled={isInspektorat} className="space-y-4 disabled:opacity-85">
               {/* SECTION A: PEJABAT CAMAT */}
               <div className="space-y-3 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
                 <div className="flex items-center gap-2 text-amber-400 font-bold uppercase tracking-wider text-[11px]">
@@ -409,7 +430,7 @@ export const DesaInfoView: React.FC = () => {
                       placeholder="Contoh: MESRAWAN HAREFA, S.Pd., M.M."
                       value={camatFormData.namaCamat}
                       onChange={(e) => handleCamatInputChange('namaCamat', e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors disabled:cursor-not-allowed"
                     />
                   </div>
 
@@ -423,7 +444,7 @@ export const DesaInfoView: React.FC = () => {
                       placeholder="Contoh: 19780512 200501 1 008"
                       value={camatFormData.nipCamat}
                       onChange={(e) => handleCamatInputChange('nipCamat', e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors disabled:cursor-not-allowed"
                     />
                   </div>
 
@@ -437,7 +458,7 @@ export const DesaInfoView: React.FC = () => {
                       placeholder="Contoh: Pembina, IV/a"
                       value={camatFormData.pangkatCamat}
                       onChange={(e) => handleCamatInputChange('pangkatCamat', e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors disabled:cursor-not-allowed"
                     />
                   </div>
 
@@ -451,7 +472,7 @@ export const DesaInfoView: React.FC = () => {
                       placeholder="Contoh: CAMAT SIROMBU"
                       value={camatFormData.jabatanCamat || 'CAMAT SIROMBU'}
                       onChange={(e) => handleCamatInputChange('jabatanCamat', e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white uppercase placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white uppercase placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -466,7 +487,7 @@ export const DesaInfoView: React.FC = () => {
                     placeholder="Contoh: Tetesua"
                     value={camatFormData.tempatSurat}
                     onChange={(e) => handleCamatInputChange('tempatSurat', e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors disabled:cursor-not-allowed"
                   />
                   <p className="text-[10px] text-slate-500 mt-1">
                     Format cetakan tanda tangan akan tercantum: <span className="text-amber-300 font-medium">{camatFormData.tempatSurat || 'Tetesua'}, [Tanggal Cetak]</span>
@@ -491,7 +512,7 @@ export const DesaInfoView: React.FC = () => {
                     placeholder="Contoh: Tetesua Desa Tegideu Kec. Sirombu Kabupaten Nias Barat"
                     value={camatFormData.alamatKantor}
                     onChange={(e) => handleCamatInputChange('alamatKantor', e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors resize-none"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors resize-none disabled:cursor-not-allowed"
                   />
                 </div>
 
@@ -506,7 +527,7 @@ export const DesaInfoView: React.FC = () => {
                       placeholder="22863"
                       value={camatFormData.kodePos}
                       onChange={(e) => handleCamatInputChange('kodePos', e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors disabled:cursor-not-allowed"
                     />
                   </div>
 
@@ -519,7 +540,7 @@ export const DesaInfoView: React.FC = () => {
                       placeholder="kecamatan.sirombu@niasbaratkab.go.id"
                       value={camatFormData.emailKantor}
                       onChange={(e) => handleCamatInputChange('emailKantor', e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors disabled:cursor-not-allowed"
                     />
                   </div>
 
@@ -532,22 +553,25 @@ export const DesaInfoView: React.FC = () => {
                       placeholder="0813 6699 8787"
                       value={camatFormData.teleponKantor}
                       onChange={(e) => handleCamatInputChange('teleponKantor', e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Submit Button */}
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20 cursor-pointer"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>Simpan Perubahan Data Camat & Kantor Kecamatan</span>
-                </button>
-              </div>
+              {!isInspektorat && (
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Simpan Perubahan Data Camat & Kantor Kecamatan</span>
+                  </button>
+                </div>
+              )}
+              </fieldset>
             </form>
           </div>
 
@@ -651,14 +675,16 @@ export const DesaInfoView: React.FC = () => {
       {/* ===================================================================== */}
       {(activeSubTab === 'desa' || isDesaUser) && (
         <>
-          {/* Village Selector for Kecamatan Admin / Super Admin */}
-          {isKecamatanOrSuper && (
+          {/* Village Selector for Kecamatan Admin / Super Admin / Inspektorat */}
+          {canViewAllProfiles && (
             <div className="bg-[#0E1526] border border-slate-800 rounded-2xl p-4 shadow-xl">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
                 <div className="flex items-center gap-2">
                   <Building2 className="w-4 h-4 text-amber-400" />
                   <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                    Pilih Desa yang Akan Dikelola ({desas.length} Desa se-Kecamatan Sirombu)
+                    {isInspektorat
+                      ? `Pilih Desa yang Akan Dipantau (${desas.length} Desa se-Kecamatan Sirombu)`
+                      : `Pilih Desa yang Akan Dikelola (${desas.length} Desa se-Kecamatan Sirombu)`}
                   </h3>
                 </div>
                 <div className="relative w-full sm:w-64">
@@ -725,6 +751,7 @@ export const DesaInfoView: React.FC = () => {
               </div>
 
               <form onSubmit={handleSaveDesa} className="space-y-4 text-xs">
+                <fieldset disabled={isInspektorat} className="space-y-4 disabled:opacity-85">
                 {/* Nama Kepala Desa & NIP */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -738,7 +765,7 @@ export const DesaInfoView: React.FC = () => {
                       placeholder="Contoh: Bazisokhi Daeli"
                       value={formData.kepalaDesa}
                       onChange={(e) => handleInputChange('kepalaDesa', e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors disabled:cursor-not-allowed"
                     />
                   </div>
 
@@ -752,7 +779,7 @@ export const DesaInfoView: React.FC = () => {
                       placeholder="Kosongkan atau isi '-' jika non-PNS"
                       value={formData.nipKepalaDesa}
                       onChange={(e) => handleInputChange('nipKepalaDesa', e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors disabled:cursor-not-allowed"
                     />
                     <p className="text-[10px] text-slate-500 mt-1">
                       Bila dikosongkan atau diisi &apos;-&apos;, cetakan otomatis menampilkan: <span className="text-amber-300 font-mono">NIP. -</span>
@@ -772,7 +799,7 @@ export const DesaInfoView: React.FC = () => {
                       placeholder="Contoh: Desa Togideu Kecamatan Sirombu Kabupaten Nias Barat"
                       value={formData.alamatDesa}
                       onChange={(e) => handleInputChange('alamatDesa', e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors disabled:cursor-not-allowed"
                     />
                   </div>
 
@@ -786,7 +813,7 @@ export const DesaInfoView: React.FC = () => {
                       placeholder="Contoh: 22863"
                       value={formData.kodePos}
                       onChange={(e) => handleInputChange('kodePos', e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -803,7 +830,7 @@ export const DesaInfoView: React.FC = () => {
                       placeholder="Contoh: kantor@sirombu.desa.id"
                       value={formData.emailDesa}
                       onChange={(e) => handleInputChange('emailDesa', e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors disabled:cursor-not-allowed"
                     />
                   </div>
 
@@ -817,7 +844,7 @@ export const DesaInfoView: React.FC = () => {
                       placeholder="Contoh: 081263001021"
                       value={formData.nomorHp}
                       onChange={(e) => handleInputChange('nomorHp', e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -833,22 +860,25 @@ export const DesaInfoView: React.FC = () => {
                     placeholder="Contoh: Faomaso Hia"
                     value={formData.kaurAset}
                     onChange={(e) => handleInputChange('kaurAset', e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors disabled:cursor-not-allowed"
                   />
                   <p className="text-[10px] text-slate-500 mt-1">
                     Sebagai Penatausahaan Barang Milik Desa sesuai Pasal 7 Permendagri No. 20/2018.
                   </p>
                 </div>
 
-                <div className="pt-2">
-                  <button
-                    type="submit"
-                    className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20 cursor-pointer"
-                  >
-                    <Save className="w-4 h-4" />
-                    <span>Simpan Profil {targetDesa.name}</span>
-                  </button>
-                </div>
+                {!isInspektorat && (
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20 cursor-pointer"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>Simpan Profil {targetDesa.name}</span>
+                    </button>
+                  </div>
+                )}
+                </fieldset>
               </form>
             </div>
 
